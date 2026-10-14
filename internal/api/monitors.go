@@ -316,7 +316,7 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("heartbeats"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 1000 {
-			writeError(w, http.StatusBadRequest, "heartbeats must be between 1 and 1000")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("heartbeats", "heartbeats must be between 1 and 1000"))
 			return
 		}
 		perMonitor = n
@@ -1179,7 +1179,7 @@ func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 1000 {
-			writeError(w, http.StatusBadRequest, "limit must be between 1 and 1000")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("limit", "limit must be between 1 and 1000"))
 			return
 		}
 		limit = n

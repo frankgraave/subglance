@@ -17,7 +17,8 @@ info:
 
     Timestamps are RFC 3339 / ISO 8601 in UTC. Errors always share one shape:
     a JSON object with an `error` string and, when the refusal is about one
-    request field, a `field` naming it (see the `Error` schema).
+    request field or query parameter, a `field` naming it (see the `Error`
+    schema).
 
     A JSON request body is one JSON object and nothing after it, with no
     field the operation does not document, of at most 1 MiB (256 KiB for the
@@ -727,7 +728,7 @@ paths:
                   hourly_buckets: { type: integer, minimum: 0 }
                   incidents: { type: integer, minimum: 0 }
         '400':
-          description: A window that is not a number, or that breaks a retention rule.
+          description: A window that is not a number, or that breaks a retention rule. `field` names the parameter.
           content:
             application/json:
               schema:
@@ -1263,7 +1264,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PushResult'
         '400':
-          description: The `status` parameter was not a recognised value.
+          description: The `status` parameter was not a recognised value. `field` is `status`.
           content:
             application/json:
               schema:
@@ -1335,7 +1336,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PushResult'
         '400':
-          description: The `status` parameter was not a recognised value.
+          description: The `status` parameter was not a recognised value. `field` is `status`.
           content:
             application/json:
               schema:
@@ -1495,7 +1496,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/Monitor'
         '400':
-          description: A `heartbeats` value that is not an integer in 1–1000.
+          description: A `heartbeats` value that is not an integer in 1–1000. `field` is `heartbeats`.
           content:
             application/json:
               schema:
@@ -1815,7 +1816,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/RawHeartbeat'
         '400':
-          description: An invalid monitor id, or a limit outside 1–1000.
+          description: An invalid monitor id, or a limit outside 1–1000 (`field` is `limit`).
           content:
             application/json:
               schema:
@@ -1870,7 +1871,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UptimeResponse'
         '400':
-          description: An invalid monitor id, or an unparseable/out-of-range window.
+          description: An invalid monitor id, or an unparseable/out-of-range window (`field` is `window`).
           content:
             application/json:
               schema:
@@ -1929,7 +1930,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/LatencyResponse'
         '400':
-          description: An invalid monitor id, or a window outside the list.
+          description: An invalid monitor id, or a window outside the list (`field` is `window`).
           content:
             application/json:
               schema:
@@ -1976,7 +1977,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/IncidentList'
         '400':
-          description: An invalid monitor id, or a limit outside 1–500.
+          description: An invalid monitor id, or a limit outside 1–500 (`field` is `limit`).
           content:
             application/json:
               schema:
@@ -2671,7 +2672,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResolvedIncidentPage'
         '400':
-          description: The window, page size or cursor was not valid.
+          description: The window, page size or cursor was not valid. `field` names the parameter (`days`, `limit` or `cursor`).
           content:
             application/json:
               schema:
@@ -4104,7 +4105,8 @@ paths:
             an unknown field, a duplicate key, a reference to a key that
             exists neither in the file nor on the instance, or a value the
             equivalent API request would refuse. `field` points into the file,
-            for example `monitors[2].interval_s`. Nothing was written.
+            for example `monitors[2].interval_s`. A `dry_run` that is not true
+            or false is refused with `field: dry_run`. Nothing was written.
           content:
             application/json:
               schema:
@@ -5645,12 +5647,13 @@ components:
         present and is always a human-readable sentence.
 
         `field` is present only when the rejection is about one named field of
-        the request body, and it carries the JSON name that was sent, so a
-        client can place the message next to the input that caused it instead
-        of matching on the wording of `error`. Anything not about a single
-        field — malformed JSON, an unknown field, a rate limit, a missing
-        session, a server failure — omits it. A value of the wrong JSON type
-        is about one field and names it.
+        the request body or one query parameter, and it carries the name that
+        was sent (`target`, `limit`), so a client can place the message next to
+        the input that caused it instead of matching on the wording of
+        `error`. Anything not about a single field — malformed JSON, an
+        unknown field, a rate limit, a missing session, a server failure, an
+        invalid id in the path — omits it. A value of the wrong JSON type is
+        about one field and names it.
       required: [error]
       properties:
         error:
@@ -5660,8 +5663,9 @@ components:
         field:
           type: string
           description: |
-            The JSON name of the request body field the error is about, when
-            the error is about exactly one. Absent otherwise; never empty.
+            The JSON name of the request body field, or the name of the query
+            parameter, the error is about, when the error is about exactly one.
+            Absent otherwise; never empty.
           example: target
       additionalProperties: false
     HealthResponse:

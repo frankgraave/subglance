@@ -183,8 +183,8 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	if v := q.Get("days"); v != "" && q.Get("cursor") == "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > resolvedHistoryMaxDays {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("days must be between 1 and %d", resolvedHistoryMaxDays))
+			writeProblem(w, http.StatusBadRequest, fieldProblem("days",
+				fmt.Sprintf("days must be between 1 and %d", resolvedHistoryMaxDays)))
 			return
 		}
 		days = n
@@ -194,8 +194,8 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	if v := q.Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > resolvedPageMaxLimit {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("limit must be between 1 and %d", resolvedPageMaxLimit))
+			writeProblem(w, http.StatusBadRequest, fieldProblem("limit",
+				fmt.Sprintf("limit must be between 1 and %d", resolvedPageMaxLimit)))
 			return
 		}
 		limit = n
@@ -209,7 +209,7 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 			// "start from the top". Quietly restarting a paged read is how a
 			// client ends up looping over page one forever while believing it
 			// is walking a month of history.
-			writeError(w, http.StatusBadRequest, "invalid cursor")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("cursor", "invalid cursor"))
 			return
 		}
 		cursor = parsed.ResolvedIncidentCursor
@@ -260,7 +260,7 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 		 * just issued. Wide enough for any real walk, and still narrower by
 		 * orders of magnitude than the window it guards.
 		 */
-		writeError(w, http.StatusBadRequest, "invalid cursor")
+		writeProblem(w, http.StatusBadRequest, fieldProblem("cursor", "invalid cursor"))
 		return
 	}
 
@@ -351,7 +351,7 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 500 {
-			writeError(w, http.StatusBadRequest, "limit must be between 1 and 500")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("limit", "limit must be between 1 and 500"))
 			return
 		}
 		limit = n
