@@ -45,19 +45,7 @@ func readJSONLimit(w http.ResponseWriter, r *http.Request, limit int64, dst any)
 	// believes it configured a 5-second check, and receives the default
 	// instead. A typo should be an error at the moment it is made.
 	dec.DisallowUnknownFields()
-	err := dec.Decode(dst)
-	if err == nil {
-		// A second value in the same body is a client bug. Acting on the
-		// first one alone reports success for a request the caller did not
-		// make: `{"target":"a"}{"target":"b"}` would otherwise create "a".
-		if extra := dec.Decode(new(json.RawMessage)); !errors.Is(extra, io.EOF) {
-			err = errTrailingValue
-			var tooBig *http.MaxBytesError
-			if errors.As(extra, &tooBig) {
-				err = extra
-			}
-		}
-	}
+	err := decodeOne(dec, dst)
 	if err == nil {
 		return true
 	}
@@ -72,14 +60,46 @@ func readJSONLimit(w http.ResponseWriter, r *http.Request, limit int64, dst any)
 func decodeStrict(data []byte, dst any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
+	return decodeOne(dec, dst)
+}
+
+// decodeOne decodes the one JSON value dec holds into dst and refuses
+// anything after it.
+func decodeOne(dec *json.Decoder, dst any) error {
 	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			// The decoder read to the end without finding a whole value,
+			// so the end is where parsing failed; a SyntaxError carries
+			// that offset, an end of input does not.
+			rest, _ := io.Copy(io.Discard, dec.Buffered())
+			return &endOfBody{err: err, offset: dec.InputOffset() + rest}
+		}
 		return err
 	}
-	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		return errTrailingValue
+	// A second value in the same body is a client bug. Acting on the first
+	// one alone reports success for a request the caller did not make:
+	// `{"target":"a"}{"target":"b"}` would otherwise create "a".
+	extra := dec.Decode(new(json.RawMessage))
+	if errors.Is(extra, io.EOF) {
+		return nil
 	}
-	return nil
+	var tooBig *http.MaxBytesError
+	if errors.As(extra, &tooBig) {
+		return extra
+	}
+	return errTrailingValue
 }
+
+// endOfBody is a body that ends before its JSON value begins (err io.EOF:
+// it is empty or only white space) or before the value is whole
+// (io.ErrUnexpectedEOF), offset bytes in.
+type endOfBody struct {
+	err    error
+	offset int64
+}
+
+func (e *endOfBody) Error() string { return e.err.Error() }
+func (e *endOfBody) Unwrap() error { return e.err }
 
 // errTrailingValue is a body that holds more than one JSON value.
 var errTrailingValue = errors.New("the request body must be exactly one JSON value")
@@ -94,7 +114,11 @@ func bodyRefusal(err error, dst any, prefix string, limit int64) (int, problem) 
 		tooBig  *http.MaxBytesError
 		typeErr *json.UnmarshalTypeError
 		syntax  *json.SyntaxError
+		end     *endOfBody
 	)
+	// A body that is not JSON is refused in one shape whatever is wrong with
+	// it, "invalid JSON at byte N: why", so a client can find the place in
+	// what it sent.
 	switch {
 	case errors.As(err, &tooBig):
 		return http.StatusRequestEntityTooLarge,
@@ -102,12 +126,11 @@ func bodyRefusal(err error, dst any, prefix string, limit int64) (int, problem) 
 	case errors.As(err, &typeErr):
 		return http.StatusBadRequest, typeProblem(typeErr, dst, prefix)
 	case errors.As(err, &syntax):
-		return http.StatusBadRequest, bodyProblem("invalid JSON at byte " +
-			strconv.FormatInt(syntax.Offset, 10) + ": " + syntax.Error())
-	case errors.Is(err, io.EOF):
-		return http.StatusBadRequest, bodyProblem("the request body is empty; send a JSON object")
-	case errors.Is(err, io.ErrUnexpectedEOF):
-		return http.StatusBadRequest, bodyProblem("invalid JSON: the request body ends before the JSON value does")
+		return http.StatusBadRequest, invalidJSON(syntax.Offset, syntax.Error())
+	case errors.As(err, &end) && errors.Is(err, io.EOF):
+		return http.StatusBadRequest, invalidJSON(end.offset, "the request body is empty; send a JSON object")
+	case errors.As(err, &end):
+		return http.StatusBadRequest, invalidJSON(end.offset, "the request body ends before the JSON value does")
 	case errors.Is(err, errTrailingValue):
 		return http.StatusBadRequest, bodyProblem(err.Error())
 	}
@@ -131,6 +154,11 @@ func bodyRefusal(err error, dst any, prefix string, limit int64) (int, problem) 
 	// A read that failed part way (the client went away) is all that is
 	// left; the reader cannot act on its text.
 	return http.StatusBadRequest, bodyProblem("could not read the request body")
+}
+
+// invalidJSON is the refusal of a body that is not JSON, offset bytes in.
+func invalidJSON(offset int64, why string) problem {
+	return bodyProblem("invalid JSON at byte " + strconv.FormatInt(offset, 10) + ": " + why)
 }
 
 // timeFormat is the refusal of a time the request body did not write as one.
