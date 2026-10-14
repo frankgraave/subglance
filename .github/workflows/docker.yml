@@ -31,10 +31,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   # A push run publishes an image and then signs it in a second job;
   # cancelling it in between would leave that image unsigned. Only runs
-  # that push nothing (pull requests, a manual build) are cancelled.
+  # that push nothing (pull requests, a manual build) are cancelled, and
+  # the event is part of the group because cancel-in-progress is read
+  # from the incoming run: a manual run on develop must not share a push
+  # run's group, or it would cancel that run.
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 # No `id-token` here on purpose: a workflow-level grant would reach every job,

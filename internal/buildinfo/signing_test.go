@@ -30,7 +30,8 @@ type imageWorkflow struct {
 		} `yaml:"push"`
 	} `yaml:"on"`
 	Concurrency struct {
-		CancelInProgress any `yaml:"cancel-in-progress"`
+		Group            string `yaml:"group"`
+		CancelInProgress any    `yaml:"cancel-in-progress"`
 	} `yaml:"concurrency"`
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
@@ -196,8 +197,10 @@ func TestImageIsSignedByDigestOnlyOnPush(t *testing.T) {
 // TestImagePushRunsAreNotCancelled keeps a newer run from cancelling a push
 // run of docker.yml. The image is signed by a second job after `publish`: a
 // push run cancelled between the two leaves an image in the registry, under
-// its sha tag, that nothing signs later. A pull request run pushes nothing,
-// so cancelling it is still safe.
+// its sha tag, that nothing signs later. A pull request or manual run pushes
+// nothing, so cancelling it is still safe, but only in a group no push run
+// is in: GitHub evaluates cancel-in-progress for the incoming run, so a
+// manual run on develop sharing the push run's group would cancel it.
 func TestImagePushRunsAreNotCancelled(t *testing.T) {
 	wf := readImageWorkflow(t)
 
@@ -210,6 +213,9 @@ func TestImagePushRunsAreNotCancelled(t *testing.T) {
 		}
 	case string:
 		if expr(v) == "github.event_name != 'push'" {
+			if !strings.Contains(wf.Concurrency.Group, "github.event_name") {
+				t.Errorf("docker.yml concurrency group %q does not separate events, so a manual run on develop shares a push run's group and its cancel-in-progress cancels that push run; put github.event_name in the group", wf.Concurrency.Group)
+			}
 			return
 		}
 	}
