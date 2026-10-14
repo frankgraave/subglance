@@ -187,7 +187,7 @@ func TestChannels(t *testing.T) {
 		check  func(configfile.Channel) bool
 		note   string
 	}{
-		{"smtp with cc and bcc", `{"type":"smtp","smtpTo":"a@example.com","smtpCC":"b@example.com, a@example.com","smtpBCC":"c@example.com","smtpHost":"mail","smtpSecure":true}`,
+		{"smtp with cc and bcc", `{"type":"smtp","smtpTo":"a@example.com","smtpCC":"b@example.com, a@example.com","smtpBCC":"c@example.com","smtpHost":"mail","smtpFrom":"kuma@example.com","smtpSecure":true}`,
 			func(c configfile.Channel) bool {
 				return c.Config["to"] == "a@example.com, b@example.com" && c.Config["password"] == ""
 			},
@@ -220,6 +220,25 @@ func TestChannels(t *testing.T) {
 	var res Result
 	if _, ok := convertChannel(row{"id": int64(1), "name": "Mail", "config": `{"type":"smtp","smtpHost":"mail"}`}, &res); ok {
 		t.Error("an email channel without recipients was converted")
+	}
+
+	// The importer refuses a channel its sender would refuse, and one such
+	// channel would fail the whole file, so each is reported and left out.
+	for _, tc := range []struct{ config, reason string }{
+		{`{"type":"smtp","smtpTo":"a@example.com","smtpFrom":"k@example.com"}`, "host is required"},
+		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail"}`, "from is required"},
+		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"Kuma"}`, "from is not an e-mail address"},
+		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"k@example.com","smtpPort":"70000"}`, "port must be"},
+		{`{"type":"telegram","telegramBotToken":"1:x"}`, "it has no chat ID"},
+	} {
+		var res Result
+		if _, ok := convertChannel(row{"id": int64(1), "name": "Ch", "config": tc.config}, &res); ok {
+			t.Errorf("%s was converted, want it skipped", tc.config)
+			continue
+		}
+		if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0].Reason, tc.reason) {
+			t.Errorf("%s: skipped = %v, want a reason containing %q", tc.config, res.Skipped, tc.reason)
+		}
 	}
 }
 

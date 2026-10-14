@@ -36,7 +36,7 @@ func (s *DiscordSender) Validate(cfg map[string]string) error {
 	// Slack and Discord webhook URLs look similar enough that they get
 	// mixed up, and Discord's rejection does not say so.
 	if !strings.Contains(cfg["url"], "discord") {
-		return errNotDiscordURL
+		return onKey("url", errNotDiscordURL)
 	}
 	return nil
 }

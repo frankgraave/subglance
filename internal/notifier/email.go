@@ -54,7 +54,7 @@ func guardedDialer(guard *checker.Guard) func(ctx context.Context, addr string) 
 func (s *EmailSender) Validate(cfg map[string]string) error {
 	for _, k := range []string{"host", "from", "to"} {
 		if strings.TrimSpace(cfg[k]) == "" {
-			return &configError{k + " is required"}
+			return onKey(k, &configError{k + " is required"})
 		}
 	}
 
@@ -64,7 +64,7 @@ func (s *EmailSender) Validate(cfg map[string]string) error {
 	}
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 1 || n > 65535 {
-		return &configError{"port must be a number between 1 and 65535"}
+		return onKey("port", &configError{"port must be a number between 1 and 65535"})
 	}
 
 	// A missing @ is the error people actually make, usually by putting a
@@ -73,7 +73,7 @@ func (s *EmailSender) Validate(cfg map[string]string) error {
 	// the value.
 	for _, k := range []string{"from", "to"} {
 		if !strings.Contains(cfg[k], "@") {
-			return &configError{k + " is not an e-mail address"}
+			return onKey(k, &configError{k + " is not an e-mail address"})
 		}
 	}
 	return nil

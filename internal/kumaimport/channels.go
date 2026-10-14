@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/frankgraave/subglance/internal/configfile"
+	"github.com/frankgraave/subglance/internal/notifier"
 )
 
 // convertChannel converts one row of Kuma's notification table.
@@ -74,6 +75,11 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 	case "telegram":
 		out.Type = "telegram"
 		secret("bot_token")
+		if get("telegramChatID") == "" {
+			// The importer refuses a Telegram channel with no chat, as
+			// the sender does, so carrying it over would fail the file.
+			return skip("it has no chat ID")
+		}
 		plain("chat_id", get("telegramChatID"))
 		if get("telegramMessageThreadID") != "" {
 			note("messages went to topic " + get("telegramMessageThreadID") + " of the chat; SubGlance posts to the chat itself")
@@ -83,10 +89,6 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		to := get("smtpTo")
 		if cc := get("smtpCC"); cc != "" {
 			to = joinRecipients(to, cc)
-			note("the Cc recipients are now ordinary recipients")
-		}
-		if get("smtpBCC") != "" {
-			note("the Bcc recipients were left out: SubGlance has no Bcc, and adding them as recipients would show their addresses to everyone")
 		}
 		if to == "" {
 			return skip("it has no recipients")
@@ -98,6 +100,19 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		if get("smtpUsername") != "" {
 			plain("username", get("smtpUsername"))
 			secret("password")
+		}
+		// The importer holds an email channel to its sender's rules (a
+		// host, a sender address, a port that is a port), so a Kuma
+		// notification without them is reported here rather than failing
+		// the whole file there. The withheld password is not among them.
+		if err := notifier.ValidateConfig(out.Type, out.Config); err != nil {
+			return skip("its SMTP settings cannot be used by SubGlance's email channel: " + err.Error())
+		}
+		if get("smtpCC") != "" {
+			note("the Cc recipients are now ordinary recipients")
+		}
+		if get("smtpBCC") != "" {
+			note("the Bcc recipients were left out: SubGlance has no Bcc, and adding them as recipients would show their addresses to everyone")
 		}
 		if get("smtpSecure") == "true" {
 			note("Kuma connected with TLS from the start; SubGlance uses STARTTLS, so a server that only offers TLS on port 465 needs its submission port, usually 587")

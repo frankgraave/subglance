@@ -593,9 +593,12 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
 
-// validatePushChannel checks the settings ntfy, Gotify, SMS and webhook need
-// beyond their required key. The notifier validates the same things again before every
-// send; checking here as well is what puts the message on the form.
+// validatePushChannel checks the settings each type needs beyond its required
+// key: first the API's own wording for ntfy and Gotify, then every rule the
+// type's sender holds the settings to (notifier.ValidateConfig). The sender
+// rules are the ones that decide whether an alert can go out, so a channel
+// that passes here is one its sender accepts; checking them on save is what
+// puts the message on the form instead of in a failed delivery.
 func validatePushChannel(req channelRequest) problem {
 	cfg := req.Config
 	switch req.Type {
@@ -624,18 +627,6 @@ func validatePushChannel(req channelRequest) problem {
 			}
 			return fieldProblem(missing, "config.username and config.password must be set together")
 		}
-	case store.ChannelWebhook:
-		// The method, the headers and the body template, with the rules
-		// the sender applies before every delivery.
-		if err := notifier.ValidateWebhookConfig(cfg); err != nil {
-			return notifierProblem(err)
-		}
-	case store.ChannelSMS:
-		// One rule set, shared with the sender, so the form and the
-		// delivery cannot disagree about what a valid number is.
-		if err := notifier.ValidateSMSConfig(cfg); err != nil {
-			return notifierProblem(err)
-		}
 	case store.ChannelGotify:
 		if strings.TrimSpace(cfg["token"]) == "" {
 			return fieldProblem("config.token", "config.token is required for a gotify channel")
@@ -649,6 +640,14 @@ func validatePushChannel(req channelRequest) problem {
 				return fieldProblem("config."+key, "config."+key+" must be a whole number from 0 to 10")
 			}
 		}
+	}
+	// One rule set, shared with the sender, so the form and the delivery
+	// cannot disagree: a webhook's method, headers and body template, an
+	// SMS channel's numbers, an email channel's host, sender and port, a
+	// Telegram chat, a Discord URL. The type is known here (validateChannel
+	// refused any other before this point).
+	if err := notifier.ValidateConfig(req.Type, cfg); err != nil {
+		return notifierProblem(err)
 	}
 	return problem{}
 }

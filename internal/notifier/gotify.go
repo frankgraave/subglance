@@ -42,11 +42,11 @@ func (s *GotifySender) Validate(cfg map[string]string) error {
 		return err
 	}
 	if strings.TrimSpace(cfg["token"]) == "" {
-		return &configError{"token is required (an application token from Gotify's Apps page)"}
+		return onKey("token", &configError{"token is required (an application token from Gotify's Apps page)"})
 	}
 	for _, key := range []string{"priority_down", "priority_up"} {
 		if _, err := gotifyPriority(cfg[key], 0); err != nil {
-			return &configError{key + " " + err.Error()}
+			return onKey(key, &configError{key + " " + err.Error()})
 		}
 	}
 	return nil

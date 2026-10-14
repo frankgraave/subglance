@@ -311,6 +311,13 @@ var withheldStandIn = map[string]string{
 	"token": "withheld",
 }
 
+// withheldTypeStandIn overrides withheldStandIn where a type's sender holds
+// the value to a shape of its own: a Discord channel's URL has to name
+// Discord, and the generic stand-in does not.
+var withheldTypeStandIn = map[string]map[string]string{
+	store.ChannelDiscord: {"url": "https://discord.com/api/webhooks/0/withheld"},
+}
+
 func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConfig, path string, c configfile.Channel) error {
 	existing, found := ex.channels[c.Key]
 	item := importItem{Key: c.Key, Name: c.Name, Action: actionCreate}
@@ -382,6 +389,9 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 	}
 	for _, k := range missing {
 		if v, ok := withheldStandIn[k]; ok {
+			req.Config[k] = v
+		}
+		if v, ok := withheldTypeStandIn[next.Type][k]; ok {
 			req.Config[k] = v
 		}
 	}
