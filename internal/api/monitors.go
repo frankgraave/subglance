@@ -563,8 +563,13 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		// Every refusal a request can earn is answered above, with its
+		// field, before the store is reached. What arrives here is the
+		// server failing to write a request that was fine — a locked or full
+		// database, an I/O error — so it is a 500, and the driver's text,
+		// which names tables and constraints, goes to the log only.
 		s.log.Error("create monitor", "error", err)
-		writeError(w, http.StatusBadRequest, "could not create monitor: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "could not create monitor")
 		return
 	}
 
@@ -1558,8 +1563,10 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "monitor not found")
 		return
 	default:
+		// As on create: the request was validated in full above, so this is
+		// a failed write, not a refused one.
 		s.log.Error("update monitor", "id", id, "error", err)
-		writeError(w, http.StatusBadRequest, "could not update monitor: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "could not update monitor")
 		return
 	}
 
