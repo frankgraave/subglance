@@ -29,6 +29,15 @@ the variable and the value they could not read. An invalid flag already
 behaved that way; silently running on the default meant believing you had a
 five-minute dead man's switch, or LAN monitoring, and having neither.
 
+A flag takes its value as `--name value` or `--name=value`. A true/false flag
+takes it only after an equals sign: `--connectivity-check=false`, while a bare
+`--allow-private-targets` means true. A word on the command line that is not a
+flag is refused at startup, naming the word. Go's flag parser stops reading at
+such a word, so `--connectivity-check false --addr :9000` used to leave the
+check on and listen on `:8080` without a message; the same holds for the
+subcommands, so `subglance restore latest --data-dir /srv/subglance` is refused
+rather than restoring into `/data`.
+
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
 | `--addr` | `SUBGLANCE_ADDR` | `:8080` | HTTP listen address |

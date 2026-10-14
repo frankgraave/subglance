@@ -474,6 +474,9 @@ func Load(args []string) (Config, error) {
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
+	if err := refuseStrayArgument(fs, args); err != nil {
+		return Config{}, err
+	}
 	// A flag beats the variable, so it is also what the page names.
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -498,6 +501,47 @@ func Load(args []string) (Config, error) {
 	// one form links are built from.
 	c.BaseURL, _ = notifier.ParseBaseURL(c.BaseURL)
 	return c, nil
+}
+
+// refuseStrayArgument fails when parsing stopped before the end of args.
+//
+// Go's flag package stops at the first word that is not a flag and leaves
+// the rest unread, so without this every flag after a stray word is dropped
+// in silence: `--connectivity-check false --addr :9000` turns the check on
+// (a boolean flag takes no separate value, so `false` is the stray word) and
+// listens on :8080. Refusing is the only safe answer, because the operator
+// believes the dropped flags are in force.
+func refuseStrayArgument(fs *flag.FlagSet, args []string) error {
+	left := fs.Args()
+	if len(left) == 0 {
+		return nil
+	}
+	stray := left[0]
+	if i := len(args) - len(left); i > 0 {
+		if name, ok := boolFlagWithoutValue(fs, args[i-1]); ok {
+			if _, err := strconv.ParseBool(stray); err == nil {
+				return fmt.Errorf("unexpected argument %q after --%s: a true/false flag takes its value after "+
+					"an equals sign, as --%s=%s", stray, name, name, stray)
+			}
+		}
+	}
+	return fmt.Errorf("unexpected argument %q: every setting is a flag, such as --data-dir /data, and "+
+		"a word that is not one leaves every flag after it unread (--help lists the flags)", stray)
+}
+
+// boolFlagWithoutValue reports whether arg is a boolean flag written without
+// `=value`, and returns its name.
+func boolFlagWithoutValue(fs *flag.FlagSet, arg string) (string, bool) {
+	if !strings.HasPrefix(arg, "-") || strings.Contains(arg, "=") {
+		return "", false
+	}
+	name := strings.TrimLeft(arg, "-")
+	f := fs.Lookup(name)
+	if f == nil {
+		return "", false
+	}
+	b, ok := f.Value.(interface{ IsBoolFlag() bool })
+	return name, ok && b.IsBoolFlag()
 }
 
 func (c Config) validate() error {
