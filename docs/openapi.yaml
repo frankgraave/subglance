@@ -1541,7 +1541,8 @@ paths:
           description: |
             Malformed or unknown-field JSON, a missing name/type/target, an
             out-of-range interval or timeout, a target that cannot work for the
-            chosen type, or a rejection from the storage layer.
+            chosen type, or a channel that does not exist. A refusal of one
+            field names it in `field`.
           content:
             application/json:
               schema:
@@ -1554,6 +1555,18 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          description: |
+            The request was valid but the monitor could not be written, for
+            example because the database is locked or the disk is full.
+            Nothing was stored; the request can be retried as it is. The
+            cause is in the server log, not in the response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: could not create monitor
       x-subglance-access: write
   /api/v1/monitors/{id}:
     parameters:
@@ -1679,8 +1692,8 @@ paths:
           description: |
             An invalid id, a malformed `If-Match` header, malformed or
             unknown-field JSON, an empty name or target, an out-of-range value,
-            an unknown type, HTTP method or keyword mode, or a rejection from
-            the storage layer.
+            an unknown type, HTTP method or keyword mode, or a channel that
+            does not exist. A refusal of one field names it in `field`.
           content:
             application/json:
               schema:
@@ -1719,11 +1732,17 @@ paths:
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '500':
-          description: The monitor could not be loaded.
+          description: |
+            The request was valid but the monitor could not be loaded or
+            written, for example because the database is locked or the disk
+            is full. Nothing was changed; the request can be retried as it
+            is. The cause is in the server log, not in the response.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: could not update monitor
       x-subglance-access: write
     delete:
       tags: [Monitors]
