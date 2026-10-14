@@ -164,8 +164,7 @@ func (s *Server) statusPageFromPath(w http.ResponseWriter, r *http.Request) (sto
 
 func decodeStatusPage(w http.ResponseWriter, r *http.Request) (store.StatusPage, bool) {
 	var req statusPageRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return store.StatusPage{}, false
 	}
 	return store.StatusPage{
@@ -249,8 +248,7 @@ func (s *Server) handleSetStatusPageEntries(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req statusPageEntriesRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.Entries == nil {

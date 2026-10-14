@@ -28,7 +28,7 @@ func TestBulkTagsRejectInvalidRequestsAtomically(t *testing.T) {
 		{"empty", "", 400}, {"null", "null", 400}, {"unknown action", strings.Replace(base, "apply", "explode", 1), 400},
 		{"unknown field", strings.TrimSuffix(base, "}") + `,"typo":true}`, 400},
 		{"trailing JSON", base + ` {}`, 400}, {"trailing garbage", base + ` !`, 400},
-		{"oversized", base + strings.Repeat(" ", 256<<10), 400},
+		{"oversized", base + strings.Repeat(" ", 256<<10), 413},
 		{"empty selection", strings.Replace(base, `[`+itoa(m.ID)+`]`, `[]`, 1), 400},
 		{"duplicate ID", strings.Replace(base, `[`+itoa(m.ID)+`]`, `[`+itoa(m.ID)+`,`+itoa(m.ID)+`]`, 1), 400},
 		{"negative ID", strings.Replace(base, `[`+itoa(m.ID)+`]`, `[-1]`, 1), 400},

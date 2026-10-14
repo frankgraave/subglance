@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -457,17 +456,10 @@ func oldestFirstHeartbeats(hbs []store.Heartbeat) []heartbeatResponse {
 
 func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	var req createMonitorRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	// Reject fields the API does not know.
-	//
-	// Silently ignoring them is a trap: a client that sends interval_seconds
-	// instead of interval_s gets a 201, believes it configured a 5-second
-	// check, and receives the default instead. The failure surfaces much
-	// later as "why is this monitor so slow" — a typo should be an error at
-	// the moment it is made.
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	// readJSON refuses fields the API does not know: a client that sends
+	// interval_seconds instead of interval_s must not get a 201 and the
+	// default interval.
+	if !readJSON(w, r, &req) {
 		return
 	}
 
@@ -1504,10 +1496,7 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req patchMonitorRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 
@@ -1779,10 +1768,14 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	}
 	if len(req.JSONAssertion) > 0 {
 		var wire *jsonAssertionWire
-		dec := json.NewDecoder(bytes.NewReader(req.JSONAssertion))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&wire); err != nil {
-			return fieldProblem("json_assertion", "json_assertion must be an object with path, operator and expected, or null: "+err.Error())
+		if err := decodeStrict(req.JSONAssertion, &wire); err != nil {
+			// A value of the wrong type names its sub-field
+			// (json_assertion.path); an unknown key has none to name.
+			_, p := bodyRefusal(err, &wire, "json_assertion", 0)
+			if p.field == "" {
+				p = fieldProblem("json_assertion", "json_assertion must be an object with path, operator and expected, or null: "+p.msg)
+			}
+			return p
 		}
 		a, p := jsonAssertionFromWire(wire)
 		if !p.ok() {

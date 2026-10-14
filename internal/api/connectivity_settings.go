@@ -135,8 +135,7 @@ func (s *Server) handleSetConnectivitySettings(w http.ResponseWriter, r *http.Re
 	}
 
 	var req connectivitySettingsRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.Enabled == nil && req.Targets == nil {

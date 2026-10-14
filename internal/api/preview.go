@@ -1,9 +1,6 @@
 package api
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -128,18 +125,10 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req previewRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	// A second JSON value in the same body is a client bug, and silently
-	// probing only the first target hides it. `{"target":"a"}{"target":"b"}`
-	// used to preview "a" and report success for a request the caller did not
-	// make.
-	if err := dec.Decode(new(struct{})); !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "invalid JSON: expected exactly one JSON object")
+	// readJSON also refuses a second JSON value: `{"target":"a"}{"target":"b"}`
+	// used to preview "a" and report success for a request the caller did
+	// not make.
+	if !readJSON(w, r, &req) {
 		return
 	}
 

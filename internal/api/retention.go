@@ -356,8 +356,7 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req retentionRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.RawSeconds == nil && req.RollupSeconds == nil && req.RunAt == nil && req.MaxDatabaseBytes == nil {

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -30,19 +29,16 @@ func (s *Server) handleTagOperation(w http.ResponseWriter, r *http.Request, prev
 			return
 		}
 	}
+	// Read raw first: which fields are allowed depends on the action, so
+	// the field check below is this endpoint's own.
 	var raw json.RawMessage
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10))
-	if err := decoder.Decode(&raw); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeError(w, http.StatusBadRequest, "expected exactly one JSON object")
+	if !readJSONLimit(w, r, maxBulkJSONBody, &raw) {
 		return
 	}
 	var op store.TagOperation
 	if err := json.Unmarshal(raw, &op); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		status, p := bodyRefusal(err, &op, "", 0)
+		writeProblem(w, status, p)
 		return
 	}
 	var fields map[string]json.RawMessage

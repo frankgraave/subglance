@@ -64,8 +64,7 @@ func (s *Server) handleListRoutingRules(w http.ResponseWriter, r *http.Request) 
 // itself and reports false when the body is unusable.
 func decodeRoutingRule(w http.ResponseWriter, r *http.Request) (store.RoutingRule, bool) {
 	var req routingRuleRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return store.RoutingRule{}, false
 	}
 	key, value, pr := routingTagProblem(req.TagKey, req.TagValue)
