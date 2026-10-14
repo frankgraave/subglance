@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -108,7 +109,7 @@ func TestResolvableHostAgreesWithTheResolver(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err := r.LookupNetIP(ctx, "ip", tc.host)
+			_, err := r.LookupNetIP(ctx, "ip", rooted(tc.host))
 
 			// Asked a server, or answered at once (an address, or a name in
 			// the hosts file): either way the name was usable.
@@ -120,4 +121,18 @@ func TestResolvableHostAgreesWithTheResolver(t *testing.T) {
 			}
 		})
 	}
+}
+
+// rooted returns host as a fully qualified name, so the resolver's answer in
+// TestResolvableHostAgreesWithTheResolver does not depend on the machine.
+// An unrooted name is also tried under each search domain in resolv.conf,
+// and the resolver applies its .onion refusal to each name it would send:
+// on a machine with a search domain it dials for x.onion.corp.example, and
+// the onion case would read as usable. A rooted name skips the search list.
+// An address is left alone, because a trailing dot would make it a name.
+func rooted(host string) string {
+	if _, err := netip.ParseAddr(host); err == nil || strings.HasSuffix(host, ".") {
+		return host
+	}
+	return host + "."
 }

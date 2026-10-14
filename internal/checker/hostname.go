@@ -80,7 +80,9 @@ func ResolvableHost(host string) error {
 		return fmt.Errorf("%q is not a valid IP address, and a hostname needs at least one letter", host)
 	}
 	// RFC 7686: a .onion name is reachable only through Tor, and the
-	// resolver refuses to send it to DNS.
+	// resolver refuses to send it to DNS as written. On a machine with a
+	// search domain it still asks for x.onion.<search domain>, which is not
+	// the onion service either.
 	if strings.HasSuffix(strings.ToLower(name), ".onion") {
 		return fmt.Errorf("%q is a Tor onion address, which DNS does not resolve", host)
 	}
