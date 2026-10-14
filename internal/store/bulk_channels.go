@@ -14,7 +14,23 @@ import (
 
 // ErrInvalidChannelOperation is a bulk channel request that cannot be read as
 // one: an unknown action, a missing channel or a malformed selection.
+// Every refusal is a *ChannelOperationError, which matches it under errors.Is.
 var ErrInvalidChannelOperation = errors.New("invalid channel operation")
+
+// ChannelOperationError is one refused channel operation. Field names the
+// request field at fault ("action", "channel_id" or "monitor_ids"), so a
+// client can place the message without matching on its words.
+type ChannelOperationError struct {
+	Field string
+	Msg   string
+}
+
+func (e *ChannelOperationError) Error() string {
+	return ErrInvalidChannelOperation.Error() + ": " + e.Msg
+}
+
+// Is makes errors.Is(err, ErrInvalidChannelOperation) hold for every refusal.
+func (e *ChannelOperationError) Is(target error) bool { return target == ErrInvalidChannelOperation }
 
 // ErrChannelPreviewChanged is a commit whose selection, channel links or
 // channel state moved after the preview it names.
@@ -46,25 +62,25 @@ type ChannelOperationResult struct {
 }
 
 func (op ChannelOperation) normalised() (ChannelOperation, error) {
-	bad := func(message string) (ChannelOperation, error) {
-		return ChannelOperation{}, fmt.Errorf("%w: %s", ErrInvalidChannelOperation, message)
+	bad := func(field, message string) (ChannelOperation, error) {
+		return ChannelOperation{}, &ChannelOperationError{Field: field, Msg: message}
 	}
 	if op.Action != "add" && op.Action != "remove" {
-		return bad("action must be add or remove")
+		return bad("action", "action must be add or remove")
 	}
 	if op.ChannelID <= 0 {
-		return bad("channel_id must be a positive channel ID")
+		return bad("channel_id", "channel_id must be a positive channel ID")
 	}
 	// The same ceiling as a tag change on a selection: one transaction, one
 	// request body, and no silently skipped tail.
 	if len(op.MonitorIDs) == 0 || len(op.MonitorIDs) > MaxTagOperationIDs {
-		return bad("monitor_ids must contain between 1 and 10000 IDs")
+		return bad("monitor_ids", "monitor_ids must contain between 1 and 10000 IDs")
 	}
 	op.MonitorIDs = slices.Clone(op.MonitorIDs)
 	slices.Sort(op.MonitorIDs)
 	for i, id := range op.MonitorIDs {
 		if id <= 0 || (i > 0 && op.MonitorIDs[i-1] == id) {
-			return bad("monitor_ids must be positive and unique")
+			return bad("monitor_ids", "monitor_ids must be positive and unique")
 		}
 	}
 	return op, nil

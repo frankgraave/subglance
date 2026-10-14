@@ -2085,11 +2085,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/TagOperationResult'
         '400':
-          description: Invalid or trailing JSON, invalid operation or resulting tag limit exceeded.
+          description: |
+            Invalid or trailing JSON, an invalid operation, or a resulting tag
+            limit exceeded. A refusal about one input names it in `field`:
+            `action`, `monitor_ids`, `key`, `value`, `new_key` or `new_value`,
+            including a field the action does not take. The tag limit is about
+            the result and carries no `field`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: new_key must differ from key
+                field: new_key
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2150,7 +2158,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/TagOperationResult'
         '400':
-          description: Invalid request or resulting tags, or malformed If-Match.
+          description: |
+            Invalid request or resulting tags, or a malformed If-Match. Field
+            refusals carry `field` as on the preview.
           content:
             application/json:
               schema:
@@ -2224,8 +2234,10 @@ paths:
                 $ref: '#/components/schemas/ChannelOperationResult'
         '400':
           description: |
-            Invalid or trailing JSON, an unknown field or action, or an
-            unknown channel (`field: channel_id`).
+            Invalid or trailing JSON, an unknown field, or an invalid
+            operation. A refusal about one input names it in `field`:
+            `action`, `channel_id` (also for a channel that does not exist) or
+            `monitor_ids`.
           content:
             application/json:
               schema:
@@ -2280,8 +2292,8 @@ paths:
                 $ref: '#/components/schemas/ChannelOperationResult'
         '400':
           description: |
-            Invalid request, an unknown channel (`field: channel_id`), or a
-            malformed If-Match.
+            Invalid request or a malformed If-Match. Field refusals carry
+            `field` as on the preview, `channel_id` for an unknown channel.
           content:
             application/json:
               schema:
@@ -3678,6 +3690,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: expires_in must be a duration such as 720h
+                field: expires_in
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

@@ -115,11 +115,11 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresIn != "" {
 		d, err := time.ParseDuration(req.ExpiresIn)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "expires_in must be a duration such as 720h")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("expires_in", "expires_in must be a duration such as 720h"))
 			return
 		}
 		if d <= 0 {
-			writeError(w, http.StatusBadRequest, "expires_in must be positive")
+			writeProblem(w, http.StatusBadRequest, fieldProblem("expires_in", "expires_in must be positive"))
 			return
 		}
 		t := time.Now().Add(d)
