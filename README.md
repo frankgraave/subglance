@@ -221,7 +221,9 @@ identity, so the signature can be checked without trusting a key I could lose.
 The container image is built on every push to `develop`, so `:edge` and
 `:develop` move under you; a short-SHA tag is published alongside them for
 pinning an exact build. A release tag publishes its version as an image tag
-too, such as `:0.1.0-rc4`.
+too, such as `:0.1.0-rc4`. Every pushed image is signed keylessly as well,
+against the image workflow's identity:
+[verifying the image](docs/installation.md#verifying-the-image).
 
 ## Contributing
 
