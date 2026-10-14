@@ -16,6 +16,8 @@ import (
 // MaxTagOperationIDs bounds explicit selections. Global renames have no row cap.
 const MaxTagOperationIDs = 10000
 
+// ErrInvalidTagOperation is a tag operation that cannot be performed as sent.
+// Every refusal is a *TagOperationError, which matches it under errors.Is.
 var ErrInvalidTagOperation = errors.New("invalid tag operation")
 var ErrTagPreviewChanged = errors.New("tags changed since the preview; review a new preview before saving")
 
@@ -23,6 +25,21 @@ var ErrTagPreviewChanged = errors.New("tags changed since the preview; review a 
 // one tag pair. One rule per pair is a constraint (see ErrRoutingRuleExists),
 // and merging the two cannot keep each rule's own exclusions.
 var ErrTagRenameRuleConflict = errors.New("tag rename would give two routing rules the same tag")
+
+// TagOperationError is one refused tag operation. Field names the request
+// field at fault in the spelling the API uses ("action", "monitor_ids", "key",
+// "value", "new_key", "new_value"), so a client can place the message without
+// matching on its words. It is empty when the refusal is about the result
+// rather than one input: a monitor the change would leave with too many tags.
+type TagOperationError struct {
+	Field string
+	Msg   string
+}
+
+func (e *TagOperationError) Error() string { return ErrInvalidTagOperation.Error() + ": " + e.Msg }
+
+// Is makes errors.Is(err, ErrInvalidTagOperation) hold for every refusal.
+func (e *TagOperationError) Is(target error) bool { return target == ErrInvalidTagOperation }
 
 // TagOperation describes intent, never a stale replacement of a monitor's tags.
 // IDs are required for apply/remove and forbidden for global renames.
@@ -50,29 +67,51 @@ type TagOperationResult struct {
 	StatusPages        int `json:"status_pages"`
 }
 
-func (op TagOperation) normalised() (TagOperation, error) {
-	bad := func(message string) (TagOperation, error) {
-		return TagOperation{}, fmt.Errorf("%w: %s", ErrInvalidTagOperation, message)
+// ValidTagAction reports whether action is one a TagOperation can perform.
+// The API asks before checking which other fields the action allows, so an
+// unknown action is refused as itself rather than as a field it disallows.
+func ValidTagAction(action string) bool {
+	switch action {
+	case "apply", "remove", "rename_key", "rename_value":
+		return true
 	}
-	if op.Action != "apply" && op.Action != "remove" && op.Action != "rename_key" && op.Action != "rename_value" {
-		return bad("unknown action")
+	return false
+}
+
+func (op TagOperation) normalised() (TagOperation, error) {
+	bad := func(field, message string) (TagOperation, error) {
+		return TagOperation{}, &TagOperationError{Field: field, Msg: message}
+	}
+	if !ValidTagAction(op.Action) {
+		return bad("action", "action must be apply, remove, rename_key or rename_value")
 	}
 	global := op.Action == "rename_key" || op.Action == "rename_value"
 	if global && len(op.MonitorIDs) != 0 {
-		return bad("global renames do not accept monitor_ids")
+		return bad("monitor_ids", "global renames do not accept monitor_ids")
 	}
 	if !global && (len(op.MonitorIDs) == 0 || len(op.MonitorIDs) > MaxTagOperationIDs) {
-		return bad("monitor_ids must contain between 1 and 10000 IDs")
+		return bad("monitor_ids", "monitor_ids must contain between 1 and 10000 IDs")
 	}
 	op.MonitorIDs = slices.Clone(op.MonitorIDs)
 	slices.Sort(op.MonitorIDs)
 	for i, id := range op.MonitorIDs {
 		if id <= 0 || (i > 0 && op.MonitorIDs[i-1] == id) {
-			return bad("monitor_ids must be positive and unique")
+			return bad("monitor_ids", "monitor_ids must be positive and unique")
 		}
 	}
-	if (op.Action != "rename_value" && op.NewValue != "") || (op.Action != "rename_key" && op.NewKey != "") || (op.Action == "rename_key" && op.Value != "") {
-		return bad("unexpected value, new_key or new_value for this action")
+	switch {
+	case op.Action != "rename_value" && op.NewValue != "":
+		return bad("new_value", "new_value is not allowed for action "+op.Action)
+	case op.Action != "rename_key" && op.NewKey != "":
+		return bad("new_key", "new_key is not allowed for action "+op.Action)
+	case op.Action == "rename_key" && op.Value != "":
+		return bad("value", "value is not allowed for action rename_key")
+	}
+	// The key is checked on its own first, with a stand-in value, as routing
+	// rules check theirs: one tag rule refuses both halves of the pair, so
+	// without this step an empty value would be blamed on the key.
+	if _, err := NormaliseTags(map[string]string{op.Key: "-"}); err != nil {
+		return bad("key", err.Error())
 	}
 	value := op.Value
 	if op.Action == "rename_key" {
@@ -80,7 +119,7 @@ func (op TagOperation) normalised() (TagOperation, error) {
 	}
 	tags, err := NormaliseTags(map[string]string{op.Key: value})
 	if err != nil {
-		return bad(err.Error())
+		return bad("value", err.Error())
 	}
 	for key, value := range tags {
 		op.Key = key
@@ -91,23 +130,23 @@ func (op TagOperation) normalised() (TagOperation, error) {
 	if op.Action == "rename_key" {
 		next, err := NormaliseTags(map[string]string{op.NewKey: "key"})
 		if err != nil {
-			return bad(err.Error())
+			return bad("new_key", err.Error())
 		}
 		for key := range next {
 			op.NewKey = key
 		}
 		if op.NewKey == op.Key {
-			return bad("new_key must differ from key")
+			return bad("new_key", "new_key must differ from key")
 		}
 	}
 	if op.Action == "rename_value" {
 		next, err := NormaliseTags(map[string]string{op.Key: op.NewValue})
 		if err != nil {
-			return bad(err.Error())
+			return bad("new_value", err.Error())
 		}
 		op.NewValue = next[op.Key]
 		if op.NewValue == op.Value {
-			return bad("new_value must differ from value")
+			return bad("new_value", "new_value must differ from value")
 		}
 	}
 	return op, nil
@@ -229,7 +268,8 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 			continue
 		}
 		if _, err := NormaliseTags(next); err != nil {
-			return empty, "", fmt.Errorf("%w: monitor %d: %w", ErrInvalidTagOperation, row.ID, err)
+			// About the result, not one input: no field to blame.
+			return empty, "", &TagOperationError{Msg: fmt.Sprintf("monitor %d: %v", row.ID, err)}
 		}
 		changed = append(changed, tagOperationRow{ID: row.ID, Tags: next})
 	}

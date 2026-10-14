@@ -40,14 +40,17 @@ func (s *Server) handleChannelOperation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	result, etag, err := s.db.ChangeMonitorChannels(r.Context(), op, expected, preview)
+	var invalid *store.ChannelOperationError
 	switch {
 	case errors.Is(err, store.ErrUnknownChannel):
 		// The inventory's dialog lists the channels it read when it opened;
 		// one deleted since is the usual way to get here.
 		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_id", err))
 		return
-	case errors.Is(err, store.ErrInvalidChannelOperation):
-		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.As(err, &invalid):
+		// The store's own words without its "invalid channel operation:"
+		// prefix, which names the Go error and tells a person nothing.
+		writeProblem(w, http.StatusBadRequest, fieldProblem(invalid.Field, invalid.Msg))
 		return
 	case errors.Is(err, sql.ErrNoRows):
 		writeError(w, http.StatusNotFound, "one or more selected monitors no longer exist; refresh the selection")
