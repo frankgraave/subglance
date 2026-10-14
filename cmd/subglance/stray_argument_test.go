@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,13 +44,10 @@ func TestServerRefusesAStrayArgument(t *testing.T) {
 func TestHealthcheckRefusesAStrayArgument(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"ready","database":"up"}`))
-	}))
-	defer srv.Close()
-
-	// The server is ready, so only the refusal can make this fail.
-	err := runHealthcheck([]string{"--addr", listenAddr(t, srv.URL), "now"}, &bytes.Buffer{})
+	// Nothing listens here and the refusal comes before any request, so the
+	// short suite opens no socket; without the refusal the probe would fail
+	// with a dial error that does not name the word.
+	err := runHealthcheck([]string{"--addr", "127.0.0.1:1", "now"}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), `unexpected argument "now"`) {
 		t.Fatalf("runHealthcheck: err = %v, want it to name the stray argument", err)
 	}

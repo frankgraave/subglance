@@ -517,7 +517,7 @@ func refuseStrayArgument(fs *flag.FlagSet, args []string) error {
 		return nil
 	}
 	stray := left[0]
-	if i := len(args) - len(left); i > 0 {
+	if i := len(args) - len(left); i > 0 && readAsFlag(fs, args, i-1) {
 		if name, ok := boolFlagWithoutValue(fs, args[i-1]); ok {
 			if _, err := strconv.ParseBool(stray); err == nil {
 				return fmt.Errorf("unexpected argument %q after --%s: a true/false flag takes its value after "+
@@ -527,6 +527,36 @@ func refuseStrayArgument(fs *flag.FlagSet, args []string) error {
 	}
 	return fmt.Errorf("unexpected argument %q: every setting is a flag, such as --data-dir /data, and "+
 		"a word that is not one leaves every flag after it unread (--help lists the flags)", stray)
+}
+
+// readAsFlag reports whether parsing read args[i] as a flag rather than as
+// the value of the flag before it. A flag that takes a value and is written
+// without `=value` consumes the next word whatever it looks like, so in
+// `--data-dir --connectivity-check false` the middle word is a directory.
+func readAsFlag(fs *flag.FlagSet, args []string, i int) bool {
+	j := 0
+	for j < i {
+		if takesNextWord(fs, args[j]) {
+			j += 2
+		} else {
+			j++
+		}
+	}
+	return j == i
+}
+
+// takesNextWord reports whether arg is a flag that takes a value and is
+// written without `=value`, so the flag package reads the next word as it.
+func takesNextWord(fs *flag.FlagSet, arg string) bool {
+	if !strings.HasPrefix(arg, "-") || strings.Contains(arg, "=") {
+		return false
+	}
+	f := fs.Lookup(strings.TrimLeft(arg, "-"))
+	if f == nil {
+		return false
+	}
+	b, ok := f.Value.(interface{ IsBoolFlag() bool })
+	return !ok || !b.IsBoolFlag()
 }
 
 // boolFlagWithoutValue reports whether arg is a boolean flag written without

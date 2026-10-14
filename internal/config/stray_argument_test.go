@@ -38,6 +38,13 @@ func TestLoadRefusesAStrayArgument(t *testing.T) {
 			want: []string{`unexpected argument "false" after --connectivity-check`, "--connectivity-check=false"},
 		},
 		{
+			// --data-dir takes --addr as its value, so the boolean flag after
+			// them is read as a flag and the hint still applies.
+			name: "a boolean flag after a flag that took a flag-like value",
+			args: []string{"--data-dir", "--addr", "--connectivity-check", "false"},
+			want: []string{`unexpected argument "false" after --connectivity-check`, "--connectivity-check=false"},
+		},
+		{
 			name: "a single-dash boolean flag given its value after a space",
 			args: []string{"-allow-private-targets", "true"},
 			want: []string{"--allow-private-targets=true"},
@@ -73,6 +80,10 @@ func TestStrayArgumentHintOnlyAfterABooleanFlag(t *testing.T) {
 		{"--connectivity-check", "maybe"},
 		{"--connectivity-check=false", "true"},
 		{"--addr", "127.0.0.1:9000", "false"},
+		// --data-dir reads the next word as its value, so the boolean flag
+		// here is a directory name, and --connectivity-check=false would
+		// send the reader to a command that still sets the wrong directory.
+		{"--data-dir", "--connectivity-check", "false"},
 	}
 	for _, args := range cases {
 		_, err := Load(args)
