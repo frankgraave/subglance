@@ -23,13 +23,17 @@
 
 # --- Stage 1: the dashboard ---------------------------------------------
 #
-# Pinned to the Node major the CI frontend job uses. Alpine because this
-# stage is thrown away and its size only affects build time.
+# Pinned to the exact Node release.yml builds the archives' dashboard with,
+# which is also the one the CI frontend job tests. The image is the install
+# path the README leads with, and a floating major tag let it move to a Node
+# no CI job ran. internal/buildinfo/toolchain_test.go fails when this file
+# and the workflows disagree, so a bump moves them together. Alpine because
+# this stage is thrown away and its size only affects build time.
 #
 # --platform=$BUILDPLATFORM: this stage emits platform-independent
 # JavaScript, so building it once natively beats building it twice, one of
 # them under QEMU emulation.
-FROM --platform=$BUILDPLATFORM node:26-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24.21.0-alpine AS web
 
 WORKDIR /src/web
 
@@ -51,7 +55,11 @@ RUN npm run build
 #
 # Also native, cross-compiling to the target: Go does that for free and it is
 # roughly an order of magnitude faster than emulating arm64.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS go
+#
+# The same exact Go as GO_VERSION in ci.yml and release.yml, for the reason
+# given there: what CI proved is what gets shipped, and `subglance --version`
+# reports the same toolchain whether it came from an archive or this image.
+FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine AS go
 
 WORKDIR /src
 
