@@ -32,7 +32,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A push run publishes an image and then signs it in a second job;
+  # cancelling it in between would leave that image unsigned. Only runs
+  # that push nothing (pull requests, a manual build) are cancelled.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 # No `id-token` here on purpose: a workflow-level grant would reach every job,
 # including the pull request build. Only the `sign` job asks for it.

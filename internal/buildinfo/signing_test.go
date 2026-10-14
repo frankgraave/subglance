@@ -29,6 +29,9 @@ type imageWorkflow struct {
 			Tags     []string `yaml:"tags"`
 		} `yaml:"push"`
 	} `yaml:"on"`
+	Concurrency struct {
+		CancelInProgress any `yaml:"cancel-in-progress"`
+	} `yaml:"concurrency"`
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
 		If          string            `yaml:"if"`
@@ -188,6 +191,29 @@ func TestImageIsSignedByDigestOnlyOnPush(t *testing.T) {
 	if !signed {
 		t.Errorf("no job in docker.yml signs the pushed digest with `cosign sign`")
 	}
+}
+
+// TestImagePushRunsAreNotCancelled keeps a newer run from cancelling a push
+// run of docker.yml. The image is signed by a second job after `publish`: a
+// push run cancelled between the two leaves an image in the registry, under
+// its sha tag, that nothing signs later. A pull request run pushes nothing,
+// so cancelling it is still safe.
+func TestImagePushRunsAreNotCancelled(t *testing.T) {
+	wf := readImageWorkflow(t)
+
+	switch v := wf.Concurrency.CancelInProgress.(type) {
+	case nil:
+		return // GitHub's default: a newer run waits instead of cancelling
+	case bool:
+		if !v {
+			return
+		}
+	case string:
+		if expr(v) == "github.event_name != 'push'" {
+			return
+		}
+	}
+	t.Errorf("docker.yml concurrency has cancel-in-progress: %v; a newer run would cancel a push run between publish and sign and leave its image unsigned, so cancel only runs that are not a push", wf.Concurrency.CancelInProgress)
 }
 
 // identityRegexp finds the identity pattern of the `cosign verify` command
