@@ -137,12 +137,22 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 			skipMonitor(res, name, typ, "it has no usable host and port")
 			return configfile.Monitor{}, false
 		}
+		// The import refuses a hostname the resolver would refuse, so one
+		// that came over would fail the whole file instead of this monitor.
+		if err := checker.ResolvableHost(host); err != nil {
+			skipMonitor(res, name, typ, "its host cannot be looked up: "+err.Error())
+			return configfile.Monitor{}, false
+		}
 		out.Type, out.Target = "tcp", net.JoinHostPort(host, strconv.Itoa(port))
 	case "ping":
 		host := strings.TrimSpace(m.str("hostname"))
 		if host == "" || (strings.ContainsAny(host, "/?#@:") && net.ParseIP(host) == nil) ||
 			strings.ContainsFunc(host, unicode.IsSpace) {
 			skipMonitor(res, name, typ, "its host "+strconv.Quote(host)+" is not a hostname or IP address")
+			return configfile.Monitor{}, false
+		}
+		if err := checker.ResolvableHost(host); err != nil {
+			skipMonitor(res, name, typ, "its host cannot be looked up: "+err.Error())
 			return configfile.Monitor{}, false
 		}
 		out.Type, out.Target = "ping", host
@@ -310,6 +320,9 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
 		strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
 		return skip("its URL " + strconv.Quote(target) + " is not an http or https URL with a host")
+	}
+	if err := checker.ResolvableURLHost(u.Hostname()); err != nil {
+		return skip("its URL's host cannot be looked up: " + err.Error())
 	}
 	out.Type, out.Target = "http", target
 

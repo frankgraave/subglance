@@ -147,6 +147,23 @@ invalid, while spaces in paths and queries are URL data and remain allowed.
 TCP and SSL ignore a pasted URL's credentials, path, query and fragment; ping
 requires a bare hostname or IP address, with no port or URL components.
 
+A hostname has to be one a resolver will look up. SubGlance resolves names
+itself rather than through the C library, and that resolver answers "no such
+host" for a malformed name without asking any server — the same words it uses
+for a name that does not exist. So a monitor saved with one would fail every
+check while looking like an outage. Creating, editing, previewing or importing
+an `http`, `tcp`, `ssl` or `ping` monitor therefore refuses, on `target`, a
+hostname with an empty label (`exa..mple.com`), a character other than a
+letter, digit, hyphen, underscore or dot, a label that starts or ends with a
+hyphen, a label over 63 characters or a name over 253, a name of digits and
+dots that is not a valid IPv4 address (`10.0.1`, `999.1.1.1`), and a `.onion`
+name. Single-label names such as `db` or `localhost`, underscores and a
+trailing dot are accepted. An internationalised name such as `bücher.de` works
+in an `http` URL, which is converted to its `xn--` form before the request;
+`tcp`, `ssl` and `ping` need that form written out (`xn--bcher-kva.de`).
+A monitor saved before this rule keeps its target until it is edited; the
+check reports it as a DNS failure, as it did before.
+
 An HTTP monitor's own request headers — an `Authorization` or `X-Api-Key`, for
 instance — are sent only to the origin (scheme, host and port) of its target.
 When a followed redirect leads to another origin, every header the monitor set

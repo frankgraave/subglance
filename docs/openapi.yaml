@@ -5792,7 +5792,13 @@ components:
       description: |
         The kind of check. `http` needs an http/https URL, `tcp` needs
         `host:port`, `ssl` takes a host with an optional port (443 assumed),
-        and `ping` takes a bare hostname or IP — ICMP has no ports.
+        and `ping` takes a bare hostname or IP — ICMP has no ports. For all
+        four, a hostname the resolver would refuse without asking a server (an
+        empty label, a character other than a letter, digit, hyphen,
+        underscore or dot, a label that starts or ends with a hyphen, digits
+        and dots that are not an IPv4 address, a `.onion` name) is refused on
+        `target`. `tcp`, `ssl` and `ping` take an internationalised name in
+        its `xn--` form; an `http` URL may use either.
 
         `push` is the one type nothing dials. The monitor is given a secret
         URL, the job pings it when it finishes, and silence past

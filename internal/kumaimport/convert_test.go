@@ -94,6 +94,11 @@ func TestMonitorsThatCannotComeOver(t *testing.T) {
 		{"not a URL", httpRow(row{"url": "https://"}), "is not an http or https URL"},
 		{"port without port", row{"id": int64(1), "name": "Db", "type": "port", "hostname": "db", "port": nil, "interval": int64(60)}, "no usable host and port"},
 		{"ping a URL", row{"id": int64(1), "name": "P", "type": "ping", "hostname": "https://x.example/", "interval": int64(60)}, "is not a hostname"},
+		// Hostnames the resolver refuses without asking: the import would
+		// refuse the whole file over one of them, so the monitor stays behind.
+		{"ping an empty label", row{"id": int64(1), "name": "P", "type": "ping", "hostname": "x..example", "interval": int64(60)}, "empty label"},
+		{"port a bad character", row{"id": int64(1), "name": "Db", "type": "port", "hostname": "db!.example", "port": int64(5432), "interval": int64(60)}, `contains "!"`},
+		{"http a leading hyphen", httpRow(row{"url": "https://-x.example/"}), "starts with a hyphen"},
 		{"odd status codes", httpRow(row{"accepted_statuscodes_json": `["abc"]`}), "accepted status codes"},
 	}
 	for _, tc := range cases {

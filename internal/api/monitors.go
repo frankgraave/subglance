@@ -959,6 +959,9 @@ func validateTargetForType(typ, target string) problem {
 		if strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
 			return bad("a hostname cannot contain spaces")
 		}
+		if err := checker.ResolvableURLHost(u.Hostname()); err != nil {
+			return bad(err.Error())
+		}
 
 	case "tcp":
 		host, port, err := checker.ParseHostPort(target, 0)
@@ -971,6 +974,9 @@ func validateTargetForType(typ, target string) problem {
 		if port == 0 {
 			return bad("a tcp monitor needs a port, for example db.example.com:5432")
 		}
+		if err := checker.ResolvableHost(host); err != nil {
+			return bad(err.Error())
+		}
 
 	case "ssl":
 		host, _, err := checker.ParseHostPort(target, 443)
@@ -979,6 +985,9 @@ func validateTargetForType(typ, target string) problem {
 		}
 		if host == "" {
 			return bad("target has no host")
+		}
+		if err := checker.ResolvableHost(host); err != nil {
+			return bad(err.Error())
 		}
 
 	case store.TypeDNS:
@@ -1046,6 +1055,9 @@ func validateTargetForType(typ, target string) problem {
 		if strings.ContainsAny(target, "/?#@") {
 			return bad("a ping monitor takes a hostname or IP address, nothing after it — " +
 				"use " + host)
+		}
+		if err := checker.ResolvableHost(host); err != nil {
+			return bad(err.Error())
 		}
 	}
 	return problem{}
