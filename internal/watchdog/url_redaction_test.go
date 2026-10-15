@@ -200,8 +200,8 @@ func TestShownURLKeepsSchemeAndHostOnly(t *testing.T) {
 		"https://hc-ping.com:abc/ping#fr4g@secret-uuid-1234":   "https://hc-ping.com:***/…",
 		"http://[2001:db8::1]:pa55word/x":                      "http://[2001:db8::1]:***/…",
 	} {
-		if got := shownURL(raw); got != want {
-			t.Errorf("shownURL(%q) = %q, want %q", raw, got, want)
+		if got := ShownURL(raw); got != want {
+			t.Errorf("ShownURL(%q) = %q, want %q", raw, got, want)
 		}
 	}
 }

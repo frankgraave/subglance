@@ -123,7 +123,7 @@ type Watchdog struct {
 	history   history
 	createdAt time.Time
 	url       string
-	// shown is url as a log line or an error may print it; see shownURL.
+	// shown is url as a log line or an error may print it; see ShownURL.
 	shown    string
 	interval time.Duration
 	liveness func() Liveness
@@ -173,7 +173,7 @@ func New(opts Options) (*Watchdog, error) {
 	return &Watchdog{
 		createdAt: time.Now(),
 		url:       opts.URL,
-		shown:     shownURL(opts.URL),
+		shown:     ShownURL(opts.URL),
 		interval:  interval,
 		liveness:  opts.Liveness,
 		log:       log,
@@ -198,7 +198,7 @@ func cloneWithoutRedirects(c *http.Client) *http.Client {
 // because anything stricter would start rejecting the private addresses this
 // feature is often pointed at on purpose.
 func ValidateURL(raw string) error {
-	shown := shownURL(raw)
+	shown := ShownURL(raw)
 	quoted := strconv.Quote(shown)
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -206,7 +206,7 @@ func ValidateURL(raw string) error {
 		// and its reason can quote the authority: in
 		// https://user:pass/x@host, or https://user:pass/x with the "@"
 		// left out, the parser reads pass as a port and its reason
-		// prints it. The reason is given only where shownURL kept the
+		// prints it. The reason is given only where ShownURL kept the
 		// authority whole.
 		if strings.Contains(shown, "***") {
 			// Go's reason without the text it quotes.
@@ -235,7 +235,7 @@ func ValidateURL(raw string) error {
 	return nil
 }
 
-// shownURL is the watchdog URL as a log line or an error prints it: the
+// ShownURL is the watchdog URL as a log line or an error prints it: the
 // scheme and the host, and "/…" where a path, query or fragment followed. A
 // user name and password are left out.
 //
@@ -248,7 +248,7 @@ func ValidateURL(raw string) error {
 // follows a colon in the host is replaced by "***" as well: a port that
 // does not parse may be a password whose "@" was left out, as in
 // https://user:pa55word/path.
-func shownURL(raw string) string {
+func ShownURL(raw string) string {
 	if u, err := url.Parse(raw); err == nil && u.Scheme != "" && u.Host != "" {
 		shown := u.Scheme + "://" + u.Host
 		if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
@@ -286,7 +286,7 @@ func shownURL(raw string) string {
 	return host + tail
 }
 
-// loggable is err with every URL in it shown as shownURL shows it.
+// loggable is err with every URL in it shown as ShownURL shows it.
 //
 // The HTTP client wraps every transport failure in a *url.Error that
 // quotes the request URL: Go masks a password there, but not the path or
@@ -303,7 +303,7 @@ func loggable(err error) error {
 		return err
 	}
 	clean := *ue
-	clean.URL = shownURL(ue.URL)
+	clean.URL = ShownURL(ue.URL)
 	clean.Err = loggable(ue.Err)
 	msg := strings.ReplaceAll(err.Error(), ue.Error(), clean.Error())
 	if msg == clean.Error() {
