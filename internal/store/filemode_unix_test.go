@@ -136,3 +136,75 @@ func TestRestrictFileModesWithoutADatabase(t *testing.T) {
 		t.Errorf("changed = %v, err = %v; want nothing", changed, err)
 	}
 }
+
+// A database path that is a symlink to a file that does not exist yet gets
+// that file created owner-only, rather than being taken for an existing
+// database and left to SQLite to create.
+func TestNewDatabaseBehindADanglingSymlinkIsOwnerOnly(t *testing.T) {
+	withUmask(t, 0o022)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "data", "real.db")
+	if err := os.Mkdir(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Relative, and through a second link, as a hand-made layout might be.
+	hop := filepath.Join(dir, "hop.db")
+	if err := os.Symlink("data/real.db", hop); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "subglance.db")
+	if err := os.Symlink("hop.db", link); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := Open(context.Background(), Options{Path: link})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Writer.Exec("INSERT INTO settings (key, value, updated_at) VALUES ('k', 'v', 0)"); err != nil {
+		t.Fatal(err)
+	}
+	requireMode(t, target, 0o600)
+}
+
+// A symlink loop is an error from Open, not a hang.
+func TestOpenRefusesASymlinkLoop(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a.db"), filepath.Join(dir, "b.db")
+	if err := os.Symlink(b, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Fatal(err)
+	}
+	if db, err := Open(context.Background(), Options{Path: a}); err == nil {
+		_ = db.Close()
+		t.Fatal("Open followed a symlink loop without an error")
+	}
+}
+
+// A "file:" URI or a name with "?" would reach SQLite as a different file
+// than the one created owner-only, so Open refuses it before creating
+// anything.
+func TestOpenRefusesAURIOrAQuery(t *testing.T) {
+	withUmask(t, 0o022)
+	dir := t.TempDir()
+	for _, path := range []string{
+		"file:" + filepath.Join(dir, "uri.db"),
+		"file:" + filepath.Join(dir, "uri.db") + "?mode=rwc",
+		filepath.Join(dir, "query.db") + "?_pragma=foreign_keys(ON)",
+	} {
+		if db, err := Open(context.Background(), Options{Path: path}); err == nil {
+			_ = db.Close()
+			t.Errorf("Open(%q) succeeded, want a refusal", path)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		t.Errorf("Open left %s behind after refusing", e.Name())
+	}
+}

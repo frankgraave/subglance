@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 )
 
@@ -34,6 +35,60 @@ func createOwnerOnly(path string) error {
 		return err
 	}
 	return f.Close()
+}
+
+// createDatabaseFile creates the database at path owner-only, unless it
+// exists already. A symlink is followed: one that points at a missing file
+// gets that file created owner-only, where exclusive creation would report
+// it as existing and leave SQLite to create the target readable by everyone.
+func createDatabaseFile(path string) error {
+	_, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return nil // exists, possibly behind a link: nothing to create
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return err // a symlink loop, or a directory that cannot be read
+	}
+	dest, err := danglingLinkTarget(path)
+	if err != nil {
+		return err
+	}
+	if dest != "" {
+		path = dest
+	}
+	if err := createOwnerOnly(path); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	return nil
+}
+
+// danglingLinkTarget returns the missing file a chain of symlinks at path
+// ends in, or "" when path is not a symlink. The chain is followed by hand
+// because EvalSymlinks gives up at the first missing name.
+func danglingLinkTarget(path string) (string, error) {
+	const maxLinks = 40 // the Linux limit, so a loop is an error rather than a hang
+	resolved := ""
+	for range maxLinks {
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return resolved, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return resolved, nil
+		}
+		dest, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(dest) {
+			dest = filepath.Join(filepath.Dir(path), dest)
+		}
+		path, resolved = dest, dest
+	}
+	return "", fmt.Errorf("%s: too many levels of symbolic links", path)
 }
 
 // RestrictFileModes makes the database at path, and its -wal and -shm when

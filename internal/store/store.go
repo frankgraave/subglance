@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -57,7 +56,8 @@ type DB struct {
 
 // Options configures Open.
 type Options struct {
-	// Path is the SQLite file. Use ":memory:" for tests.
+	// Path is the SQLite file. Use ":memory:" for tests. A "file:" URI or a
+	// name with a "?" in it is refused (see Open).
 	Path string
 	// MaxReaders caps concurrent read connections. Zero means 4.
 	MaxReaders int
@@ -96,16 +96,23 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 	}
 
 	memory := opts.Path == ":memory:"
+	// The database is created owner-only below, under the name given here.
+	// A "file:" URI, or a plain name with a "?" (the driver drops what
+	// follows it), would reach SQLite as a different file than the one
+	// created, and SQLite would create that one readable by everyone.
+	if !memory && (strings.HasPrefix(opts.Path, "file:") || strings.Contains(opts.Path, "?")) {
+		return nil, fmt.Errorf("store: database path %q must be a filename, not a URI or a name with \"?\"", opts.Path)
+	}
 	if memory {
 		// A shared cache plus a named in-memory database lets both pools see
 		// the same data. Without this, the reader pool would open its own
 		// empty database and every test would fail in a confusing way.
 		opts.Path = "file:subglance-test?mode=memory&cache=shared"
-	} else if !strings.HasPrefix(opts.Path, "file:") {
+	} else {
 		// Created here rather than by SQLite, so that the database and the
 		// -wal and -shm SQLite creates beside it are owner-only from the
-		// first write (see ownerOnly). A URI is left to SQLite.
-		if err := createOwnerOnly(opts.Path); err != nil && !errors.Is(err, os.ErrExist) {
+		// first write (see ownerOnly).
+		if err := createDatabaseFile(opts.Path); err != nil {
 			return nil, fmt.Errorf("create database %s: %w", opts.Path, err)
 		}
 	}
