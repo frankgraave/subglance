@@ -28,8 +28,8 @@ are especially welcome:
   fixation, token leakage.
 - **Injection** — SQL injection, header injection into outbound checks, template
   injection in notification payloads.
-- **Secret exposure** — notification channel credentials appearing in logs, API
-  responses, or error messages.
+- **Secret exposure** — notification channel credentials or the watchdog URL
+  appearing in logs, API responses, or error messages.
 - **Denial of service** through crafted check targets or responses, for example a
   monitored endpoint that can exhaust memory or wedge the scheduler.
 

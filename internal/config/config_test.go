@@ -167,6 +167,23 @@ func TestWatchdogURLIsValidated(t *testing.T) {
 			t.Errorf("Load(--watchdog-url %s) = %v, want a refusal naming watchdog-url", raw, err)
 		}
 	}
+	// The refusal ends up on a terminal or in a log, and the URL's path is
+	// the switch's credential: it names the host and the reason only.
+	for _, raw := range []string{
+		"https://user:pa55word@hc-ping.com:99999/secret-uuid-1234",
+		"https://hc-ping.com:abc/secret-uuid-1234",
+	} {
+		_, err := Load([]string{"--watchdog-url", raw})
+		if err == nil || !strings.Contains(err.Error(), "watchdog-url \"https://hc-ping.com:") {
+			t.Errorf("Load(--watchdog-url %s) = %v, want a refusal naming watchdog-url and the host", raw, err)
+			continue
+		}
+		for _, secret := range []string{"pa55word", "secret-uuid-1234"} {
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("the refusal of %s quotes %q: %v", raw, secret, err)
+			}
+		}
+	}
 	// An interval is irrelevant while the watchdog is off, so it must not
 	// block startup.
 	if _, err := Load([]string{"--watchdog-interval", "0"}); err != nil {
