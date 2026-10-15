@@ -307,8 +307,25 @@ export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
       help: "Several addresses may be separated by commas.",
       placeholder: "ops@example.com",
     },
-    { key: "from", label: "From address", secret: false, required: false },
-    { key: "host", label: "SMTP host", secret: false, required: false },
+    /*
+     * The sender refuses a channel without a sender address or a host
+     * (EmailSender.Validate), and the server refuses to save one, so the
+     * form asks for both up front rather than relaying the refusal.
+     */
+    {
+      key: "from",
+      label: "From address",
+      secret: false,
+      required: true,
+      placeholder: "subglance@example.com",
+    },
+    {
+      key: "host",
+      label: "SMTP host",
+      secret: false,
+      required: true,
+      placeholder: "smtp.example.com",
+    },
     {
       key: "port",
       label: "SMTP port",

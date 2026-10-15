@@ -360,7 +360,7 @@ describe("ChannelForm, webhook body", () => {
     });
     render(<ChannelForm channel={mail} onSave={onSave} />);
     expect(screen.queryByLabelText("SMTP password (optional)")).toBeNull();
-    fireEvent.change(screen.getByLabelText("SMTP host (optional)"), {
+    fireEvent.change(screen.getByLabelText("SMTP host"), {
       target: { value: "smtp.elsewhere.example" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
@@ -483,6 +483,31 @@ describe("ChannelForm, SMS", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "Phone numbers is required for an SMS channel.",
     );
+  });
+
+  it("asks for an email channel's sender and host before anything is sent", () => {
+    // The sender refuses a channel without either, and the server refuses to
+    // save one; the form says so first, under the field to fill in.
+    const onSave = vi.fn();
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ops" } });
+    fireEvent.change(screen.getByLabelText(/recipient address/i), {
+      target: { value: "ops@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "From address is required for an Email channel.",
+    );
+    fireEvent.change(screen.getByLabelText("From address"), {
+      target: { value: "sg@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "SMTP host is required for an Email channel.",
+    );
+    expect(screen.getByLabelText("SMTP host").getAttribute("aria-invalid")).toBe("true");
   });
 
   it("does not carry a value typed for one type into another", () => {

@@ -30,7 +30,7 @@ function email(quiet: typeof NIGHT | null = null) {
     id: 3,
     name: "Ops email",
     type: "email",
-    config: { to: "ops@example.com" },
+    config: { to: "ops@example.com", from: "sg@example.com", host: "smtp.example.com" },
     enabled: true,
     quiet_hours: quiet,
   });
@@ -141,6 +141,12 @@ describe("ChannelForm quiet hours", () => {
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ops" } });
     fireEvent.change(screen.getByLabelText(/recipient address/i), {
       target: { value: "ops@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("From address"), {
+      target: { value: "sg@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("SMTP host"), {
+      target: { value: "smtp.example.com" },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /hold this channel's alerts/i }));
     expect((screen.getByRole("radio", { name: /^Hold/ }) as HTMLInputElement).checked).toBe(true);

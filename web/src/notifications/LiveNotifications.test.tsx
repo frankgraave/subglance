@@ -270,6 +270,12 @@ describe("LiveNotifications", () => {
     fireEvent.change(screen.getByLabelText(/recipient address/i), {
       target: { value: "ops@example.com" },
     });
+    fireEvent.change(screen.getByLabelText("From address"), {
+      target: { value: "sg@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("SMTP host"), {
+      target: { value: "smtp.example.com" },
+    });
     fireEvent.click(
       screen.getByRole("checkbox", { name: /hold this channel's alerts/i }),
     );
@@ -305,6 +311,12 @@ describe("LiveNotifications", () => {
     fireEvent.change(screen.getByLabelText(/recipient address/i), {
       target: { value: "ops@example.com" },
     });
+    fireEvent.change(screen.getByLabelText("From address"), {
+      target: { value: "sg@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("SMTP host"), {
+      target: { value: "smtp.example.com" },
+    });
     fireEvent.click(
       screen.getByRole("checkbox", { name: /hold this channel's alerts/i }),
     );
@@ -335,12 +347,18 @@ describe("LiveNotifications", () => {
     fireEvent.change(screen.getByLabelText(/recipient address/i), {
       target: { value: "ops@example.com" },
     });
+    fireEvent.change(screen.getByLabelText("From address"), {
+      target: { value: "sg@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("SMTP host"), {
+      target: { value: "smtp.example.com" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /^Add channel$/ }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toEqual({
       name: "Ops email",
       type: "email",
-      config: { to: "ops@example.com" },
+      config: { to: "ops@example.com", from: "sg@example.com", host: "smtp.example.com" },
     });
   });
 

@@ -77,9 +77,12 @@ func TestCreateChannelRefusesBlockedTarget(t *testing.T) {
 			wantField: "config.url",
 		},
 		{
+			// The Discord sender refuses a URL that does not mention
+			// Discord, before any address is looked at; this one does,
+			// so it is the address that is refused.
 			name:      "discord to a private address",
 			typ:       "discord",
-			config:    `{"url":"https://10.0.0.5/api/webhooks/1/x"}`,
+			config:    `{"url":"https://10.0.0.5/discord/api/webhooks/1/x"}`,
 			wantField: "config.url",
 		},
 		// A port must not smuggle the host past the check.

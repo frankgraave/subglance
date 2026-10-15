@@ -191,16 +191,7 @@ func New(opts Options) *Notifier {
 
 	senders := opts.Senders
 	if senders == nil {
-		senders = map[string]Sender{
-			store.ChannelWebhook:  NewWebhookSender(opts.Guard),
-			store.ChannelDiscord:  NewDiscordSender(opts.Guard),
-			store.ChannelSlack:    NewSlackSender(opts.Guard),
-			store.ChannelTelegram: NewTelegramSender(opts.Guard),
-			store.ChannelEmail:    NewEmailSender(opts.Guard),
-			store.ChannelNtfy:     NewNtfySender(opts.Guard),
-			store.ChannelGotify:   NewGotifySender(opts.Guard),
-			store.ChannelSMS:      NewSMSSender(opts.Guard),
-		}
+		senders = defaultSenders(opts.Guard)
 	}
 
 	interval := opts.Interval
@@ -693,12 +684,36 @@ func (n *Notifier) giveUp(ctx context.Context, d store.Delivery, ch store.Channe
 	n.nextFailureCheck.Store(0)
 }
 
-// Validate checks a channel config without sending anything.
+// defaultSenders is one sender per channel type, the set a Notifier delivers
+// through unless its options name others.
+func defaultSenders(guard *checker.Guard) map[string]Sender {
+	return map[string]Sender{
+		store.ChannelWebhook:  NewWebhookSender(guard),
+		store.ChannelDiscord:  NewDiscordSender(guard),
+		store.ChannelSlack:    NewSlackSender(guard),
+		store.ChannelTelegram: NewTelegramSender(guard),
+		store.ChannelEmail:    NewEmailSender(guard),
+		store.ChannelNtfy:     NewNtfySender(guard),
+		store.ChannelGotify:   NewGotifySender(guard),
+		store.ChannelSMS:      NewSMSSender(guard),
+	}
+}
+
+// configRules is the senders whose Validate ValidateConfig asks. Validation
+// reads only the settings and never dials, so these need no guard.
+var configRules = defaultSenders(nil)
+
+// ValidateConfig checks a channel's settings against the rules its sender
+// holds them to, without a Notifier and without sending anything.
 //
-// Exposed for the API so a channel is checked when it is saved, while the
-// person who typed it is still looking at the form.
-func (n *Notifier) Validate(channelType string, cfg map[string]string) error {
-	sender, ok := n.senders[channelType]
+// The API calls it when a channel is saved. Delivery does not validate: an
+// email channel saved without a host dials ":587", and one with port 99999
+// fails its dial, and both are retried as if the server were down until the
+// alert is given up — so a setting the sender refuses has to be refused on
+// the form, or the first sign of it is an outage nobody was told about.
+// Every refusal names the config key it is about (ConfigKey).
+func ValidateConfig(channelType string, cfg map[string]string) error {
+	sender, ok := configRules[channelType]
 	if !ok {
 		return fmt.Errorf("unknown channel type %q", channelType)
 	}

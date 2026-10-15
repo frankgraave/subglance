@@ -38,17 +38,17 @@ func NewTelegramSender(guard *checker.Guard) *TelegramSender {
 // Validate checks that both settings are present.
 func (s *TelegramSender) Validate(cfg map[string]string) error {
 	if strings.TrimSpace(cfg["bot_token"]) == "" {
-		return &configError{"bot_token is required"}
+		return onKey("bot_token", &configError{"bot_token is required"})
 	}
 	if strings.TrimSpace(cfg["chat_id"]) == "" {
-		return &configError{"chat_id is required"}
+		return onKey("chat_id", &configError{"chat_id is required"})
 	}
 	// A bot token is "<digits>:<secret>". Checking the shape catches the
 	// common paste error — the bot's @name instead of its token — with a
 	// message that says what is wrong, rather than a 401 from Telegram
 	// that says only "Unauthorized".
 	if !strings.Contains(cfg["bot_token"], ":") {
-		return &configError{"bot_token does not look like a bot token (expected 123456:ABC-DEF…)"}
+		return onKey("bot_token", &configError{"bot_token does not look like a bot token (expected 123456:ABC-DEF…)"})
 	}
 	return nil
 }

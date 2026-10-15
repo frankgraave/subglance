@@ -46,10 +46,10 @@ const (
 func (s *NtfySender) Validate(cfg map[string]string) error {
 	topic := strings.TrimSpace(cfg["topic"])
 	if topic == "" {
-		return &configError{"topic is required"}
+		return onKey("topic", &configError{"topic is required"})
 	}
 	if !ntfyTopicPattern.MatchString(topic) {
-		return &configError{"topic may contain only letters, digits, - and _ (at most 64)"}
+		return onKey("topic", &configError{"topic may contain only letters, digits, - and _ (at most 64)"})
 	}
 	if server := strings.TrimSpace(cfg["url"]); server != "" {
 		if err := validateHTTPSURL(server, "url"); err != nil {
@@ -59,22 +59,27 @@ func (s *NtfySender) Validate(cfg map[string]string) error {
 		// in the body. A URL with a path would post to that path instead,
 		// and ntfy does not support being served from a sub-path at all.
 		if u, err := url.Parse(server); err != nil || !ntfyServerRoot(u) {
-			return &configError{"url must name the ntfy server, not a topic or other path"}
+			return onKey("url", &configError{"url must name the ntfy server, not a topic or other path"})
 		}
 	}
 	// A token of only whitespace would go out as an empty bearer token and
 	// be refused at the first outage rather than here.
 	if cfg["token"] != "" && strings.TrimSpace(cfg["token"]) == "" {
-		return &configError{"token must not be only whitespace"}
+		return onKey("token", &configError{"token must not be only whitespace"})
 	}
 	// A token and a username/password pair are two ways to say the same
 	// thing. Accepting both would mean silently ignoring one of them, and the
 	// operator would debug the one that is not being sent.
 	if cfg["token"] != "" && (cfg["username"] != "" || cfg["password"] != "") {
-		return &configError{"set either token or username and password, not both"}
+		return onKey("token", &configError{"set either token or username and password, not both"})
 	}
 	if (cfg["username"] == "") != (cfg["password"] == "") {
-		return &configError{"username and password must be set together"}
+		// Blamed on the half that is missing, which is the one to type.
+		missing := "password"
+		if cfg["username"] == "" {
+			missing = "username"
+		}
+		return onKey(missing, &configError{"username and password must be set together"})
 	}
 	return nil
 }

@@ -11,7 +11,7 @@ same settings can be written through `POST /api/v1/channels` (see
 | `discord` | `url` (the channel webhook) | — |
 | `slack` | `url` (the incoming webhook) | — |
 | `telegram` | `bot_token`, `chat_id` | — |
-| `email` | `to` | `from`, `host`, `port`, `username`, `password` |
+| `email` | `to`, `from`, `host` | `port` (default 587), `username`, `password` |
 | `ntfy` | `topic` | `url` (default `https://ntfy.sh`), `token`, or `username` + `password` |
 | `gotify` | `url`, `token` (an application token) | `priority_down` (default 8), `priority_up` (default 4) |
 | `sms` | `numbers`, `provider`, and per provider: `url`, `username`, `password` (`android-gateway`) or `account_sid`, `auth_token`, `from` (`twilio`) | `country_code`, `hourly_limit` (default 10), `recoveries` (default `true`), `timezone` |

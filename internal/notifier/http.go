@@ -129,19 +129,22 @@ const userAgent = "SubGlance/1 (+https://github.com/frankgraave/subglance)"
 // Rejecting at configuration time rather than at 03:00 is the whole point:
 // a webhook URL with a typo should fail while the person who typed it is
 // still looking at the screen.
+//
+// The refusal is about field, and says so (ConfigKey), so the form can put
+// the sentence under that input.
 func validateHTTPSURL(raw, field string) error {
 	if strings.TrimSpace(raw) == "" {
-		return fmt.Errorf("%s is required", field)
+		return onKey(field, fmt.Errorf("%s is required", field))
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("%s is not a valid URL: %w", field, err)
+		return onKey(field, fmt.Errorf("%s is not a valid URL: %w", field, err))
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("%s must be an http or https URL", field)
+		return onKey(field, fmt.Errorf("%s must be an http or https URL", field))
 	}
 	if u.Host == "" {
-		return fmt.Errorf("%s has no host", field)
+		return onKey(field, fmt.Errorf("%s has no host", field))
 	}
 	return nil
 }
