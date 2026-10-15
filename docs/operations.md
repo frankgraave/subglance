@@ -858,7 +858,20 @@ page and the key is an application key limited to that bucket:
 
 The endpoint is the service URL alone, with no path; one with a port of 0 or
 above 65535, or a hostname the resolver refuses without asking, stops
-SubGlance at startup rather than failing every upload.
+SubGlance at startup rather than failing every upload. The same goes for the
+bucket and the region:
+
+- The bucket takes letters, digits, dots, hyphens and underscores. A host and
+  port in its place (`s3://minio.local:9000/backups`) is refused with a
+  pointer to the endpoint, which is where the service URL goes.
+- A region with a `/` or `,` in it, or a control character, is refused for
+  every service: it breaks the request signature. Any other region name is
+  passed on as written, since an S3-compatible service may name its regions
+  as it likes.
+- With no endpoint, requests go to `<bucket>.s3.<region>.amazonaws.com` (or
+  `s3.<region>.amazonaws.com/<bucket>` for a bucket with a dot in its name),
+  so the bucket and the region are held to the hostname rule: a bucket that
+  starts or ends with a hyphen, or a region with a space, is refused.
 Cloudflare R2 uses `https://<account id>.r2.cloudflarestorage.com` as the
 endpoint and `auto` as the region. MinIO uses its own URL and accepts any
 region. With a custom endpoint, requests use path-style URLs

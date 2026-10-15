@@ -78,6 +78,11 @@ func TestBackupMisconfigurationRefusesToStart(t *testing.T) {
 		{"endpoint with a path", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://minio.example/bucket"}, "without a path"},
 		{"endpoint port out of range", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "http://minio.example:90000"}, "port 90000 is out of range"},
 		{"endpoint hostname the resolver refuses", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://min!o.example"}, `contains "!"`},
+		{"endpoint written into the target", map[string]string{"SUBGLANCE_BACKUP_TARGET": "s3://minio.local:9000/backups"}, "backup endpoint"},
+		{"bucket AWS cannot be asked for", map[string]string{"SUBGLANCE_BACKUP_TARGET": "s3://-bucket/prod"}, "starts with a hyphen"},
+		{"region with a space on AWS", map[string]string{"SUBGLANCE_BACKUP_REGION": "eu central 1"}, `contains " "`},
+		{"region with a slash behind an endpoint", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://minio.example",
+			"SUBGLANCE_BACKUP_REGION": "eu-central-1/"}, `backup region "eu-central-1/"`},
 		{"interval without a unit", map[string]string{"SUBGLANCE_BACKUP_INTERVAL": "24"}, "SUBGLANCE_BACKUP_INTERVAL"},
 	}
 	for _, c := range cases {
