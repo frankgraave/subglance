@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/net/idna"
 )
 
 // ResolvableHost reports why the checker's resolver would refuse host without
@@ -91,15 +93,29 @@ func ResolvableHost(host string) error {
 	return nil
 }
 
-// ResolvableURLHost is ResolvableHost for the hostname of an http monitor's
-// URL. net/http converts an internationalised hostname to its xn-- form before
-// it dials, so a non-ASCII hostname is left to it; an ASCII one reaches the
-// resolver as written and is held to the same rule as the other types.
+// ResolvableURLHost is ResolvableHost for the hostname of a URL SubGlance
+// requests. net/http converts an internationalised hostname to its xn-- form
+// (IDNA lookup profile) before it dials, so a non-ASCII hostname is converted
+// the same way here and the result is held to the rule an ASCII one is. When
+// the conversion fails, net/http keeps the hostname as written and the
+// resolver refuses its non-ASCII bytes on every request, so a hostname that
+// does not convert is refused: a non-breaking space typed into
+// exa<U+00A0>mple.com, say.
 func ResolvableURLHost(host string) error {
-	if !isASCII(host) {
-		return nil
+	if isASCII(host) {
+		return ResolvableHost(host)
 	}
-	return ResolvableHost(host)
+	ascii, err := idna.Lookup.ToASCII(host)
+	if err != nil {
+		return fmt.Errorf("hostname %q is not a valid internationalised name: %w", host, err)
+	}
+	if !isASCII(ascii) {
+		return fmt.Errorf("hostname %q contains characters that have no xn-- form", host)
+	}
+	if err := ResolvableHost(ascii); err != nil {
+		return fmt.Errorf("hostname %q, as %s: %w", host, ascii, err)
+	}
+	return nil
 }
 
 // ResolvableURL reports why a request to u would fail before it leaves the
