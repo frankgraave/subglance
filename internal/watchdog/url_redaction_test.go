@@ -160,6 +160,7 @@ func TestValidateURLRefusalsDoNotQuoteTheToken(t *testing.T) {
 		{"https://hc-ping.com:abc/secret-uuid-1234", `"https://hc-ping.com:***/…" is not a URL: invalid port after host`},
 		{"https://user:pa55word/secret-uuid-1234", `"https://user:***/…" is not a URL: invalid port after host`},
 		{"https://user:pa55word?key=k3y-value", `"https://user:***/…" is not a URL: invalid port after host`},
+		{"https://hc-ping.com:abc/ping?key@secret-uuid-1234", `"https://hc-ping.com:***/…" is not a URL: invalid port after host`},
 		// The parser reads "pa55" as a port and would quote it back in
 		// its reason, so only the shape is given.
 		{"https://user:pa55word/x@hc-ping.com/secret-uuid-1234", `"https://***@hc-ping.com/…" is not a URL`},
@@ -195,6 +196,8 @@ func TestShownURLKeepsSchemeAndHostOnly(t *testing.T) {
 		"hc-ping.com/secret-uuid-1234":                         "hc-ping.com/…",
 		"https://user:pa55word/secret-uuid-1234":               "https://user:***/…",
 		"https://hc-ping.com:abc/secret-uuid-1234":             "https://hc-ping.com:***/…",
+		"https://hc-ping.com:abc/ping?key@secret-uuid-1234":    "https://hc-ping.com:***/…",
+		"https://hc-ping.com:abc/ping#fr4g@secret-uuid-1234":   "https://hc-ping.com:***/…",
 		"http://[2001:db8::1]:pa55word/x":                      "http://[2001:db8::1]:***/…",
 	} {
 		if got := shownURL(raw); got != want {

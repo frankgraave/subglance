@@ -241,7 +241,8 @@ func ValidateURL(raw string) error {
 //
 // An address that does not parse, or has no host, is cut from its text
 // instead, so the error that refuses it does not quote it back in full.
-// There everything up to the last "@" is replaced by "***", as the
+// There everything up to the last "@" before any query or fragment is
+// replaced by "***", as the
 // --base-url refusal does: Go could not pick the user part out, and in
 // https://user:pa/ss@host the password runs past the first slash. What
 // follows a colon in the host is replaced by "***" as well: a port that
@@ -259,8 +260,14 @@ func shownURL(raw string) string {
 	if !hasScheme {
 		scheme, rest = "", raw
 	}
-	if at := strings.LastIndex(rest, "@"); at >= 0 {
-		rest = "***" + rest[at:]
+	// A query or a fragment is never the user part: an "@" there would
+	// make what follows it the host.
+	userPart, suffix := rest, ""
+	if end := strings.IndexAny(rest, "?#"); end >= 0 {
+		userPart, suffix = rest[:end], rest[end:]
+	}
+	if at := strings.LastIndex(userPart, "@"); at >= 0 {
+		rest = "***" + userPart[at:] + suffix
 	}
 	host, tail := rest, ""
 	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
