@@ -35,14 +35,18 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{}, "url"},
 		{map[string]string{"url": "ftp://discord.com/api/webhooks/1/x"}, "url"},
 		{map[string]string{"url": "https://hooks.example.com/services/x"}, "url"},
+		{map[string]string{"url": "https://discord.com:99999/api/webhooks/1/x"}, "url"},
 	},
 	store.ChannelSlack: {
 		{map[string]string{}, "url"},
 		{map[string]string{"url": "https:///services/x"}, "url"},
+		{map[string]string{"url": "https://hooks.slack.com:0/services/x"}, "url"},
+		{map[string]string{"url": "https://hooks..slack.com/services/x"}, "url"},
 	},
 	store.ChannelGotify: {
 		{map[string]string{"token": "t"}, "url"},
 		{map[string]string{"url": "https://gotify.example.com"}, "token"},
+		{map[string]string{"url": "https://got!fy.example.com", "token": "t"}, "url"},
 		{map[string]string{"url": "https://gotify.example.com", "token": "t", "priority_down": "11"}, "priority_down"},
 		{map[string]string{"url": "https://gotify.example.com", "token": "t", "priority_up": "x"}, "priority_up"},
 	},
@@ -51,6 +55,7 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{"topic": "a b"}, "topic"},
 		{map[string]string{"topic": "t", "url": "ftp://ntfy.example.com"}, "url"},
 		{map[string]string{"topic": "t", "url": "https://ntfy.example.com/t"}, "url"},
+		{map[string]string{"topic": "t", "url": "https://ntfy.example.com:70000"}, "url"},
 		{map[string]string{"topic": "t", "token": "  "}, "token"},
 		{map[string]string{"topic": "t", "token": "k", "username": "u", "password": "p"}, "token"},
 		{map[string]string{"topic": "t", "username": "u"}, "password"},
@@ -60,6 +65,8 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{}, "url"},
 		{map[string]string{"url": "https://hooks.example.com/{{monitor_name}}"}, "url"},
 		{map[string]string{"url": "https://hooks.example.com/in", "method": "GET"}, "method"},
+		{map[string]string{"url": "https://-hooks.example.com/in"}, "url"},
+		{map[string]string{"url": "https://hooks.example.com:99999/in"}, "url"},
 		{map[string]string{"url": "https://hooks.example.com/in", "headers": "not-a-header"}, "headers"},
 		{map[string]string{"url": "https://hooks.example.com/in", "body": `{"x": {{summary}}}`}, "body"},
 	},
@@ -67,6 +74,7 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{"numbers": "+31612345678"}, "provider"},
 		{map[string]string{"numbers": "+31612345678", "provider": "twilio", "account_sid": "nope"}, "account_sid"},
 		{map[string]string{"provider": "android-gateway", "url": "http://phone.example:8080", "username": "u", "password": "p"}, "numbers"},
+		{map[string]string{"numbers": "+31612345678", "provider": "android-gateway", "url": "http://192.168.1.50:80800", "username": "u", "password": "p"}, "url"},
 	},
 }
 

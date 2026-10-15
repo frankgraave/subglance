@@ -146,6 +146,12 @@ func validateHTTPSURL(raw, field string) error {
 	if u.Host == "" {
 		return onKey(field, fmt.Errorf("%s has no host", field))
 	}
+	// A port out of range or a hostname the resolver refuses unasked parses
+	// as a URL and then fails every delivery before it leaves the process,
+	// so each alert would be retried and lost instead of refused here.
+	if err := checker.ResolvableURL(u); err != nil {
+		return onKey(field, fmt.Errorf("%s: %w", field, err))
+	}
 	return nil
 }
 

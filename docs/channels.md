@@ -31,6 +31,13 @@ provider. A stored credential is only ever sent to the destination it was
 saved for, so the edit is refused until the password, token or headers are
 typed again, and the form opens that field for it.
 
+A channel URL is held to the rule an `http` monitor's target is (see
+[Using SubGlance](using-subglance.md)): its hostname has to be one the resolver
+will look up, and its port, when written, has to be between 1 and 65535.
+Either mistake parses as a URL and then fails every delivery before it leaves
+the process, so it is refused on `config.url` when the channel is saved,
+edited or imported rather than discovered when an alert is lost.
+
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 

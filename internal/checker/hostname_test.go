@@ -5,10 +5,13 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/net/idna"
 )
 
 // hostCases are the shapes a target's hostname takes in practice, and the
@@ -77,12 +80,111 @@ func TestResolvableHost(t *testing.T) {
 	}
 }
 
-func TestResolvableURLHostLeavesInternationalisedNamesToNetHTTP(t *testing.T) {
+// urlCases are URLs that parse, and whether a request to them would leave
+// the process. want is the substring a refusal must contain; empty means the
+// URL is accepted.
+var urlCases = []struct {
+	raw  string
+	want string
+}{
+	{"https://example.com/health", ""},
+	{"http://example.com:8080/", ""},
+	{"http://example.com:1/", ""},
+	{"http://example.com:65535/", ""},
+	{"http://example.com:/", ""}, // an empty port is the scheme's default
+	{"http://192.168.1.9:8080/api", ""},
+	{"http://[2001:db8::1]:8080/", ""},
+	{"http://db/", ""},
+	{"https://b\u00fccher.de/", ""},
+	{"https://user:pass@example.com/", ""},
+
+	{"http://example.com:0/", "port 0 is out of range"},
+	{"http://example.com:65536/", "port 65536 is out of range"},
+	{"http://example.com:99999/", "port 99999 is out of range"},
+	{"http://[::1]:70000/", "port 70000 is out of range"},
+	{"http://:8080/", "no host"},
+	{"https://exa!mple.com/x", `contains "!"`},
+	{"https://-bad.example.com/x", "starts with a hyphen"},
+	{"http://10.0.1/", "not a valid IP address"},
+	{"https://exa\u00a0mple.com/", "not a valid internationalised name"},
+	{"https://b\u00fccher..de/", "empty label"},
+}
+
+func TestResolvableURL(t *testing.T) {
+	for _, tc := range urlCases {
+		t.Run(tc.raw, func(t *testing.T) {
+			u, err := url.Parse(tc.raw)
+			if err != nil {
+				t.Fatalf("url.Parse(%q): %v", tc.raw, err)
+			}
+			err = ResolvableURL(u)
+			switch {
+			case tc.want == "" && err != nil:
+				t.Errorf("ResolvableURL(%q) = %v, want accepted", tc.raw, err)
+			case tc.want != "" && err == nil:
+				t.Errorf("ResolvableURL(%q) accepted, want a refusal mentioning %q", tc.raw, tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Errorf("ResolvableURL(%q) = %q, want it to mention %q", tc.raw, err, tc.want)
+			}
+		})
+	}
+}
+
+// Every URL ResolvableURL refuses is one the client's dial refuses before a
+// byte leaves the process, or, for port 0, one no server can answer. This
+// asks the two parts of the dial that decide it, the port parser and a Go
+// resolver whose every connection fails, so nothing leaves the machine: if a
+// Go release changes either rule, this fails on the URL where they part ways.
+func TestResolvableURLAgreesWithTheDial(t *testing.T) {
+	for _, tc := range urlCases {
+		u, _ := url.Parse(tc.raw)
+		if u.Hostname() == "" || u.Port() == "0" {
+			// The first never reaches a dial, and the dial accepts port 0
+			// for the far end to refuse.
+			continue
+		}
+		t.Run(tc.raw, func(t *testing.T) {
+			var dialled atomic.Bool
+			r := &net.Resolver{
+				PreferGo: true,
+				Dial: func(context.Context, string, string) (net.Conn, error) {
+					dialled.Store(true)
+					return nil, errors.New("no network in this test")
+				},
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			port := u.Port()
+			if port == "" {
+				port = "80"
+			}
+			// net/http's dial address: the hostname in its xn-- form when it
+			// converts, and as written when it does not.
+			host := u.Hostname()
+			if v, err := idna.Lookup.ToASCII(host); err == nil {
+				host = v
+			}
+			_, lookupErr := r.LookupNetIP(ctx, "ip", rooted(host))
+			_, portErr := net.LookupPort("tcp", port)
+			usable := (dialled.Load() || lookupErr == nil) && portErr == nil
+			ours := ResolvableURL(u) == nil
+			if usable != ours {
+				t.Errorf("client usable = %v (dialled %v, lookup %v, port %v), ResolvableURL accepted = %v",
+					usable, dialled.Load(), lookupErr, portErr, ours)
+			}
+		})
+	}
+}
+
+func TestResolvableURLHostConvertsInternationalisedNames(t *testing.T) {
 	if err := ResolvableURLHost("b\u00fccher.de"); err != nil {
 		t.Errorf("internationalised URL host refused: %v", err)
 	}
 	if err := ResolvableURLHost("exa..mple.com"); err == nil {
 		t.Error("an ASCII URL host with an empty label was accepted")
+	}
+	if err := ResolvableURLHost("exa\u00a0mple.com"); err == nil {
+		t.Error("a URL host with a non-breaking space was accepted")
 	}
 }
 

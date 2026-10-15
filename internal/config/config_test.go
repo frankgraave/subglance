@@ -160,6 +160,13 @@ func TestWatchdogURLIsValidated(t *testing.T) {
 	if _, err := Load([]string{"--watchdog-url", "https://hc-ping.com/abc", "--watchdog-interval", "0"}); err == nil {
 		t.Fatal("a zero interval with a configured URL should be rejected")
 	}
+	// These parse as URLs and fail every ping before it leaves the
+	// process, so the switch would raise the alarm for a healthy instance.
+	for _, raw := range []string{"https://hc-ping.com:99999/abc", "https://hc..ping.com/abc"} {
+		if _, err := Load([]string{"--watchdog-url", raw}); err == nil || !strings.Contains(err.Error(), "watchdog-url") {
+			t.Errorf("Load(--watchdog-url %s) = %v, want a refusal naming watchdog-url", raw, err)
+		}
+	}
 	// An interval is irrelevant while the watchdog is off, so it must not
 	// block startup.
 	if _, err := Load([]string{"--watchdog-interval", "0"}); err != nil {

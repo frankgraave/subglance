@@ -76,6 +76,8 @@ func TestBackupMisconfigurationRefusesToStart(t *testing.T) {
 		{"interval too short", map[string]string{"SUBGLANCE_BACKUP_INTERVAL": "5m"}, "at least 1h"},
 		{"keep zero", map[string]string{"SUBGLANCE_BACKUP_KEEP": "0"}, "at least 1"},
 		{"endpoint with a path", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://minio.example/bucket"}, "without a path"},
+		{"endpoint port out of range", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "http://minio.example:90000"}, "port 90000 is out of range"},
+		{"endpoint hostname the resolver refuses", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://min!o.example"}, `contains "!"`},
 		{"interval without a unit", map[string]string{"SUBGLANCE_BACKUP_INTERVAL": "24"}, "SUBGLANCE_BACKUP_INTERVAL"},
 	}
 	for _, c := range cases {

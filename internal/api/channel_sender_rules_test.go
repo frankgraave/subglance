@@ -45,6 +45,21 @@ var senderRefusedChannels = []struct {
 		map[string]string{"bot_token": "@ops_bot", "chat_id": "42"}, "config.bot_token", "does not look like a bot token"},
 	{"discord url that is not discord", store.ChannelDiscord,
 		map[string]string{"url": "https://hooks.example.com/x"}, "config.url", "does not look like a Discord webhook"},
+	// A URL that parses and that every delivery refuses before it leaves
+	// the process: the dial rejects the port, the resolver the hostname.
+	{"webhook port out of range", store.ChannelWebhook,
+		map[string]string{"url": "https://hooks.example.com:99999/in"}, "config.url", "port 99999 is out of range"},
+	{"slack port zero", store.ChannelSlack,
+		map[string]string{"url": "https://hooks.slack.com:0/services/x"}, "config.url", "port 0 is out of range"},
+	{"gotify hostname with a bad character", store.ChannelGotify,
+		map[string]string{"url": "https://got!fy.example.com", "token": "t"}, "config.url", `contains "!"`},
+	{"ntfy hostname with a leading hyphen", store.ChannelNtfy,
+		map[string]string{"url": "https://-ntfy.example.com", "topic": "alerts"}, "config.url", "starts with a hyphen"},
+	{"discord port out of range", store.ChannelDiscord,
+		map[string]string{"url": "https://discord.com:65536/api/webhooks/1/x"}, "config.url", "port 65536 is out of range"},
+	{"sms gateway hostname of digits", store.ChannelSMS,
+		map[string]string{"provider": "android-gateway", "url": "http://192.168.1:8080", "username": "u", "password": "p", "numbers": "+31612345678"},
+		"config.url", "not a valid IP address"},
 }
 
 func TestChannelSaveRefusesSettingsItsSenderRefuses(t *testing.T) {

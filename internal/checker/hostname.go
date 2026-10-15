@@ -3,8 +3,12 @@ package checker
 import (
 	"fmt"
 	"net/netip"
+	"net/url"
+	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/net/idna"
 )
 
 // ResolvableHost reports why the checker's resolver would refuse host without
@@ -89,15 +93,56 @@ func ResolvableHost(host string) error {
 	return nil
 }
 
-// ResolvableURLHost is ResolvableHost for the hostname of an http monitor's
-// URL. net/http converts an internationalised hostname to its xn-- form before
-// it dials, so a non-ASCII hostname is left to it; an ASCII one reaches the
-// resolver as written and is held to the same rule as the other types.
+// ResolvableURLHost is ResolvableHost for the hostname of a URL SubGlance
+// requests. net/http converts an internationalised hostname to its xn-- form
+// (IDNA lookup profile) before it dials, so a non-ASCII hostname is converted
+// the same way here and the result is held to the rule an ASCII one is. When
+// the conversion fails, net/http keeps the hostname as written and the
+// resolver refuses its non-ASCII bytes on every request, so a hostname that
+// does not convert is refused: a non-breaking space typed into
+// exa<U+00A0>mple.com, say.
 func ResolvableURLHost(host string) error {
-	if !isASCII(host) {
-		return nil
+	if isASCII(host) {
+		return ResolvableHost(host)
 	}
-	return ResolvableHost(host)
+	ascii, err := idna.Lookup.ToASCII(host)
+	if err != nil {
+		return fmt.Errorf("hostname %q is not a valid internationalised name: %w", host, err)
+	}
+	if !isASCII(ascii) {
+		return fmt.Errorf("hostname %q contains characters that have no xn-- form", host)
+	}
+	if err := ResolvableHost(ascii); err != nil {
+		return fmt.Errorf("hostname %q, as %s: %w", host, ascii, err)
+	}
+	return nil
+}
+
+// ResolvableURL reports why a request to u would fail before it leaves the
+// process, or nil when it would at least be attempted. It is the rule for
+// every URL SubGlance requests on an operator's behalf: an http monitor's
+// target, a channel's URL, the watchdog URL and the backup endpoint.
+//
+// net/url accepts any run of digits as a port, so http://example.com:99999/
+// parses and is then refused by every dial ("invalid port"), and a port of 0
+// is refused by the far end of the loopback on every attempt. A hostname is
+// held to ResolvableURLHost. A port left empty (http://example.com:/) is the
+// scheme's default to net/http, and is accepted.
+//
+// The scheme and the presence of a host are the caller's to check first, in
+// its own words; a URL with no hostname is refused here only so that a
+// caller that forgot cannot pass one.
+func ResolvableURL(u *url.URL) error {
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("the URL has no host")
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("port %s is out of range 1-65535", p)
+		}
+	}
+	return ResolvableURLHost(host)
 }
 
 func isASCII(s string) bool {

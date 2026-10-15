@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // Target is where backups go: a bucket, a key prefix inside it, and the
@@ -57,6 +59,12 @@ func ParseTarget(raw, endpoint, region string) (Target, error) {
 		}
 		if e.Path != "" && e.Path != "/" {
 			return Target{}, fmt.Errorf("backup endpoint %q: want the service URL without a path; the bucket goes in the s3:// target", endpoint)
+		}
+		// A port out of range or a hostname the resolver refuses unasked
+		// would fail every upload, and the first sign would be the alert
+		// about a backup that never ran.
+		if err := checker.ResolvableURL(e); err != nil {
+			return Target{}, fmt.Errorf("backup endpoint %q: %w", endpoint, err)
 		}
 	}
 	if region == "" {
