@@ -99,6 +99,7 @@ func TestMonitorsThatCannotComeOver(t *testing.T) {
 		{"ping an empty label", row{"id": int64(1), "name": "P", "type": "ping", "hostname": "x..example", "interval": int64(60)}, "empty label"},
 		{"port a bad character", row{"id": int64(1), "name": "Db", "type": "port", "hostname": "db!.example", "port": int64(5432), "interval": int64(60)}, `contains "!"`},
 		{"http a leading hyphen", httpRow(row{"url": "https://-x.example/"}), "starts with a hyphen"},
+		{"http a port out of range", httpRow(row{"url": "https://x.example:99999/"}), "port 99999 is out of range"},
 		{"odd status codes", httpRow(row{"accepted_statuscodes_json": `["abc"]`}), "accepted status codes"},
 	}
 	for _, tc := range cases {

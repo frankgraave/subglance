@@ -71,6 +71,13 @@ func TestValidateTargetForType(t *testing.T) {
 		{name: "http bad character", typ: "http", target: "https://exa!mple.com/", wantErr: true, wantMsg: `contains "!"`},
 		{name: "http leading hyphen", typ: "http", target: "http://-example.com", wantErr: true, wantMsg: "starts with a hyphen"},
 		{name: "http short ipv4", typ: "http", target: "http://10.0.1/", wantErr: true, wantMsg: "not a valid IP address"},
+		// net/url takes any digits as a port; the dial refuses these on
+		// every check, as a tcp monitor's target already is at save.
+		{name: "http port zero", typ: "http", target: "http://example.com:0/", wantErr: true, wantMsg: "port 0 is out of range"},
+		{name: "http port out of range", typ: "http", target: "https://example.com:65536/", wantErr: true, wantMsg: "port 65536 is out of range"},
+		{name: "http ipv6 port out of range", typ: "http", target: "http://[2001:db8::1]:70000/", wantErr: true, wantMsg: "port 70000 is out of range"},
+		{name: "http highest port", typ: "http", target: "http://example.com:65535/"},
+		{name: "http empty port", typ: "http", target: "http://example.com:/"},
 		{name: "tcp empty label", typ: "tcp", target: "exa..mple.com:443", wantErr: true, wantMsg: "empty label"},
 		{name: "tcp out-of-range octet", typ: "tcp", target: "999.1.1.1:80", wantErr: true, wantMsg: "not a valid IP address"},
 		{name: "tcp trailing hyphen", typ: "tcp", target: "db-.example.com:5432", wantErr: true, wantMsg: "ends with a hyphen"},

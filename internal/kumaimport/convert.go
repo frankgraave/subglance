@@ -321,8 +321,8 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 		strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
 		return skip("its URL " + strconv.Quote(target) + " is not an http or https URL with a host")
 	}
-	if err := checker.ResolvableURLHost(u.Hostname()); err != nil {
-		return skip("its URL's host cannot be looked up: " + err.Error())
+	if err := checker.ResolvableURL(u); err != nil {
+		return skip("its URL cannot be requested: " + err.Error())
 	}
 	out.Type, out.Target = "http", target
 

@@ -243,6 +243,9 @@ func TestParseTarget(t *testing.T) {
 		{"s3://b/x?versionId=1", ""},
 		{"s3://b", "s3.example.com"},
 		{"s3://b", "https://s3.example.com/bucket"},
+		{"s3://b", "https://s3.example.com:99999"},
+		{"s3://b", "http://minio:0"},
+		{"s3://b", "https://s3..example.com"},
 	}
 	for _, c := range bad {
 		if _, err := ParseTarget(c.raw, c.endpoint, ""); err == nil {

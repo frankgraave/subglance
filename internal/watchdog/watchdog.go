@@ -60,6 +60,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // DefaultInterval is how often a ping is sent when none is configured.
@@ -191,6 +193,13 @@ func ValidateURL(raw string) error {
 	}
 	if u.Host == "" {
 		return fmt.Errorf("watchdog-url %q: missing host", raw)
+	}
+	// Not a stricter reading of the address, which stays any host and any
+	// network: a port out of range or a hostname the resolver refuses
+	// unasked fails every ping before it leaves the process, and the switch
+	// at the far end would raise the alarm for an instance that is fine.
+	if err := checker.ResolvableURL(u); err != nil {
+		return fmt.Errorf("watchdog-url %q: %w", raw, err)
 	}
 	return nil
 }

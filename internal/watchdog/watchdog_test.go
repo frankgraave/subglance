@@ -222,6 +222,8 @@ func TestValidateURL(t *testing.T) {
 	valid := []string{
 		"https://hc-ping.com/abc",
 		"http://192.168.1.9:8080/api/push/xyz",
+		"http://subglance-b:3000/api/push/xyz",
+		"http://[2001:db8::1]:8080/ping",
 	}
 	for _, raw := range valid {
 		if err := ValidateURL(raw); err != nil {
@@ -234,6 +236,11 @@ func TestValidateURL(t *testing.T) {
 		"/just/a/path",
 		"hc-ping.com/abc",
 		"://nonsense",
+		// Parse, and fail every ping before it leaves the process.
+		"https://hc-ping.com:99999/abc",
+		"https://hc-ping.com:0/abc",
+		"https://hc-p!ng.com/abc",
+		"https://-hc-ping.com/abc",
 	}
 	for _, raw := range invalid {
 		if err := ValidateURL(raw); err == nil {

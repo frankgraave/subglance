@@ -161,8 +161,12 @@ name. Single-label names such as `db` or `localhost`, underscores and a
 trailing dot are accepted. An internationalised name such as `bücher.de` works
 in an `http` URL, which is converted to its `xn--` form before the request;
 `tcp`, `ssl` and `ping` need that form written out (`xn--bcher-kva.de`).
-A monitor saved before this rule keeps its target until it is edited; the
-check reports it as a DNS failure, as it did before.
+A port has to be one a connection can use: an `http` target with port 0 or a
+port above 65535 (`https://example.com:99999/`) is refused on `target`, as a
+`tcp` target already was. An empty port (`http://example.com:/`) means the
+scheme's default. A monitor saved before these rules keeps its target until
+it is edited; the check reports it as a DNS or connection failure, as it did
+before.
 
 An HTTP monitor's own request headers — an `Authorization` or `X-Api-Key`, for
 instance — are sent only to the origin (scheme, host and port) of its target.

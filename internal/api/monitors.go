@@ -959,7 +959,9 @@ func validateTargetForType(typ, target string) problem {
 		if strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
 			return bad("a hostname cannot contain spaces")
 		}
-		if err := checker.ResolvableURLHost(u.Hostname()); err != nil {
+		// The port as well as the hostname: net/url takes any digits as a
+		// port, and a dial refuses http://example.com:99999/ on every check.
+		if err := checker.ResolvableURL(u); err != nil {
 			return bad(err.Error())
 		}
 

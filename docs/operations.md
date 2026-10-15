@@ -644,6 +644,12 @@ service raises the alarm.
 subglance --watchdog-url https://hc-ping.com/your-uuid --watchdog-interval 5m
 ```
 
+The URL may point at any host, private addresses included. SubGlance refuses
+to start only on one no ping could reach: not http or https, no host, a port
+of 0 or above 65535, or a hostname the resolver refuses without asking (two
+dots in a row, or a character other than a letter, digit, hyphen, underscore
+or dot).
+
 The read-only **Settings → Self-monitoring** card shows watchdog history for
 this process. The dashboard explains the limitation once when no watchdog is
 configured. Unknown or unavailable diagnostics do not mean it is switched off.
@@ -843,6 +849,9 @@ page and the key is an application key limited to that bucket:
       SUBGLANCE_BACKUP_REGION: eu-central-003
 ```
 
+The endpoint is the service URL alone, with no path; one with a port of 0 or
+above 65535, or a hostname the resolver refuses without asking, stops
+SubGlance at startup rather than failing every upload.
 Cloudflare R2 uses `https://<account id>.r2.cloudflarestorage.com` as the
 endpoint and `auto` as the region. MinIO uses its own URL and accepts any
 region. With a custom endpoint, requests use path-style URLs

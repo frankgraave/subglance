@@ -3,6 +3,8 @@ package checker
 import (
 	"fmt"
 	"net/netip"
+	"net/url"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -98,6 +100,33 @@ func ResolvableURLHost(host string) error {
 		return nil
 	}
 	return ResolvableHost(host)
+}
+
+// ResolvableURL reports why a request to u would fail before it leaves the
+// process, or nil when it would at least be attempted. It is the rule for
+// every URL SubGlance requests on an operator's behalf: an http monitor's
+// target, a channel's URL, the watchdog URL and the backup endpoint.
+//
+// net/url accepts any run of digits as a port, so http://example.com:99999/
+// parses and is then refused by every dial ("invalid port"), and a port of 0
+// is refused by the far end of the loopback on every attempt. A hostname is
+// held to ResolvableURLHost. A port left empty (http://example.com:/) is the
+// scheme's default to net/http, and is accepted.
+//
+// The scheme and the presence of a host are the caller's to check first, in
+// its own words; a URL with no hostname is refused here only so that a
+// caller that forgot cannot pass one.
+func ResolvableURL(u *url.URL) error {
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("the URL has no host")
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("port %s is out of range 1-65535", p)
+		}
+	}
+	return ResolvableURLHost(host)
 }
 
 func isASCII(s string) bool {
