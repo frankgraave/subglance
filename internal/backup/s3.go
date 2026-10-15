@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,15 +38,25 @@ type Target struct {
 // operator will paste. The prefix gets a trailing slash so that "backups" and
 // "backups/" name the same folder instead of one of them producing keys like
 // "backupssubglance-…".
+//
+// A user name or password in the target or the endpoint is refused, and no
+// refusal quotes one: see checkEndpoint.
 func ParseTarget(raw, endpoint, region string) (Target, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return Target{}, fmt.Errorf("backup target %q: %w", raw, err)
+		// Go's message quotes the whole input, and its reason can quote
+		// a password the parser took for a port.
+		return Target{}, fmt.Errorf("backup target %q: want s3://bucket or s3://bucket/prefix",
+			checker.ShownURL(raw))
+	}
+	if u.User != nil {
+		return Target{}, fmt.Errorf("backup target %q holds a user name or password; %s, "+
+			"and the target holds only s3://bucket/prefix", checker.ShownURL(raw), signedWith)
 	}
 	if u.Scheme != "s3" || u.Host == "" {
 		return Target{}, fmt.Errorf("backup target %q: want s3://bucket or s3://bucket/prefix", raw)
 	}
-	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+	if u.RawQuery != "" || u.Fragment != "" {
 		return Target{}, fmt.Errorf("backup target %q: want s3://bucket/prefix with nothing after the prefix", raw)
 	}
 	if err := checkBucket(u.Host); err != nil {
@@ -56,18 +67,8 @@ func ParseTarget(raw, endpoint, region string) (Target, error) {
 		prefix += "/"
 	}
 	if endpoint != "" {
-		e, err := url.Parse(endpoint)
-		if err != nil || (e.Scheme != "https" && e.Scheme != "http") || e.Host == "" {
-			return Target{}, fmt.Errorf("backup endpoint %q: want an http or https URL", endpoint)
-		}
-		if e.Path != "" && e.Path != "/" {
-			return Target{}, fmt.Errorf("backup endpoint %q: want the service URL without a path; the bucket goes in the s3:// target", endpoint)
-		}
-		// A port out of range or a hostname the resolver refuses unasked
-		// would fail every upload, and the first sign would be the alert
-		// about a backup that never ran.
-		if err := checker.ResolvableURL(e); err != nil {
-			return Target{}, fmt.Errorf("backup endpoint %q: %w", endpoint, err)
+		if err := checkEndpoint(endpoint); err != nil {
+			return Target{}, err
 		}
 	}
 	if region == "" {
@@ -89,6 +90,52 @@ func ParseTarget(raw, endpoint, region string) (Target, error) {
 		}
 	}
 	return t, nil
+}
+
+// signedWith says where the credentials go, for a refusal of a URL that
+// carries them.
+const signedWith = "every request is signed with SUBGLANCE_BACKUP_ACCESS_KEY_ID and the secret access key, " +
+	"so the key pair goes there"
+
+// checkEndpoint refuses an endpoint every upload would fail at, or that
+// carries a user name or password.
+//
+// Every request is signed with the access key, which sets the Authorization
+// header, and net/http only turns a URL's user part into credentials when no
+// such header is set. A key pair written into the endpoint is therefore never
+// used, while every request URL built from the endpoint carries it, and so
+// does every transport error that quotes one. An operator who put it there
+// believes it is in use, so it is refused rather than dropped, the way the
+// base URL refuses one.
+//
+// An endpoint that does not parse, or that carries a user part, is quoted as
+// checker.ShownURL shows it: Go could not pick the user part out of the first,
+// and the password in https://key:pa/ss@host runs past the first slash. Every
+// later refusal is of an address that parsed with no user part, and quotes it
+// as written, so the path or port being refused is in front of the operator.
+func checkEndpoint(endpoint string) error {
+	shown := strconv.Quote(checker.ShownURL(endpoint))
+	e, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("backup endpoint %s: want an http or https URL", shown)
+	}
+	if e.User != nil {
+		return fmt.Errorf("backup endpoint %s holds a user name or password, which no request uses; %s",
+			shown, signedWith)
+	}
+	if (e.Scheme != "https" && e.Scheme != "http") || e.Host == "" {
+		return fmt.Errorf("backup endpoint %q: want an http or https URL", endpoint)
+	}
+	if e.Path != "" && e.Path != "/" {
+		return fmt.Errorf("backup endpoint %q: want the service URL without a path; the bucket goes in the s3:// target", endpoint)
+	}
+	// A port out of range or a hostname the resolver refuses unasked
+	// would fail every upload, and the first sign would be the alert
+	// about a backup that never ran.
+	if err := checker.ResolvableURL(e); err != nil {
+		return fmt.Errorf("backup endpoint %q: %w", endpoint, err)
+	}
+	return nil
 }
 
 // checkBucket refuses a bucket name no S3 service accepts. The characters

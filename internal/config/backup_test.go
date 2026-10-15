@@ -77,6 +77,7 @@ func TestBackupMisconfigurationRefusesToStart(t *testing.T) {
 		{"keep zero", map[string]string{"SUBGLANCE_BACKUP_KEEP": "0"}, "at least 1"},
 		{"endpoint with a path", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://minio.example/bucket"}, "without a path"},
 		{"endpoint port out of range", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "http://minio.example:90000"}, "port 90000 is out of range"},
+		{"endpoint with a key pair", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://key-id:secret@minio.example"}, "holds a user name or password"},
 		{"endpoint hostname the resolver refuses", map[string]string{"SUBGLANCE_BACKUP_ENDPOINT": "https://min!o.example"}, `contains "!"`},
 		{"endpoint written into the target", map[string]string{"SUBGLANCE_BACKUP_TARGET": "s3://minio.local:9000/backups"}, "backup endpoint"},
 		{"bucket AWS cannot be asked for", map[string]string{"SUBGLANCE_BACKUP_TARGET": "s3://-bucket/prod"}, "starts with a hyphen"},
