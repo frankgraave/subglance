@@ -230,6 +230,7 @@ func TestChannels(t *testing.T) {
 		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail"}`, "from is required"},
 		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"Kuma"}`, "from is not an e-mail address"},
 		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"k@example.com","smtpPort":"70000"}`, "port must be"},
+		{`{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail:465","smtpFrom":"k@example.com"}`, "host must not include a port"},
 		{`{"type":"telegram","telegramBotToken":"1:x"}`, "it has no chat ID"},
 	} {
 		var res Result

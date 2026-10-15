@@ -24,6 +24,8 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{"host": "smtp.example.com", "from": "sg@example.com", "to": "ops@example.com", "port": "abc"}, "port"},
 		{map[string]string{"host": "smtp.example.com", "from": "sg@example.com", "to": "ops@example.com", "port": "99999"}, "port"},
 		{map[string]string{"host": "smtp.example.com", "from": "sg@example.com", "to": "ops@example.com", "port": "0"}, "port"},
+		{map[string]string{"host": "smtp.example.com:2525", "from": "sg@example.com", "to": "ops@example.com"}, "host"},
+		{map[string]string{"host": "smtp..example.com", "from": "sg@example.com", "to": "ops@example.com"}, "host"},
 	},
 	store.ChannelTelegram: {
 		{map[string]string{"chat_id": "42"}, "bot_token"},
