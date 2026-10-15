@@ -31,6 +31,8 @@ func TestParseTargetRefusesABucketOrRegionEveryUploadRefuses(t *testing.T) {
 		{"a region with a slash, any service", "s3://bucket/x", "https://minio.example", "eu/central", `contains "/"`},
 		{"a region with a comma, any service", "s3://bucket/x", "https://minio.example", "eu,central", `contains ","`},
 		{"a region with a newline, any service", "s3://bucket/x", "https://minio.example", "auto\n", "control character"},
+		{"a region with a tab, any service", "s3://bucket/x", "https://minio.example", "auto\t", `control character "\t"`},
+		{"a region with a DEL, any service", "s3://bucket/x", "https://minio.example", "eu\x7fwest", "control character"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

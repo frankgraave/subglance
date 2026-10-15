@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/http/httpguts"
-
 	"github.com/frankgraave/subglance/internal/checker"
 )
 
@@ -122,8 +120,10 @@ func checkBucket(bucket string) error {
 // verifier splits on "/": a slash adds a field, so the date or the region it
 // reads is wrong and the signature is refused. The scope ends at a "," in the
 // Authorization header, so a comma cuts the region short in the same way. A
-// byte net/http refuses in a header value (a control character other than a
-// tab) stops the request before it is sent. Nothing stricter is applied: an
+// control character is refused too, a tab included: net/http refuses the
+// others in a header value and stops the request before it is sent, and a
+// tab is whitespace no region name holds, which a server or proxy reading
+// the header may fold or trim. Nothing stricter is applied: an
 // S3-compatible service may name its regions as it likes, with underscores
 // for instance, and a region AWS is asked in is held to the hostname rule in
 // ParseTarget.
@@ -135,8 +135,11 @@ func checkRegion(region string) error {
 	case strings.Contains(region, ","):
 		return errors.New(`contains ",", which ends the signature's credential scope; ` +
 			"a region is one name, such as eu-west-1 or auto")
-	case !httpguts.ValidHeaderFieldValue(region):
-		return errors.New("contains a control character, which no request header may carry")
+	}
+	for i := 0; i < len(region); i++ {
+		if c := region[i]; c < ' ' || c == 0x7f {
+			return fmt.Errorf("contains the control character %q; a region is one name, such as eu-west-1 or auto", string(c))
+		}
 	}
 	return nil
 }
