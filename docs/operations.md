@@ -40,9 +40,10 @@ rather than restoring into `/data`.
 
 `--help`, and every flag that does not parse, prints the flags with the value
 each one has after the environment is read, so the list shows what this start
-would run with. The two exceptions are credentials: `--secret-key` and
-`--secret-key-previous` say only that a key is set, and `--watchdog-url` is
-shown as its scheme and host, as in the log.
+would run with. The exceptions are the values that can hold a credential:
+`--secret-key` and `--secret-key-previous` say only that a key is set, and
+`--watchdog-url` and `--backup-endpoint` are shown as their scheme and host,
+as in the log.
 
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
@@ -870,8 +871,11 @@ page and the key is an application key limited to that bucket:
 
 The endpoint is the service URL alone, with no path; one with a port of 0 or
 above 65535, or a hostname the resolver refuses without asking, stops
-SubGlance at startup rather than failing every upload. The same goes for the
-bucket and the region:
+SubGlance at startup rather than failing every upload. So does a user name or
+password in the endpoint or the target (`https://key:secret@host`): requests
+are signed with the access key and secret above, never with credentials in
+the URL, and the refusal does not repeat them. The same goes for the bucket
+and the region:
 
 - The bucket takes letters, digits, dots, hyphens and underscores. A host and
   port in its place (`s3://minio.local:9000/backups`) is refused with a

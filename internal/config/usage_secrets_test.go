@@ -102,3 +102,30 @@ func TestHidingCredentialDefaultsKeepsTheValues(t *testing.T) {
 		t.Errorf("load(--help) error = %v, want flag.ErrHelp", err)
 	}
 }
+
+// A backup endpoint written with a key pair is refused at startup, but the
+// usage text is printed before startup gets that far.
+func TestUsageDoesNotPrintABackupEndpointsUserPart(t *testing.T) {
+	t.Setenv("SUBGLANCE_BACKUP_ENDPOINT", "https://AKIAEXAMPLEKEY:s3cr3tpa55@minio.local:9000")
+
+	for _, args := range [][]string{{"--help"}, {"--no-such-flag"}} {
+		usage := usageOf(t, args...)
+		for _, part := range []string{"AKIAEXAMPLEKEY", "s3cr3tpa55"} {
+			if strings.Contains(usage, part) {
+				t.Errorf("%v: usage prints the backup endpoint's %q:\n%s", args, part, usage)
+			}
+		}
+		if !strings.Contains(usage, `(default "https://minio.local:9000")`) {
+			t.Errorf("%v: usage does not show the backup endpoint as scheme and host:\n%s", args, usage)
+		}
+	}
+}
+
+// An endpoint is a scheme, a host and a port, which the shown form keeps, so
+// a correct one reads in --help exactly as it was set.
+func TestUsageShowsAPlainBackupEndpointAsSet(t *testing.T) {
+	t.Setenv("SUBGLANCE_BACKUP_ENDPOINT", "https://s3.eu-central-003.backblazeb2.com")
+	if usage := usageOf(t, "--help"); !strings.Contains(usage, `(default "https://s3.eu-central-003.backblazeb2.com")`) {
+		t.Errorf("usage does not show the backup endpoint as set:\n%s", usage)
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/backup"
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
@@ -522,8 +523,10 @@ func load(args []string, usage io.Writer) (Config, error) {
 // written to a container log that is usually kept and often shipped
 // elsewhere. The keys are not shown at all; the usage says one is set, so an
 // operator can still tell. The watchdog URL is shown as scheme and host,
-// the form every log line uses. The values themselves are untouched:
-// DefValue is only what the usage text prints.
+// the form every log line uses, and so is the backup endpoint, which
+// startup refuses with a user name and password in it but the usage text
+// prints before startup gets that far. The values themselves are
+// untouched: DefValue is only what the usage text prints.
 func hideCredentialDefaults(fs *flag.FlagSet) {
 	for _, name := range []string{"secret-key", "secret-key-previous"} {
 		f := fs.Lookup(name)
@@ -532,8 +535,10 @@ func hideCredentialDefaults(fs *flag.FlagSet) {
 			f.Usage += " (set in the environment; not shown)"
 		}
 	}
-	if f := fs.Lookup("watchdog-url"); f.DefValue != "" {
-		f.DefValue = watchdog.ShownURL(f.DefValue)
+	for _, name := range []string{"watchdog-url", "backup-endpoint"} {
+		if f := fs.Lookup(name); f.DefValue != "" {
+			f.DefValue = checker.ShownURL(f.DefValue)
+		}
 	}
 }
 
