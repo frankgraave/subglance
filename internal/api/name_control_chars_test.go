@@ -179,3 +179,53 @@ func TestImportRefusesAControlCharacterInANameAtItsEntry(t *testing.T) {
 		})
 	}
 }
+
+// An old name is not a licence to rename the object to a different invalid
+// name or create another object with that name under a new configuration key.
+func TestLegacyNameExemptionBelongsToTheUnchangedObject(t *testing.T) {
+	ctx := t.Context()
+	srv, db := testServerWithDB(t)
+	const old = "API\nprod"
+	m := seedMonitor(t, db, store.Monitor{Name: old, Type: "http", Target: "https://example.com",
+		IntervalS: 60, TimeoutS: 10, Enabled: true})
+	ch, err := db.CreateChannel(ctx, store.Channel{Name: old, Type: "webhook", Enabled: true,
+		Config: map[string]string{"url": "https://hook.example.com/x"}})
+	must(t, err)
+
+	rec := patch(t, srv, "/api/v1/monitors/"+itoa(m.ID), `{"name":"Other\nname"}`)
+	wantStatusProblem(t, rec.Code, rec.Body.String(), "name", noControl)
+	rec = doJSON(t, srv, http.MethodPut, "/api/v1/channels/"+itoa(ch.ID),
+		`{"name":"Other\nname","type":"webhook","config":{"url":"https://hook.example.com/x"}}`)
+	wantStatusProblem(t, rec.Code, rec.Body.String(), "name", noControl)
+
+	exported, err := configfile.Parse([]byte(exportYAML(t, srv)))
+	must(t, err)
+	for _, create := range []bool{false, true} {
+		mon, channel := exported.Monitors[0], exported.Channels[0]
+		if create {
+			// Same name, different objects: no legacy exemption.
+			mon.Key, channel.Key = "another-monitor", "another-channel"
+		} else {
+			// Same objects, different names: no legacy exemption either.
+			mon.Name, channel.Name = "Other\nname", "Other\nname"
+		}
+		for field, doc := range map[string]configfile.Document{
+			"monitors[0].name": {Version: 1, Monitors: []configfile.Monitor{mon}},
+			"channels[0].name": {Version: 1, Channels: []configfile.Channel{channel}},
+		} {
+			file, err := configfile.Marshal(doc)
+			must(t, err)
+			for _, dryRun := range []bool{false, true} {
+				code, _, body := importYAML(t, srv, string(file), dryRun)
+				wantStatusProblem(t, code, body, field, noControl)
+			}
+		}
+	}
+	mons, err := db.ListMonitors(ctx)
+	must(t, err)
+	chans, err := db.ListChannels(ctx)
+	must(t, err)
+	if len(mons) != 1 || mons[0].Name != old || len(chans) != 1 || chans[0].Name != old {
+		t.Errorf("refused renames or creates changed the stored objects: monitors=%+v channels=%+v", mons, chans)
+	}
+}
