@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -634,7 +635,7 @@ func TestEmailMessageResistsHeaderInjection(t *testing.T) {
 		At:          time.Now(),
 	}
 
-	msg := buildMessage("from@test", []string{"to@test"}, a)
+	msg := buildMessage(&mail.Address{Address: "from@test"}, []*mail.Address{{Address: "to@test"}}, a)
 	if contains(msg, "Bcc: attacker@evil.test\r\n") {
 		t.Fatal("a newline in the monitor name injected a header")
 	}

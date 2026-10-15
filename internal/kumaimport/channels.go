@@ -86,10 +86,7 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		}
 	case "smtp":
 		out.Type = "email"
-		to := get("smtpTo")
-		if cc := get("smtpCC"); cc != "" {
-			to = joinRecipients(to, cc)
-		}
+		to := joinRecipients(get("smtpTo"), get("smtpCC"))
 		if to == "" {
 			return skip("it has no recipients")
 		}
@@ -189,12 +186,15 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 	return out, true
 }
 
-// joinRecipients merges two comma-separated lists, dropping duplicates.
+// joinRecipients merges recipient lists into one comma-separated list,
+// dropping duplicates.
 func joinRecipients(lists ...string) string {
 	seen := map[string]bool{}
 	var out []string
 	for _, l := range lists {
-		for _, part := range strings.Split(l, ",") {
+		// Kuma hands the list to nodemailer, which reads a semicolon as a
+		// separator too; SubGlance's email channel takes commas only.
+		for _, part := range strings.FieldsFunc(l, isRecipientSeparator) {
 			p := strings.TrimSpace(part)
 			if p == "" || seen[strings.ToLower(p)] {
 				continue
@@ -205,3 +205,5 @@ func joinRecipients(lists ...string) string {
 	}
 	return strings.Join(out, ", ")
 }
+
+func isRecipientSeparator(r rune) bool { return r == ',' || r == ';' }

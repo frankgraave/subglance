@@ -193,6 +193,10 @@ func TestChannels(t *testing.T) {
 				return c.Config["to"] == "a@example.com, b@example.com" && c.Config["password"] == ""
 			},
 			"Bcc recipients were left out"},
+		{"smtp with a named sender and semicolons", `{"type":"smtp","smtpTo":"a@example.com; b@example.com","smtpHost":"mail","smtpFrom":"\"Uptime Kuma\" <kuma@example.com>"}`,
+			func(c configfile.Channel) bool {
+				return c.Config["to"] == "a@example.com, b@example.com" && c.Config["from"] == `"Uptime Kuma" <kuma@example.com>`
+			}, ""},
 		{"ntfy with a token", `{"type":"ntfy","ntfyserverurl":"https://ntfy.sh/","ntfytopic":"t","ntfyAuthenticationMethod":"accessToken","ntfyaccesstoken":"x"}`,
 			func(c configfile.Channel) bool {
 				return c.Config["url"] == "https://ntfy.sh" && c.Config["token"] == configfile.Placeholder && c.Config["username"] == ""
@@ -212,7 +216,11 @@ func TestChannels(t *testing.T) {
 			if !tc.check(c) {
 				t.Errorf("channel = %+v", c)
 			}
-			if got := notesOf(res); !strings.Contains(got, tc.note) {
+			if got := notesOf(res); tc.note == "" {
+				if got != "" {
+					t.Errorf("notes = %q, want no notes", got)
+				}
+			} else if !strings.Contains(got, tc.note) {
 				t.Errorf("notes = %q, want %q", got, tc.note)
 			}
 		})

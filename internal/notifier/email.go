@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -71,14 +72,15 @@ func (s *EmailSender) Validate(cfg map[string]string) error {
 		return onKey("host", err)
 	}
 
-	// A missing @ is the error people actually make, usually by putting a
-	// display name in the field. Catching it here beats a rejection from
-	// the mail server three hops later that names neither the field nor
-	// the value.
-	for _, k := range []string{"from", "to"} {
-		if !strings.Contains(cfg[k], "@") {
-			return onKey(k, &configError{k + " is not an e-mail address"})
-		}
+	// Held to the parse Send uses, so a channel that saves is one whose
+	// envelope can be written. Catching it here beats a rejection from the
+	// mail server three hops later that names neither the field nor the
+	// value.
+	if _, err := senderAddress(cfg["from"]); err != nil {
+		return onKey("from", err)
+	}
+	if _, err := recipientAddresses(cfg["to"]); err != nil {
+		return onKey("to", err)
 	}
 	return nil
 }
@@ -93,6 +95,17 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		port = "587"
 	}
 	addr := net.JoinHostPort(host, port)
+
+	// Parsed before dialling: a stored value that no longer parses will not
+	// parse on the next attempt either, so it fails once, without retries.
+	from, err := senderAddress(cfg["from"])
+	if err != nil {
+		return err
+	}
+	recipients, err := recipientAddresses(cfg["to"])
+	if err != nil {
+		return err
+	}
 
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
@@ -142,14 +155,13 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		}
 	}
 
-	if err := c.Mail(cfg["from"]); err != nil {
+	if err := c.Mail(addrSpec(from)); err != nil {
 		return retryable("smtp MAIL FROM: %w", err)
 	}
 
-	recipients := splitRecipients(cfg["to"])
 	for _, to := range recipients {
-		if err := c.Rcpt(to); err != nil {
-			return retryable("smtp RCPT TO %s: %w", to, err)
+		if err := c.Rcpt(addrSpec(to)); err != nil {
+			return retryable("smtp RCPT TO %s: %w", addrSpec(to), err)
 		}
 	}
 
@@ -157,7 +169,7 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 	if err != nil {
 		return retryable("smtp DATA: %w", err)
 	}
-	if _, err := w.Write([]byte(buildMessage(cfg["from"], recipients, a))); err != nil {
+	if _, err := w.Write([]byte(buildMessage(from, recipients, a))); err != nil {
 		return retryable("write message: %w", err)
 	}
 	if err := w.Close(); err != nil {
@@ -201,15 +213,79 @@ func smtpHostProblem(host string) error {
 	return nil
 }
 
-// splitRecipients parses the comma-separated recipient list.
-func splitRecipients(raw string) []string {
-	var out []string
-	for _, part := range strings.Split(raw, ",") {
-		if p := strings.TrimSpace(part); p != "" {
-			out = append(out, p)
+// senderAddress parses the from field as one RFC 5322 mailbox.
+//
+// A display name is allowed, as in "SubGlance <sg@example.com>": it is the
+// form Uptime Kuma asks for, so imported channels carry it. It used to be
+// written into MAIL FROM as typed, which put a name and a second pair of
+// angle brackets in the envelope; the envelope now gets the bare address and
+// the From header keeps the name.
+func senderAddress(raw string) (*mail.Address, error) {
+	v := strings.TrimSpace(raw)
+	if !strings.Contains(v, "@") {
+		return nil, &configError{"from is not an e-mail address"}
+	}
+	a, err := mail.ParseAddress(v)
+	if err == nil {
+		return a, nil
+	}
+	if list, lerr := mail.ParseAddressList(v); lerr == nil && len(list) > 1 {
+		return nil, &configError{"from takes one address, not a list"}
+	}
+	return nil, &configError{"from is not an e-mail address"}
+}
+
+// recipientAddresses parses the to field as a comma-separated list of RFC
+// 5322 mailboxes, names allowed.
+//
+// Splitting on commas by hand, as this used to, sent "ops@a.com; b@a.com" as
+// one recipient and "Ops <ops@a.com>" as an envelope address with a name in
+// it, and a line break between two addresses failed every delivery in
+// net/smtp. The parser refuses all three; the first two still name the
+// people they were meant for once written as the parser reads them.
+func recipientAddresses(raw string) ([]*mail.Address, error) {
+	v := strings.TrimSpace(raw)
+	if !strings.Contains(v, "@") {
+		return nil, &configError{"to is not an e-mail address"}
+	}
+	list, err := mail.ParseAddressList(v)
+	if err == nil {
+		return list, nil
+	}
+	if strings.ContainsAny(v, ";\r\n") {
+		return nil, &configError{"to separates addresses with commas, not semicolons or line breaks"}
+	}
+	// Name the entry that does not parse, so a list of five says which one.
+	// Parsed one by one only to find it: a quoted name may hold a comma,
+	// but then the whole list parses and this is never reached.
+	if parts := strings.Split(v, ","); len(parts) > 1 {
+		for _, part := range parts {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			if _, perr := mail.ParseAddress(p); perr != nil {
+				return nil, &configError{fmt.Sprintf("to: %q is not an e-mail address", p)}
+			}
 		}
 	}
-	return out
+	return nil, &configError{"to is not an e-mail address"}
+}
+
+// addrSpec is the address as the SMTP envelope writes it: no display name and
+// no angle brackets, with the local part quoted when it needs to be.
+func addrSpec(a *mail.Address) string {
+	s := (&mail.Address{Address: a.Address}).String()
+	return strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")
+}
+
+// headerAddress is a mailbox as a header writes it: the bare address when no
+// name was given, so a plain recipient list reads as it was typed.
+func headerAddress(a *mail.Address) string {
+	if a.Name == "" {
+		return addrSpec(a)
+	}
+	return a.String()
 }
 
 // buildMessage renders the RFC 5322 message.
@@ -218,11 +294,20 @@ func splitRecipients(raw string) []string {
 // readable in a notification preview, on a phone, in a terminal mail client,
 // and in whatever the operator actually uses — and plain text is the only
 // format that is legible in all of them.
-func buildMessage(from string, to []string, a Alert) string {
+func buildMessage(from *mail.Address, to []*mail.Address, a Alert) string {
 	var b strings.Builder
 
-	b.WriteString("From: SubGlance <" + from + ">\r\n")
-	b.WriteString("To: " + strings.Join(to, ", ") + "\r\n")
+	// SubGlance is the sender's name unless the from field gives one.
+	sender := "SubGlance <" + addrSpec(from) + ">"
+	if from.Name != "" {
+		sender = from.String()
+	}
+	rcpts := make([]string, len(to))
+	for i, r := range to {
+		rcpts[i] = headerAddress(r)
+	}
+	b.WriteString("From: " + sender + "\r\n")
+	b.WriteString("To: " + strings.Join(rcpts, ", ") + "\r\n")
 	b.WriteString("Subject: " + sanitiseHeader(a.Title()) + "\r\n")
 	b.WriteString("Date: " + a.At.UTC().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")

@@ -47,6 +47,15 @@ Each of these used to be saved and then fail every delivery as "no such
 host"; now it is refused on `config.host`. Spaces around the host are
 ignored.
 
+An email channel's `from` is one address, and `to` is one or more separated
+by commas. Either may carry a name, as in `SubGlance <sg@example.com>` or
+`"Doe, Jane" <jane@example.com>`: the relay is handed the bare addresses and
+the message headers keep the names. Without a name in `from`, the message
+comes from `SubGlance <address>`. A value that is not an address, such as
+`ops@` or `ops@@example.com`, is refused on `config.from` or `config.to`, and
+so is a list separated by semicolons or line breaks. Importing from Uptime
+Kuma turns its semicolons into commas.
+
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 
