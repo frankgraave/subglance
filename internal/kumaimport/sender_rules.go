@@ -2,7 +2,7 @@ package kumaimport
 
 import (
 	"maps"
-	"strconv"
+	"net/url"
 	"strings"
 
 	"github.com/frankgraave/subglance/internal/configfile"
@@ -60,16 +60,35 @@ func withStandIns(c configfile.Channel) map[string]string {
 }
 
 // refusedAddress says why the url was withheld: Kuma's settings gave none,
-// or gave one SubGlance cannot post to. An address with an @, a ? or a #
-// can hold a credential, so it is not quoted, and neither is the sender's
-// reason, which can quote the address when it does not parse.
+// or gave one SubGlance cannot post to. The address itself is never quoted:
+// an ntfy server's path can be its topic, which is the whole credential on
+// a server without access control, and a user name or a query can hold one
+// too. The sender's reason is given only when it cannot repeat the address
+// or any part of it beyond the host and port, and never for an address with
+// an @, a ? or a #.
 func refusedAddress(raw string, err error) string {
 	if raw == "" {
 		return "Kuma's settings gave no address; fill in the url"
 	}
-	if strings.ContainsAny(raw, "@?#") {
-		return "Kuma's address is not one SubGlance can post to, so it was left out; fill in the url"
+	const refused, tail = "Kuma's address is not one SubGlance can post to", ", so it was left out; fill in the url"
+	if strings.ContainsAny(raw, "@?#") || repeatsAddress(raw, err.Error()) {
+		return refused + tail
 	}
-	return "Kuma's address " + strconv.Quote(raw) + " is not one SubGlance can post to (" + err.Error() +
-		"), so it was left out; fill in the url"
+	return refused + " (" + err.Error() + ")" + tail
+}
+
+// repeatsAddress reports whether the sender's reason can quote the address
+// or its path. A URL that does not parse is quoted whole by url.Parse's
+// error, so its reason is not given either.
+func repeatsAddress(raw, reason string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return true
+	}
+	for _, part := range []string{raw, u.Path, u.Opaque} {
+		if part != "" && part != "/" && strings.Contains(reason, part) {
+			return true
+		}
+	}
+	return false
 }

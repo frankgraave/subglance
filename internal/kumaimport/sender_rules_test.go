@@ -19,19 +19,28 @@ func TestAnAddressTheSenderRefusesIsWithheld(t *testing.T) {
 		absent []string
 	}{
 		{"an ntfy port above the range", `{"type":"ntfy","ntfyserverurl":"https://ntfy.example.org:99999"}`,
-			[]string{`Kuma's address "https://ntfy.example.org:99999" is not one SubGlance can post to`, "port 99999 is out of range"}, nil},
+			[]string{"Kuma's address is not one SubGlance can post to (url: port 99999 is out of range"}, []string{"ntfy.example.org"}},
 		{"an ntfy port of 0", `{"type":"ntfy","ntfyserverurl":"https://ntfy.example.org:0"}`,
 			[]string{"port 0 is out of range"}, nil},
 		{"an ntfy server without a scheme", `{"type":"ntfy","ntfyserverurl":"ntfy.example.org"}`,
-			[]string{`"ntfy.example.org" is not one SubGlance can post to`}, nil},
+			[]string{"url must be an http or https URL"}, []string{"ntfy.example.org"}},
 		{"an ntfy server on an onion address", `{"type":"ntfy","ntfyserverurl":"http://abc.onion"}`,
 			[]string{"Tor onion address"}, nil},
 		{"an ntfy server with a path", `{"type":"ntfy","ntfyserverurl":"https://example.org/ntfy"}`,
 			[]string{"must name the ntfy server"}, nil},
+		// On a server without access control the topic is the credential, and
+		// the converter withholds it; a topic written into the server address
+		// is not quoted in the note either.
+		{"an ntfy server with its topic in the path", `{"type":"ntfy","ntfyserverurl":"https://ntfy.example.org/alerts-k3y"}`,
+			[]string{"must name the ntfy server"}, []string{"alerts-k3y"}},
+		{"an ntfy server without a scheme with its topic in the path", `{"type":"ntfy","ntfyserverurl":"ntfy.example.org/alerts-k3y"}`,
+			[]string{"is not one SubGlance can post to"}, []string{"alerts-k3y"}},
 		{"a Gotify port above the range", `{"type":"gotify","gotifyserverurl":"https://gotify.example.org:99999"}`,
 			[]string{"port 99999 is out of range"}, nil},
+		// A URL that does not parse is quoted whole by the parser's error,
+		// so the reason is left out with the address.
 		{"a Gotify host with a space", `{"type":"gotify","gotifyserverurl":"https://gotify example.org"}`,
-			[]string{"is not one SubGlance can post to"}, nil},
+			[]string{"Kuma's address is not one SubGlance can post to, so it was left out"}, []string{"gotify example.org"}},
 		{"a Gotify server Kuma had no address for", `{"type":"gotify"}`,
 			[]string{"Kuma's settings gave no address; fill in the url"}, nil},
 		{"a Matrix homeserver port above the range", `{"type":"matrix","homeserverUrl":"https://matrix.example.org:99999","internalRoomId":"!abc:example.org"}`,
