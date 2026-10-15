@@ -56,6 +56,16 @@ comes from `SubGlance <address>`. A value that is not an address, such as
 so is a list separated by semicolons or line breaks. Importing from Uptime
 Kuma turns its semicolons into commas.
 
+The subject of an alert email is always ASCII. A subject with a character
+outside it, such as a monitor named `Bücherei Zürich`, is sent as RFC 2047
+encoded words, which every mail client shows as the original text; written
+raw, it could be returned as undeliverable by a relay whose next hop does not
+accept UTF-8 headers. Display names in `from` and `to` are encoded the same
+way. The addresses themselves cannot be: an address with a character outside
+ASCII, such as `jörg@example.com`, is written as typed and still needs a relay
+that supports SMTPUTF8. A body with such a character says
+`Content-Transfer-Encoding: 8bit`. An ASCII subject and body go out as before.
+
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 
