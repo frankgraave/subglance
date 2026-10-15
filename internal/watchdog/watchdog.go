@@ -47,6 +47,17 @@
 // never leave the instance. Those counts are still information about the
 // install, and over http they travel in cleartext: on any network path that is
 // not trusted end to end, use an https URL.
+//
+// # Why the log never shows the URL in full
+//
+// The URL is the switch's credential. Whoever knows a Healthchecks.io check
+// URL, a Dead Man's Snitch URL or a push URL can reset that switch, and keep
+// it quiet while this instance is down. Logs travel further than the
+// process environment does, to aggregators and to whoever is helping read
+// them, so every line and every error the watchdog writes shows the URL as
+// its scheme and host only, the same shape a failed channel delivery gets:
+// the host tells one receiver from another and diagnoses a refused
+// connection; the path is what grants access.
 package watchdog
 
 import (
@@ -58,6 +69,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -110,10 +123,12 @@ type Watchdog struct {
 	history   history
 	createdAt time.Time
 	url       string
-	interval  time.Duration
-	liveness  func() Liveness
-	log       *slog.Logger
-	client    *http.Client
+	// shown is url as a log line or an error may print it; see shownURL.
+	shown    string
+	interval time.Duration
+	liveness func() Liveness
+	log      *slog.Logger
+	client   *http.Client
 
 	// last is the liveness reading at the previous ping decision.
 	last Liveness
@@ -158,6 +173,7 @@ func New(opts Options) (*Watchdog, error) {
 	return &Watchdog{
 		createdAt: time.Now(),
 		url:       opts.URL,
+		shown:     shownURL(opts.URL),
 		interval:  interval,
 		liveness:  opts.Liveness,
 		log:       log,
@@ -182,26 +198,88 @@ func cloneWithoutRedirects(c *http.Client) *http.Client {
 // because anything stricter would start rejecting the private addresses this
 // feature is often pointed at on purpose.
 func ValidateURL(raw string) error {
+	quoted := strconv.Quote(shownURL(raw))
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("watchdog-url %q: %w", raw, err)
+		// Go's own message quotes the whole input back, path and all.
+		// Its reason alone is safe only without a user part: in
+		// https://user:pass/x@host the parser reads pass as a port, and
+		// its reason would print it.
+		if strings.Contains(raw, "@") {
+			return fmt.Errorf("watchdog-url %s is not a URL", quoted)
+		}
+		return fmt.Errorf("watchdog-url %s is not a URL: %w", quoted, errors.Unwrap(err))
 	}
 	switch u.Scheme {
 	case "http", "https":
 	default:
-		return fmt.Errorf("watchdog-url %q: want an http or https URL", raw)
+		return fmt.Errorf("watchdog-url %s: want an http or https URL", quoted)
 	}
 	if u.Host == "" {
-		return fmt.Errorf("watchdog-url %q: missing host", raw)
+		return fmt.Errorf("watchdog-url %s: missing host", quoted)
 	}
 	// Not a stricter reading of the address, which stays any host and any
 	// network: a port out of range or a hostname the resolver refuses
 	// unasked fails every ping before it leaves the process, and the switch
 	// at the far end would raise the alarm for an instance that is fine.
 	if err := checker.ResolvableURL(u); err != nil {
-		return fmt.Errorf("watchdog-url %q: %w", raw, err)
+		return fmt.Errorf("watchdog-url %s: %w", quoted, err)
 	}
 	return nil
+}
+
+// shownURL is the watchdog URL as a log line or an error prints it: the
+// scheme and the host, and "/…" where a path, query or fragment followed. A
+// user name and password are left out.
+//
+// An address that does not parse, or has no host, is cut from its text
+// instead, so the error that refuses it does not quote it back in full.
+// There everything up to the last "@" is replaced by "***", as the
+// --base-url refusal does: Go could not pick the user part out, and in
+// https://user:pa/ss@host the password runs past the first slash.
+func shownURL(raw string) string {
+	if u, err := url.Parse(raw); err == nil && u.Scheme != "" && u.Host != "" {
+		shown := u.Scheme + "://" + u.Host
+		if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+			return shown + "/…"
+		}
+		return shown + u.Path
+	}
+	scheme, rest, hasScheme := strings.Cut(raw, "://")
+	if !hasScheme {
+		scheme, rest = "", raw
+	}
+	if at := strings.LastIndex(rest, "@"); at >= 0 {
+		rest = "***" + rest[at:]
+	}
+	host, tail := rest, ""
+	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
+		host, tail = rest[:end], rest[end:]
+	}
+	if hasScheme {
+		host = scheme + "://" + host
+	}
+	if tail != "" && tail != "/" {
+		return host + "/…"
+	}
+	return host + tail
+}
+
+// loggable is err with the URL in it shown as shownURL shows it.
+//
+// The HTTP client wraps every transport failure in a *url.Error that
+// quotes the request URL: Go masks a password there, but not the path or
+// the query, which is where every common switch keeps its token. The copy
+// keeps Op and the cause, so "dial tcp …: connection refused" and a timeout
+// read exactly as before.
+func (w *Watchdog) loggable(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	clean := *ue
+	clean.URL = w.shown
+	return &clean
 }
 
 // Run pings until ctx is cancelled, then sends one final "stopped" ping.
@@ -215,7 +293,7 @@ func (w *Watchdog) Run(ctx context.Context) {
 		return
 	}
 	w.last = w.liveness()
-	w.log.Info("watchdog enabled", "url", w.url, "interval", w.interval)
+	w.log.Info("watchdog enabled", "url", w.shown, "interval", w.interval)
 
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -280,7 +358,7 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 	w.beginAttempt(event)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewBufferString(body))
 	if err != nil {
-		w.log.Error("watchdog ping could not be built", "error", err)
+		w.log.Error("watchdog ping could not be built", "error", w.loggable(err))
 		w.finishAttempt("request_error", 0)
 		return
 	}
@@ -292,7 +370,7 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		w.log.Error("watchdog ping failed", "event", event, "error", err)
+		w.log.Error("watchdog ping failed", "event", event, "error", w.loggable(err))
 		result := "transport_error"
 		var networkError interface{ Timeout() bool }
 		if errors.Is(err, context.Canceled) {

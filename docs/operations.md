@@ -650,6 +650,12 @@ of 0 or above 65535, or a hostname the resolver refuses without asking (two
 dots in a row, or a character other than a letter, digit, hyphen, underscore
 or dot).
 
+The URL is the switch's credential: whoever knows it can reset the switch and
+keep it quiet while this instance is down. So the log and that start-up
+refusal show it as its scheme and host only, such as `https://hc-ping.com/…`
+for the example above, with no user name, password, path or query. The host
+is enough to tell which receiver a failed ping was meant for.
+
 The read-only **Settings → Self-monitoring** card shows watchdog history for
 this process. The dashboard explains the limitation once when no watchdog is
 configured. Unknown or unavailable diagnostics do not mean it is switched off.
