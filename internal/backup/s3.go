@@ -48,6 +48,9 @@ func ParseTarget(raw, endpoint, region string) (Target, error) {
 	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 		return Target{}, fmt.Errorf("backup target %q: want s3://bucket/prefix with nothing after the prefix", raw)
 	}
+	if err := checkBucket(u.Host); err != nil {
+		return Target{}, fmt.Errorf("backup target %q: %w", raw, err)
+	}
 	prefix := strings.Trim(u.Path, "/")
 	if prefix != "" {
 		prefix += "/"
@@ -70,7 +73,75 @@ func ParseTarget(raw, endpoint, region string) (Target, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
-	return Target{Bucket: u.Host, Prefix: prefix, Endpoint: strings.TrimRight(endpoint, "/"), Region: region}, nil
+	if err := checkRegion(region); err != nil {
+		return Target{}, fmt.Errorf("backup region %q: %w", region, err)
+	}
+	t := Target{Bucket: u.Host, Prefix: prefix, Endpoint: strings.TrimRight(endpoint, "/"), Region: region}
+	// With no endpoint the bucket and the region are part of the hostname
+	// every request goes to, so they are held to the resolver's rule: a
+	// bucket that starts with a hyphen or a region with a space in it fails
+	// every upload as "no such host" or before the request is built.
+	if t.Endpoint == "" {
+		host, _ := t.awsHost()
+		if err := checker.ResolvableHost(host); err != nil {
+			return Target{}, fmt.Errorf("backup target %q in region %q: every request to AWS S3 would fail, "+
+				"because %w (for another S3-compatible service, set the backup endpoint)", raw, region, err)
+		}
+	}
+	return t, nil
+}
+
+// checkBucket refuses a bucket name no S3 service accepts. The characters
+// allowed are the union of every naming rule in use: AWS's current and legacy
+// rules (the legacy us-east-1 names allow capitals and underscores), MinIO,
+// Cloudflare R2, Backblaze B2 and Ceph's relaxed names. Length and hyphen
+// placement differ between them and are left to the service, except where the
+// bucket becomes part of a hostname (see ParseTarget).
+func checkBucket(bucket string) error {
+	if strings.ContainsAny(bucket, ":[]") {
+		return fmt.Errorf("bucket %q is a host and port, not a bucket name; "+
+			"put the service URL in the backup endpoint and only the bucket in the target, as s3://bucket/prefix", bucket)
+	}
+	for i := 0; i < len(bucket); i++ {
+		c := bucket[i]
+		switch {
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9', c == '.', c == '-', c == '_':
+		default:
+			return fmt.Errorf("bucket %q contains %q; a bucket name takes letters, digits, dots, hyphens and underscores",
+				bucket, string(c))
+		}
+	}
+	return nil
+}
+
+// checkRegion refuses a signing region that breaks the request for every
+// service, whatever region that service expects. The region is one field of
+// the signature's credential scope, key/date/region/s3/aws4_request, which a
+// verifier splits on "/": a slash adds a field, so the date or the region it
+// reads is wrong and the signature is refused. The scope ends at a "," in the
+// Authorization header, so a comma cuts the region short in the same way. A
+// control character is refused too, a tab included: net/http refuses the
+// others in a header value and stops the request before it is sent, and a
+// tab is whitespace no region name holds, which a server or proxy reading
+// the header may fold or trim. Nothing stricter is applied: an
+// S3-compatible service may name its regions as it likes, with underscores
+// for instance, and a region AWS is asked in is held to the hostname rule in
+// ParseTarget.
+func checkRegion(region string) error {
+	switch {
+	case strings.Contains(region, "/"):
+		return errors.New(`contains "/", which splits the signature's credential scope; ` +
+			"a region is one name, such as eu-west-1 or auto")
+	case strings.Contains(region, ","):
+		return errors.New(`contains ",", which ends the signature's credential scope; ` +
+			"a region is one name, such as eu-west-1 or auto")
+	}
+	for i := 0; i < len(region); i++ {
+		if c := region[i]; c < ' ' || c == 0x7f {
+			return fmt.Errorf("contains the control character %q; a region is one name, such as eu-west-1 or auto", string(c))
+		}
+	}
+	return nil
 }
 
 // String is the target as the operator configured it, for log lines. It
@@ -125,13 +196,24 @@ func (c *client) objectURL(key string) *url.URL {
 		u.RawPath = "/" + uriEncode(c.target.Bucket, true) + "/" + escapedKey
 		return u
 	}
-	host := "s3." + c.target.Region + ".amazonaws.com"
-	if strings.Contains(c.target.Bucket, ".") {
+	host, pathStyle := c.target.awsHost()
+	if pathStyle {
 		return &url.URL{Scheme: "https", Host: host,
 			Path:    "/" + c.target.Bucket + "/" + key,
 			RawPath: "/" + uriEncode(c.target.Bucket, true) + "/" + escapedKey}
 	}
-	return &url.URL{Scheme: "https", Host: c.target.Bucket + "." + host, Path: "/" + key, RawPath: "/" + escapedKey}
+	return &url.URL{Scheme: "https", Host: host, Path: "/" + key, RawPath: "/" + escapedKey}
+}
+
+// awsHost is the host a request to AWS S3 goes to, and whether the bucket
+// goes in the path (true) rather than in the host. ParseTarget holds this
+// same host to the resolver's rule, so the two cannot disagree.
+func (t Target) awsHost() (host string, pathStyle bool) {
+	host = "s3." + t.Region + ".amazonaws.com"
+	if strings.Contains(t.Bucket, ".") {
+		return host, true
+	}
+	return t.Bucket + "." + host, false
 }
 
 func (c *client) do(req *http.Request, payloadHash string) (*http.Response, error) {
