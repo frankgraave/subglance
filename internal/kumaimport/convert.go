@@ -17,6 +17,7 @@ import (
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/configfile"
 	"github.com/frankgraave/subglance/internal/scheduler"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // The bounds SubGlance's API enforces, restated so a converted value lands
@@ -91,10 +92,27 @@ func shortName(name string) (string, bool) {
 // nameShortened is the note a shortened name leaves in the report.
 var nameShortened = "the name was shortened to " + strconv.Itoa(maxName) + " characters"
 
+// oneLineName puts a name that holds a control character on one line: each
+// run of control characters and spaces becomes one space. It reports whether
+// it changed the name. SubGlance refuses a name with a line break, a tab or
+// another control character (store.HasControlCharacter); Kuma takes one, and
+// left as it is, it would make the whole file fail its import.
+func oneLineName(name string) (string, bool) {
+	if !store.HasControlCharacter(name) {
+		return name, false
+	}
+	return strings.Join(strings.FieldsFunc(name, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}), " "), true
+}
+
+// nameOnOneLine is the note a name put on one line leaves in the report.
+const nameOnOneLine = "line breaks, tabs and other control characters in the name were replaced with spaces"
+
 // convertMonitor converts one Kuma monitor row, or reports why it cannot.
 func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 	typ := m.str("type")
-	name := strings.TrimSpace(m.str("name"))
+	name, flat := oneLineName(strings.TrimSpace(m.str("name")))
 	if name == "" {
 		name = "Kuma monitor " + m.str("id")
 	}
@@ -118,6 +136,9 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 		return configfile.Monitor{}, false
 	}
 
+	if flat {
+		note(nameOnOneLine)
+	}
 	if short, cut := shortName(name); cut {
 		name = short
 		note(nameShortened)

@@ -367,3 +367,17 @@ func TestWindowNameOfMultibyteLettersIsKept(t *testing.T) {
 		t.Errorf("notes = %s", notesOf(res))
 	}
 }
+
+// A window title with a line break is put on one line, as a monitor's is.
+func TestWindowNameIsPutOnOneLine(t *testing.T) {
+	res := convertOne(windowRow(row{"title": "Deploy\nnight"}))
+	if len(res.Document.Maintenance) != 1 {
+		t.Fatalf("not converted: %s", notesOf(res))
+	}
+	if name := res.Document.Maintenance[0].Name; name != "Deploy night" {
+		t.Errorf("name = %q, want %q", name, "Deploy night")
+	}
+	if !strings.Contains(notesOf(res), nameOnOneLine) {
+		t.Errorf("notes = %s", notesOf(res))
+	}
+}

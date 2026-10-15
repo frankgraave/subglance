@@ -592,7 +592,7 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if strings.TrimSpace(req.Name) == "" {
 		return fieldProblem("name", "name is required")
 	}
-	if p := nameLengthProblem(req.Name); !p.ok() {
+	if p := nameProblem(req.Name); !p.ok() {
 		return p
 	}
 	// A push monitor has nothing to dial, so it has nothing to put in
@@ -1635,11 +1635,12 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		if strings.TrimSpace(*req.Name) == "" {
 			return fieldProblem("name", "name cannot be empty")
 		}
-		// Only a new name is measured. A monitor saved before the limit
-		// existed keeps its name through every other edit, and through an
-		// import of its own export, which sends the name back unchanged.
+		// Only a new name is measured. A monitor saved before the length
+		// limit or the control character rule existed keeps its name
+		// through every other edit, and through an import of its own
+		// export, which sends the name back unchanged.
 		if *req.Name != m.Name {
-			if p := nameLengthProblem(*req.Name); !p.ok() {
+			if p := nameProblem(*req.Name); !p.ok() {
 				return p
 			}
 		}

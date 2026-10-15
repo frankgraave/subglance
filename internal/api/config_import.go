@@ -367,7 +367,11 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 			req.Config[k] = v
 		}
 	}
-	if pr := validateChannel(req); !pr.ok() {
+	stored := ""
+	if found {
+		stored = existing.Name
+	}
+	if pr := validateChannel(req, stored); !pr.ok() {
 		return apiProblemAt(path, pr)
 	}
 	if len(missing) == 0 {
@@ -763,6 +767,16 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 			win.MonitorID = target.ID
 		}
 	}
+	// A window saved before names were held to one line comes back in the
+	// instance's own export. It is checked with a stand-in name and matched
+	// by its own, so only a window this import would create is refused for
+	// its name, as a monitor's or a channel's name is kept when unchanged.
+	name := strings.TrimSpace(w.Name)
+	savedName := store.HasControlCharacter(name) && slices.ContainsFunc(ex.windows,
+		func(cur store.MaintenanceWindow) bool { return cur.Name == name })
+	if savedName {
+		check.Name = "-"
+	}
 	normal, err := store.NormaliseMaintenance(check)
 	if err != nil {
 		var invalid *store.MaintenanceError
@@ -781,6 +795,9 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 	// Compare and store the window in the form the API stores it, so a file
 	// that writes a tag as "Env" matches the "env" window already here.
 	win.Name, win.Timezone, win.TagKey, win.TagValue = normal.Name, normal.Timezone, normal.TagKey, normal.TagValue
+	if savedName {
+		win.Name = name
+	}
 
 	item := importItem{Name: win.Name, Action: actionCreate}
 	if w.Monitor == "" || onInstance {
@@ -790,6 +807,9 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 				break
 			}
 		}
+	}
+	if savedName && item.Action == actionCreate {
+		return problemAt(sub(path, "name"), "name %s", store.NoControlCharacters)
 	}
 	p.report.Maintenance = append(p.report.Maintenance, item)
 	if item.Action == actionCreate {

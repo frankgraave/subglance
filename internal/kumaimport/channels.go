@@ -44,6 +44,7 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 	if name == "" {
 		name = get("name")
 	}
+	name, flat := oneLineName(name)
 	if name == "" {
 		name = "Kuma " + typ
 	}
@@ -51,6 +52,9 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 	skip := func(reason string) (configfile.Channel, bool) {
 		res.Skipped = append(res.Skipped, Note{Kind: "channel", Name: name, Type: typ, Reason: reason})
 		return configfile.Channel{}, false
+	}
+	if flat {
+		note(nameOnOneLine)
 	}
 	if short, cut := shortName(name); cut {
 		name = short

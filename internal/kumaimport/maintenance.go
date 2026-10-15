@@ -76,7 +76,7 @@ func convertWindows(src source, monitorKeys map[int64]string, res *Result) {
 	server := serverZone(src.settings)
 
 	for _, w := range src.maintenance {
-		name := strings.TrimSpace(w.str("title"))
+		name, flat := oneLineName(strings.TrimSpace(w.str("title")))
 		if name == "" {
 			name = "Kuma maintenance " + w.str("id")
 		}
@@ -110,6 +110,9 @@ func convertWindows(src source, monitorKeys map[int64]string, res *Result) {
 			window.Timezone = zone
 		}
 
+		if flat {
+			notes = append(notes, nameOnOneLine)
+		}
 		if utf8.RuneCountInString(name) > maxWindowName {
 			name = strings.TrimSpace(string([]rune(name)[:maxWindowName]))
 			notes = append(notes, "the name was shortened to "+strconv.Itoa(maxWindowName)+" characters")

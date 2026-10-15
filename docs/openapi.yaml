@@ -6551,6 +6551,9 @@ components:
           description: Present on list reads; true when the schedule is active at server time.
         name:
           type: string
+          description: |
+            1-120 characters once trimmed, with no line breaks, tabs or other
+            control characters.
           minLength: 1
           maxLength: 120
         monitor_id:
@@ -6873,7 +6876,8 @@ components:
           description: |
             Required, and refused when it is only whitespace. At most 100
             characters, counted as characters rather than bytes: the name is
-            the subject of every alert about the monitor.
+            the subject of every alert about the monitor. No line breaks,
+            tabs or other control characters (Unicode category Cc).
           maxLength: 100
           example: Public website
         type:
@@ -7113,8 +7117,9 @@ components:
         name:
           type: string
           description: |
-            Must not be blank. A new name is at most 100 characters; a name
-            saved before that limit is accepted back unchanged.
+            Must not be blank. A new name is at most 100 characters and holds
+            no line breaks, tabs or other control characters; a name saved
+            before those rules is accepted back unchanged.
         type:
           $ref: '#/components/schemas/MonitorType'
           description: |
@@ -8158,8 +8163,10 @@ components:
           type: string
           description: |
             Required, non-blank, at most 100 characters once trimmed (counted
-            as characters, not bytes). Surrounding whitespace does not count,
-            so the raw value carries no maxLength.
+            as characters, not bytes), with no line breaks, tabs or other
+            control characters; a name saved before those rules is accepted
+            back unchanged. Surrounding whitespace does not count, so the raw
+            value carries no maxLength.
           example: Ops Slack
         type:
           $ref: '#/components/schemas/ChannelType'
@@ -8297,8 +8304,9 @@ components:
           type: string
           description: |
             Required, non-blank, at most 100 characters once trimmed (counted
-            as characters, not bytes). Surrounding whitespace does not count,
-            so the raw value carries no maxLength. Used to tell tokens apart.
+            as characters, not bytes), with no line breaks, tabs or other
+            control characters. Surrounding whitespace does not count, so the
+            raw value carries no maxLength. Used to tell tokens apart.
           example: ci-deploy
         expires_in:
           type: string

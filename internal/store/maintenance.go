@@ -94,6 +94,9 @@ func (w MaintenanceWindow) Validate() error {
 	if strings.TrimSpace(w.Name) == "" || utf8.RuneCountInString(w.Name) > maxMaintenanceName {
 		return invalidMaintenance("name", "name must contain 1–%d characters", maxMaintenanceName)
 	}
+	if HasControlCharacter(w.Name) {
+		return invalidMaintenance("name", "name %s", NoControlCharacters)
+	}
 	if w.MonitorID < 0 {
 		return invalidMaintenance("monitor_id", "monitor_id must be a positive id")
 	}

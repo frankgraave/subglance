@@ -68,6 +68,12 @@ Import follows three rules.
   fields and status pages by their slug, so importing a file a second time
   changes nothing.
 
+Monitor, channel and maintenance names must not contain line breaks, tabs or
+other control characters (Unicode category Cc). An existing monitor or channel
+may keep a name saved before this rule when the file sends it back unchanged.
+A maintenance window with such a name is kept only when the entire window is
+unchanged; another window must use a name that meets the rule.
+
 A field the file leaves out keeps its current value on an existing object, and
 gets the same default the API gives a new one. A hand-written file can
 therefore rename one monitor without restating everything else about it:
@@ -428,6 +434,11 @@ the conversion report. A maintenance window's monitor coverage is converted
 separately; a status-page link does not become monitor coverage.
 
 ### What changes on the way
+
+A monitor, channel or maintenance name containing control characters is put on
+one line, replacing runs of controls and whitespace with a space. The report
+notes the change. If nothing remains, the converter supplies a fallback name,
+so the converted file still imports. Names without controls are not flattened.
 
 - An interval below 20 seconds becomes 20, and values outside SubGlance's other
   limits (retries up to 10, timeout up to 120 seconds and at most 80% of the
