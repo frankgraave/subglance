@@ -107,29 +107,6 @@ func TestCreateChannelRefusesBlockedTarget(t *testing.T) {
 			config:    `{"host":"127.0.0.1","port":"25","from":"a@example.com","to":"b@example.com"}`,
 			wantField: "config.host",
 		},
-		// `port` is its own field, but nothing stops an operator typing
-		// the port into `host` anyway — the field takes any string. A
-		// host carrying its own port is neither an address literal nor a
-		// resolvable name, so it used to reach the guard as
-		// "127.0.0.1:25", come back as a lookup failure, and be waved
-		// through by the rule that a name we cannot resolve is somebody
-		// else's valid configuration. The port must not be a way to
-		// smuggle a blocked relay past the check, exactly as it is not
-		// for a URL.
-		{
-			name:      "email relay with the port typed into the host",
-			typ:       "email",
-			config:    `{"host":"127.0.0.1:25","port":"25","from":"a@example.com","to":"b@example.com"}`,
-			wantField: "config.host",
-		},
-		// The bracketed form is how a host field carries an IPv6
-		// address with a port, and it has to unwrap to the address.
-		{
-			name:      "email relay on bracketed IPv6 loopback with a port",
-			typ:       "email",
-			config:    `{"host":"[::1]:25","port":"25","from":"a@example.com","to":"b@example.com"}`,
-			wantField: "config.host",
-		},
 		// And a bare IPv6 literal has colons but no port, so splitting
 		// it must leave it alone rather than mangling it into a name.
 		{
@@ -338,6 +315,12 @@ func TestChannelTargetFieldForType(t *testing.T) {
 		{"discord", map[string]string{"url": "https://b.example/x"}, "config.url", "b.example"},
 		{"slack", map[string]string{"url": "https://c.example/x"}, "config.url", "c.example"},
 		{"email", map[string]string{"host": "relay.example"}, "config.host", "relay.example"},
+		// The save refuses a host with a port before the guard is asked
+		// (the sender's host rule), but the guard does not lean on that:
+		// a port typed into the host must not hide a blocked relay from
+		// it, so it is handed the address alone, unwrapped from brackets.
+		{"email", map[string]string{"host": "127.0.0.1:25"}, "config.host", "127.0.0.1"},
+		{"email", map[string]string{"host": "[::1]:25"}, "config.host", "::1"},
 		// Telegram talks to a constant; there is no user-supplied
 		// destination to check.
 		{"telegram", map[string]string{"bot_token": "1:x", "chat_id": "2"}, "", ""},

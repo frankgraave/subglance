@@ -58,6 +58,15 @@ func TestCreateChannelRefusalNamesTheField(t *testing.T) {
 		// they keep it.
 		{"webhook method", "webhook", `{"url":"https://hook.example.com","method":"PATCH"}`,
 			"config.method", "method must be POST or PUT"},
+
+		// An SMTP host the dialer cannot use as written: the port typed
+		// into it, a URL, or a name the resolver refuses unasked.
+		{"email host with a port", "email", `{"to":"ops@example.com","from":"sg@example.com","host":"smtp.example.com:2525"}`,
+			"config.host", "config.host must not include a port; set port to 2525 instead"},
+		{"email host as a URL", "email", `{"to":"ops@example.com","from":"sg@example.com","host":"smtp://smtp.example.com"}`,
+			"config.host", "not a URL"},
+		{"email host the resolver refuses", "email", `{"to":"ops@example.com","from":"sg@example.com","host":"smtp..example.com"}`,
+			"config.host", "empty label"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

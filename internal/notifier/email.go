@@ -67,6 +67,10 @@ func (s *EmailSender) Validate(cfg map[string]string) error {
 		return onKey("port", &configError{"port must be a number between 1 and 65535"})
 	}
 
+	if err := smtpHostProblem(strings.TrimSpace(cfg["host"])); err != nil {
+		return onKey("host", err)
+	}
+
 	// A missing @ is the error people actually make, usually by putting a
 	// display name in the field. Catching it here beats a rejection from
 	// the mail server three hops later that names neither the field nor
@@ -81,7 +85,9 @@ func (s *EmailSender) Validate(cfg map[string]string) error {
 
 // Send delivers the message.
 func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) error {
-	host := cfg["host"]
+	// Trimmed as Validate judged it: a channel saved with a padded host
+	// would otherwise have its padding looked up as part of the name.
+	host := strings.TrimSpace(cfg["host"])
 	port := cfg["port"]
 	if port == "" {
 		port = "587"
@@ -162,6 +168,36 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 	// lost, and retrying would send it twice. A duplicate alert is worse
 	// than a missing goodbye.
 	_ = c.Quit()
+	return nil
+}
+
+// smtpHostProblem reports why every delivery to host would fail before a
+// connection is made, or nil when a connection would at least be attempted.
+//
+// Send joins host and the port field and hands the result to the dialer,
+// which looks the name up as written. Unlike net/http it does not convert an
+// internationalised name to its xn-- form, and a host that carries a port of
+// its own becomes one name with a colon in it. Every such host used to be
+// saved without complaint and then fail each alert as "no such host", which
+// reads as an outage of a real relay rather than as a typo in the form, so the
+// rule a tcp monitor's host is held to (checker.ResolvableHost) applies here,
+// after the three shapes worth naming on their own.
+func smtpHostProblem(host string) error {
+	if strings.Contains(host, "://") {
+		return &configError{"host must be the server's name or address, not a URL"}
+	}
+	if _, port, err := net.SplitHostPort(host); err == nil {
+		if port == "" {
+			return &configError{"host must not end with a colon"}
+		}
+		return &configError{"host must not include a port; set port to " + port + " instead"}
+	}
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		return &configError{"host takes an IPv6 address without brackets"}
+	}
+	if err := checker.ResolvableHost(host); err != nil {
+		return &configError{"host: " + err.Error()}
+	}
 	return nil
 }
 

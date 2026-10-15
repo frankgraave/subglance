@@ -122,6 +122,10 @@ func channelTarget(req channelRequest) (field, host string) {
 		// turning the port into a way to smuggle a blocked relay past a
 		// check that catches the same trick in a URL.
 		//
+		// The sender's host rule now refuses such a host when the channel
+		// is saved, before this check runs; the split stays so the guard
+		// does not depend on that ordering.
+		//
 		// SplitHostPort fails on a bare name and on a bracketless IPv6
 		// literal, and failing is the signal that there was no port to
 		// strip; keeping the original is then correct. It also unwraps

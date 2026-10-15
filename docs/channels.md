@@ -38,6 +38,15 @@ Either mistake parses as a URL and then fails every delivery before it leaves
 the process, so it is refused on `config.url` when the channel is saved,
 edited or imported rather than discovered when an alert is lost.
 
+An email channel's `host` is the relay's name or address alone, held to the
+rule a `tcp` monitor's host is: a name the resolver will look up, written in
+its `xn--` form when it is internationalised, or an IP address (IPv6 without
+brackets). A port goes in `port`, so `smtp.example.com:2525` is refused with
+a pointer to that field, and so is a URL such as `smtp://smtp.example.com`.
+Each of these used to be saved and then fail every delivery as "no such
+host"; now it is refused on `config.host`. Spaces around the host are
+ignored.
+
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 
