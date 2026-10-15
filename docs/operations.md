@@ -38,6 +38,12 @@ check on and listen on `:8080` without a message; the same holds for the
 subcommands, so `subglance restore latest --data-dir /srv/subglance` is refused
 rather than restoring into `/data`.
 
+`--help`, and every flag that does not parse, prints the flags with the value
+each one has after the environment is read, so the list shows what this start
+would run with. The two exceptions are credentials: `--secret-key` and
+`--secret-key-previous` say only that a key is set, and `--watchdog-url` is
+shown as its scheme and host, as in the log.
+
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
 | `--addr` | `SUBGLANCE_ADDR` | `:8080` | HTTP listen address |

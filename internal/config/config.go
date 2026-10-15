@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -360,6 +361,12 @@ func defaults() Config {
 // command-line arguments. It returns flag.ErrHelp when the user asked for
 // usage, which the caller should treat as a clean exit.
 func Load(args []string) (Config, error) {
+	return load(args, os.Stderr)
+}
+
+// load is Load with the usage text, printed on --help and on a flag that
+// does not parse, written to usage instead of stderr.
+func load(args []string, usage io.Writer) (Config, error) {
 	c := defaults()
 
 	// Environment first, so that flags can still override it.
@@ -414,6 +421,7 @@ func Load(args []string) (Config, error) {
 	}
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
+	fs.SetOutput(usage)
 	fs.StringVar(&c.Addr, "addr", c.Addr, "HTTP listen address")
 	fs.StringVar(&c.DataDir, "data-dir", c.DataDir, "directory for the database and persistent state")
 	fs.StringVar(&c.LogLevel, "log-level", c.LogLevel, "log level: debug, info, warn, error")
@@ -470,6 +478,7 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.ConnectivityNames, "connectivity-names", c.ConnectivityNames,
 		"comma-separated host names the connectivity check looks up through this host's resolver "+
 			"when a check's own lookup got no answer (empty = do not look up any)")
+	hideCredentialDefaults(fs)
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -501,6 +510,31 @@ func Load(args []string) (Config, error) {
 	// one form links are built from.
 	c.BaseURL, _ = notifier.ParseBaseURL(c.BaseURL)
 	return c, nil
+}
+
+// hideCredentialDefaults keeps the credentials out of the usage text.
+//
+// The flags are registered after the environment is read, so a flag's
+// default is whatever its variable set, and the usage text that --help and
+// every mistyped flag print lists each default in full. For --secret-key
+// that is the key the channel configuration is encrypted with, and for
+// --watchdog-url a path that is the dead man's switch's only credential,
+// written to a container log that is usually kept and often shipped
+// elsewhere. The keys are not shown at all; the usage says one is set, so an
+// operator can still tell. The watchdog URL is shown as scheme and host,
+// the form every log line uses. The values themselves are untouched:
+// DefValue is only what the usage text prints.
+func hideCredentialDefaults(fs *flag.FlagSet) {
+	for _, name := range []string{"secret-key", "secret-key-previous"} {
+		f := fs.Lookup(name)
+		if f.DefValue != "" {
+			f.DefValue = ""
+			f.Usage += " (set in the environment; not shown)"
+		}
+	}
+	if f := fs.Lookup("watchdog-url"); f.DefValue != "" {
+		f.DefValue = watchdog.ShownURL(f.DefValue)
+	}
 }
 
 // refuseStrayArgument fails when parsing stopped before the end of args.
