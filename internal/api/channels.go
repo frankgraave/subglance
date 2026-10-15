@@ -125,25 +125,33 @@ var requiredConfigKey = map[string]string{
 // space or a slash in it fails on the form rather than as a 404 at 03:00.
 var ntfyTopic = regexp.MustCompile(`^[-_A-Za-z0-9]{1,64}$`)
 
-// channelNameProblem refuses a channel name that is blank or too long once
-// trimmed, which is the form it is stored in.
-func channelNameProblem(name string) problem {
+// channelNameProblem refuses a channel name that is blank, too long or holds
+// a control character once trimmed, which is the form it is stored in. A
+// name equal to stored, the one the channel already has, is only refused
+// when blank: a channel saved before a rule existed keeps its name through
+// every other edit and through an import of its own export, as a monitor
+// does. stored is "" for a channel that does not exist yet.
+func channelNameProblem(name, stored string) problem {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fieldProblem("name", "name is required")
 	}
-	return nameLengthProblem(name)
+	if name == stored {
+		return problem{}
+	}
+	return nameProblem(name)
 }
 
 // validateChannel refuses a channel the notifier could not deliver through,
-// naming the request field the refusal is about.
+// naming the request field the refusal is about. storedName is the name the
+// channel has now, "" on create; see channelNameProblem.
 //
 // Each sentence already starts with the key it is about; the field carries
 // the same name on the wire, so a form can put the sentence under the input
 // that has to change rather than below the whole form, and never has to
 // read the key back out of the wording.
-func validateChannel(req channelRequest) problem {
-	if p := channelNameProblem(req.Name); !p.ok() {
+func validateChannel(req channelRequest, storedName string) problem {
+	if p := channelNameProblem(req.Name, storedName); !p.ok() {
 		return p
 	}
 
@@ -264,7 +272,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if p := validateChannel(req); !p.ok() {
+	if p := validateChannel(req, ""); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
@@ -366,7 +374,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p := validateChannel(req); !p.ok() {
+	if p := validateChannel(req, existing.Name); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}

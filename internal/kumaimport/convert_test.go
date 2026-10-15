@@ -518,3 +518,31 @@ func TestChannelNameIsShortenedToTheLimit(t *testing.T) {
 		})
 	}
 }
+
+// Kuma takes a name with a line break or a tab in it; SubGlance refuses one,
+// so the file would fail its import. Each run of control characters and
+// spaces becomes one space, and the report says so.
+func TestNamesWithControlCharactersArePutOnOneLine(t *testing.T) {
+	const from, want = "Shop\r\n\t(prod)\x00", "Shop (prod)"
+	res := convert(source{
+		monitors:      []row{httpRow(row{"name": from})},
+		notifications: []row{notificationRow(1, from, `{"type":"discord","discordWebhookUrl":"https://discord.example/x"}`)},
+	})
+	if len(res.Document.Monitors) != 1 || len(res.Document.Channels) != 1 {
+		t.Fatalf("not converted: %s", notesOf(res))
+	}
+	if got := res.Document.Monitors[0].Name; got != want {
+		t.Errorf("monitor name = %q, want %q", got, want)
+	}
+	if got := res.Document.Channels[0].Name; got != want {
+		t.Errorf("channel name = %q, want %q", got, want)
+	}
+	if n := strings.Count(notesOf(res), nameOnOneLine); n != 2 {
+		t.Errorf("%d notes about the name, want 2: %s", n, notesOf(res))
+	}
+
+	plain := convert(source{monitors: []row{httpRow(row{"name": "Shop  (prod)"})}})
+	if got := plain.Document.Monitors[0].Name; got != "Shop  (prod)" || strings.Contains(notesOf(plain), nameOnOneLine) {
+		t.Errorf("a name without control characters became %q: %s", got, notesOf(plain))
+	}
+}

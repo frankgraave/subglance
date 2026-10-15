@@ -88,7 +88,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, fieldProblem("name", "name is required"))
 		return
 	}
-	if p := nameLengthProblem(req.Name); !p.ok() {
+	if p := nameProblem(req.Name); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}

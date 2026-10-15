@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // maxNameLen is the longest name a monitor, a channel or an API token takes.
@@ -13,8 +15,14 @@ import (
 // long name turned every alert for that monitor into a failed delivery.
 const maxNameLen = 100
 
-// nameLengthProblem refuses a name longer than maxNameLen characters.
-func nameLengthProblem(name string) problem {
+// nameProblem refuses a name that holds a control character (see
+// store.HasControlCharacter) or is longer than maxNameLen characters. A
+// blank name is the caller's to refuse: a monitor rename and a create word
+// that refusal differently.
+func nameProblem(name string) problem {
+	if store.HasControlCharacter(name) {
+		return fieldProblem("name", "name "+store.NoControlCharacters)
+	}
 	if utf8.RuneCountInString(name) > maxNameLen {
 		return fieldProblem("name", fmt.Sprintf("name must be %d characters or fewer", maxNameLen))
 	}
