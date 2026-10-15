@@ -198,14 +198,21 @@ func cloneWithoutRedirects(c *http.Client) *http.Client {
 // because anything stricter would start rejecting the private addresses this
 // feature is often pointed at on purpose.
 func ValidateURL(raw string) error {
-	quoted := strconv.Quote(shownURL(raw))
+	shown := shownURL(raw)
+	quoted := strconv.Quote(shown)
 	u, err := url.Parse(raw)
 	if err != nil {
-		// Go's own message quotes the whole input back, path and all.
-		// Its reason alone is safe only without a user part: in
-		// https://user:pass/x@host the parser reads pass as a port, and
-		// its reason would print it.
-		if strings.Contains(raw, "@") {
+		// Go's own message quotes the whole input back, path and all,
+		// and its reason can quote the authority: in
+		// https://user:pass/x@host, or https://user:pass/x with the "@"
+		// left out, the parser reads pass as a port and its reason
+		// prints it. The reason is given only where shownURL kept the
+		// authority whole.
+		if strings.Contains(shown, "***") {
+			// Go's reason without the text it quotes.
+			if strings.HasPrefix(errors.Unwrap(err).Error(), "invalid port ") {
+				return fmt.Errorf("watchdog-url %s is not a URL: invalid port after host", quoted)
+			}
 			return fmt.Errorf("watchdog-url %s is not a URL", quoted)
 		}
 		return fmt.Errorf("watchdog-url %s is not a URL: %w", quoted, errors.Unwrap(err))
@@ -236,7 +243,10 @@ func ValidateURL(raw string) error {
 // instead, so the error that refuses it does not quote it back in full.
 // There everything up to the last "@" is replaced by "***", as the
 // --base-url refusal does: Go could not pick the user part out, and in
-// https://user:pa/ss@host the password runs past the first slash.
+// https://user:pa/ss@host the password runs past the first slash. What
+// follows a colon in the host is replaced by "***" as well: a port that
+// does not parse may be a password whose "@" was left out, as in
+// https://user:pa55word/path.
 func shownURL(raw string) string {
 	if u, err := url.Parse(raw); err == nil && u.Scheme != "" && u.Host != "" {
 		shown := u.Scheme + "://" + u.Host
@@ -256,6 +266,10 @@ func shownURL(raw string) string {
 	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
 		host, tail = rest[:end], rest[end:]
 	}
+	// The colons inside an IPv6 literal are not a port.
+	if from := strings.LastIndex(host, "]") + 1; strings.Contains(host[from:], ":") {
+		host = host[:from+strings.Index(host[from:], ":")] + ":***"
+	}
 	if hasScheme {
 		host = scheme + "://" + host
 	}
@@ -265,22 +279,44 @@ func shownURL(raw string) string {
 	return host + tail
 }
 
-// loggable is err with the URL in it shown as shownURL shows it.
+// loggable is err with every URL in it shown as shownURL shows it.
 //
 // The HTTP client wraps every transport failure in a *url.Error that
 // quotes the request URL: Go masks a password there, but not the path or
-// the query, which is where every common switch keeps its token. The copy
-// keeps Op and the cause, so "dial tcp …: connection refused" and a timeout
-// read exactly as before.
-func (w *Watchdog) loggable(err error) error {
+// the query, which is where every common switch keeps its token. A
+// transport passed in through Options can return a *url.Error of its own,
+// which Do then wraps in another, so every *url.Error in the chain is
+// copied with its URL shown, and an error that wraps one is given as its
+// text with that URL cut. The copies keep Op and the cause below the last
+// *url.Error, so "dial tcp …: connection refused" and a timeout read
+// exactly as before, and errors.Is still finds the cause.
+func loggable(err error) error {
 	var ue *url.Error
 	if !errors.As(err, &ue) {
 		return err
 	}
 	clean := *ue
-	clean.URL = w.shown
-	return &clean
+	clean.URL = shownURL(ue.URL)
+	clean.Err = loggable(ue.Err)
+	msg := strings.ReplaceAll(err.Error(), ue.Error(), clean.Error())
+	if msg == clean.Error() {
+		return &clean
+	}
+	// A wrapper above the *url.Error: its message is given with the
+	// chain's text cleaned, around the cleaned chain. A wrapper that
+	// printed the URL itself has that cut too.
+	return &redacted{msg: strings.ReplaceAll(msg, ue.URL, clean.URL), err: &clean}
 }
+
+// redacted is an error whose message has had a URL cut out of it, and
+// which unwraps to the cleaned *url.Error below it.
+type redacted struct {
+	msg string
+	err error
+}
+
+func (r *redacted) Error() string { return r.msg }
+func (r *redacted) Unwrap() error { return r.err }
 
 // Run pings until ctx is cancelled, then sends one final "stopped" ping.
 //
@@ -358,7 +394,7 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 	w.beginAttempt(event)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewBufferString(body))
 	if err != nil {
-		w.log.Error("watchdog ping could not be built", "error", w.loggable(err))
+		w.log.Error("watchdog ping could not be built", "error", loggable(err))
 		w.finishAttempt("request_error", 0)
 		return
 	}
@@ -370,7 +406,7 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		w.log.Error("watchdog ping failed", "event", event, "error", w.loggable(err))
+		w.log.Error("watchdog ping failed", "event", event, "error", loggable(err))
 		result := "transport_error"
 		var networkError interface{ Timeout() bool }
 		if errors.Is(err, context.Canceled) {

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -44,28 +46,36 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
-// closedAddr is a loopback address nothing listens on, so a ping to it fails
-// at once with a refused connection and never leaves the machine.
-func closedAddr(t *testing.T) string {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	addr := ln.Addr().String()
-	if err := ln.Close(); err != nil {
-		t.Fatalf("close: %v", err)
-	}
-	return addr
+// refusingTransport fails every request the way a switch's transport can:
+// with a *url.Error of its own that quotes the full request URL, around a
+// refused dial. http.Client.Do then wraps it in its own *url.Error, so the
+// URL is in the chain twice. No socket is opened, so the short suite stays
+// hermetic.
+type refusingTransport struct{}
+
+func (refusingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, &url.Error{Op: "Post", URL: req.URL.String(), Err: &net.OpError{
+		Op:   "dial",
+		Net:  "tcp",
+		Addr: refusedAddr(req.URL.Host),
+		Err:  errors.New("connection refused"),
+	}}
 }
 
+// refusedAddr is a dial address as net.OpError prints it.
+type refusedAddr string
+
+func (a refusedAddr) Network() string { return "tcp" }
+func (a refusedAddr) String() string  { return string(a) }
+
 func TestLogNeverShowsTheWatchdogURLInFull(t *testing.T) {
-	addr := closedAddr(t)
+	const addr = "hc-ping.example:8443"
 	raw := "http://user:pa55word@" + addr + "/ping/secret-uuid-1234?key=k3y-value#fr4g"
 	var out lockedBuffer
 	checks := uint64(0)
 	w, err := New(Options{
 		URL:      raw,
+		Client:   &http.Client{Transport: refusingTransport{}},
 		Interval: time.Hour,
 		Liveness: func() Liveness {
 			checks++
@@ -90,8 +100,9 @@ func TestLogNeverShowsTheWatchdogURLInFull(t *testing.T) {
 		`msg="watchdog enabled" url=http://` + addr + "/…",
 		`msg="watchdog ping failed" event=alive`,
 		`msg="watchdog ping failed" event=stopped`,
-		// The cause is what an operator diagnoses from, and it stays.
-		`Post \"http://` + addr + `/…\": dial tcp ` + addr,
+		// The cause is what an operator diagnoses from, and it stays,
+		// below both the client's *url.Error and the transport's own.
+		`Post \"http://` + addr + `/…\": Post \"http://` + addr + `/…\": dial tcp ` + addr + ": connection refused",
 	} {
 		if !strings.Contains(logged, want) {
 			t.Errorf("the log lacks %s:\n%s", want, logged)
@@ -103,18 +114,36 @@ func TestLogNeverShowsTheWatchdogURLInFull(t *testing.T) {
 }
 
 func TestLoggableKeepsTheCauseOfAnyURLError(t *testing.T) {
-	w := &Watchdog{shown: shownURL("https://hc-ping.com/secret-uuid-1234")}
+	const secret = "https://user:pa55word@hc-ping.com/secret-uuid-1234?key=k3y-value"
 	cause := errors.New("net/http: invalid header field value")
-	err := w.loggable(&url.Error{Op: "Post", URL: "https://hc-ping.com/secret-uuid-1234", Err: cause})
-	assertNoURLSecret(t, "the error", err.Error())
-	if want := `Post "https://hc-ping.com/…": net/http: invalid header field value`; err.Error() != want {
-		t.Errorf("loggable = %q, want %q", err.Error(), want)
-	}
-	if !errors.Is(err, cause) {
-		t.Error("loggable lost the cause, which errors.Is must still find")
+	inner := &url.Error{Op: "Post", URL: secret, Err: cause}
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"the client's own", &url.Error{Op: "Post", URL: secret, Err: cause},
+			`Post "https://hc-ping.com/…": net/http: invalid header field value`},
+		// http.Client.Do wraps a transport's *url.Error in another.
+		{"nested", &url.Error{Op: "Post", URL: "https://hc-ping.com/secret-uuid-1234", Err: inner},
+			`Post "https://hc-ping.com/…": Post "https://hc-ping.com/…": net/http: invalid header field value`},
+		// A transport's wrapper that is not a *url.Error itself.
+		{"wrapped", &url.Error{Op: "Post", URL: secret, Err: fmt.Errorf("proxy for %s: %w", secret, inner)},
+			`Post "https://hc-ping.com/…": proxy for https://hc-ping.com/…: Post "https://hc-ping.com/…": net/http: invalid header field value`},
+		{"wrapped from the top", fmt.Errorf("ping: %w", inner),
+			`ping: Post "https://hc-ping.com/…": net/http: invalid header field value`},
+	} {
+		got := loggable(tc.err)
+		assertNoURLSecret(t, "the "+tc.name+" error", got.Error())
+		if got.Error() != tc.want {
+			t.Errorf("%s: loggable = %q, want %q", tc.name, got.Error(), tc.want)
+		}
+		if !errors.Is(got, cause) {
+			t.Errorf("%s: loggable lost the cause, which errors.Is must still find", tc.name)
+		}
 	}
 	plain := errors.New("no URL in here")
-	if got := w.loggable(plain); !errors.Is(got, plain) || got.Error() != plain.Error() {
+	if got := loggable(plain); !errors.Is(got, plain) || got.Error() != plain.Error() {
 		t.Errorf("loggable(%v) = %v, want it unchanged", plain, got)
 	}
 }
@@ -126,7 +155,11 @@ func TestValidateURLRefusalsDoNotQuoteTheToken(t *testing.T) {
 		{"https://user:pa55word@hc-ping.com:99999/secret-uuid-1234", `"https://hc-ping.com:99999/…": port 99999 is out of range`},
 		{"https://hc-ping.com:0/secret-uuid-1234?key=k3y-value", `"https://hc-ping.com:0/…": port 0 is out of range`},
 		{"https://hc-p!ng.com/secret-uuid-1234", `"https://hc-p!ng.com/…": hostname "hc-p!ng.com"`},
-		{"https://hc-ping.com:abc/secret-uuid-1234", `"https://hc-ping.com:abc/…" is not a URL: invalid port ":abc" after host`},
+		// A port that does not parse may be a password whose "@" was
+		// left out, so neither the address nor the reason quotes it.
+		{"https://hc-ping.com:abc/secret-uuid-1234", `"https://hc-ping.com:***/…" is not a URL: invalid port after host`},
+		{"https://user:pa55word/secret-uuid-1234", `"https://user:***/…" is not a URL: invalid port after host`},
+		{"https://user:pa55word?key=k3y-value", `"https://user:***/…" is not a URL: invalid port after host`},
 		// The parser reads "pa55" as a port and would quote it back in
 		// its reason, so only the shape is given.
 		{"https://user:pa55word/x@hc-ping.com/secret-uuid-1234", `"https://***@hc-ping.com/…" is not a URL`},
@@ -143,6 +176,9 @@ func TestValidateURLRefusalsDoNotQuoteTheToken(t *testing.T) {
 		if want := "watchdog-url " + tc.reason; !strings.HasPrefix(err.Error(), want) {
 			t.Errorf("ValidateURL(%q) = %q, want it to start %q", tc.raw, err, want)
 		}
+		if strings.Contains(err.Error(), "invalid port \"") {
+			t.Errorf("ValidateURL(%q) = %q, which quotes the text the parser took for a port", tc.raw, err)
+		}
 	}
 }
 
@@ -157,6 +193,9 @@ func TestShownURLKeepsSchemeAndHostOnly(t *testing.T) {
 		"http://subglance-b:3000/api/v1/push/secret-uuid-1234": "http://subglance-b:3000/…",
 		"https://user:pa55word/x@hc-ping.com/secret-uuid-1234": "https://***@hc-ping.com/…",
 		"hc-ping.com/secret-uuid-1234":                         "hc-ping.com/…",
+		"https://user:pa55word/secret-uuid-1234":               "https://user:***/…",
+		"https://hc-ping.com:abc/secret-uuid-1234":             "https://hc-ping.com:***/…",
+		"http://[2001:db8::1]:pa55word/x":                      "http://[2001:db8::1]:***/…",
 	} {
 		if got := shownURL(raw); got != want {
 			t.Errorf("shownURL(%q) = %q, want %q", raw, got, want)
