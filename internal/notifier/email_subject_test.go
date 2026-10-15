@@ -112,8 +112,9 @@ func TestEmailASCIISubjectIsWrittenAsTyped(t *testing.T) {
 	}
 }
 
-// What the relay receives is what decides a bounce: every header line the
-// real sender writes, names and subject alike, is ASCII.
+// What the relay receives is what decides a bounce: with ASCII addresses,
+// every header line the real sender writes, names and subject alike, is
+// ASCII. An address outside ASCII cannot be encoded and still needs SMTPUTF8.
 func TestEmailEveryHeaderOnTheWireIsASCII(t *testing.T) {
 	r := startRecordingRelay(t)
 	err := NewEmailSender(nil).Send(context.Background(), map[string]string{
