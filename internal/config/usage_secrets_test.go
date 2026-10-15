@@ -129,3 +129,64 @@ func TestUsageShowsAPlainBackupEndpointAsSet(t *testing.T) {
 		t.Errorf("usage does not show the backup endpoint as set:\n%s", usage)
 	}
 }
+
+// The base URL and the backup target are refused at startup with a user name
+// and password in them, but the usage text is printed before startup gets
+// that far. A secret access key often holds a "/", which ends the URL's
+// authority early, so the target below does not even parse as one.
+func TestUsageDoesNotPrintAUserPartOfTheBaseURLOrBackupTarget(t *testing.T) {
+	t.Setenv("SUBGLANCE_BASE_URL", "https://admin:hunter2pass@status.example.com/sub")
+	t.Setenv("SUBGLANCE_BACKUP_TARGET", "s3://AKIAEXAMPLEKEY:wJalr/XUtnFEMI+K7MDENG@backups/subglance")
+
+	for _, args := range [][]string{{"--help"}, {"--no-such-flag"}} {
+		usage := usageOf(t, args...)
+		for _, part := range []string{"admin", "hunter2pass", "AKIAEXAMPLEKEY", "wJalr", "XUtnFEMI"} {
+			if strings.Contains(usage, part) {
+				t.Errorf("%v: usage prints %q:\n%s", args, part, usage)
+			}
+		}
+		for _, want := range []string{
+			`(default "https://***@status.example.com/sub")`,
+			`(default "s3://***@backups/subglance")`,
+		} {
+			if !strings.Contains(usage, want) {
+				t.Errorf("%v: usage does not show %s:\n%s", args, want, usage)
+			}
+		}
+	}
+}
+
+// Without a user part the two are printed as set: the path is the prefix
+// links and backups go under, which is what --help is read for.
+func TestUsageShowsAPlainBaseURLAndBackupTargetAsSet(t *testing.T) {
+	t.Setenv("SUBGLANCE_BASE_URL", "https://status.example.com/sub")
+	t.Setenv("SUBGLANCE_BACKUP_TARGET", "s3://backups/subglance/prod")
+
+	usage := usageOf(t, "--help")
+	for _, want := range []string{
+		`(default "https://status.example.com/sub")`,
+		`(default "s3://backups/subglance/prod")`,
+	} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("usage does not show %s:\n%s", want, usage)
+		}
+	}
+}
+
+func TestMaskedUserPart(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"", ""},
+		{"https://status.example.com/sub", "https://status.example.com/sub"},
+		{"https://user:pass@status.example.com", "https://***@status.example.com"},
+		// A password holding "/", "#" or "@" runs to the last "@".
+		{"s3://KEYID:abc/def@bucket/prefix", "s3://***@bucket/prefix"},
+		{"https://user:pa#ss@host/path", "https://***@host/path"},
+		{"https://user:p@ss@host", "https://***@host"},
+		// Without a scheme there is nothing to keep before the user part.
+		{"user:pass@host", "***@host"},
+	} {
+		if got := maskedUserPart(tc.raw); got != tc.want {
+			t.Errorf("maskedUserPart(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
