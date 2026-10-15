@@ -308,9 +308,17 @@ func buildMessage(from *mail.Address, to []*mail.Address, a Alert) string {
 	}
 	b.WriteString("From: " + sender + "\r\n")
 	b.WriteString("To: " + strings.Join(rcpts, ", ") + "\r\n")
-	b.WriteString("Subject: " + sanitiseHeader(a.Title()) + "\r\n")
+	b.WriteString(subjectHeader(sanitiseHeader(a.Title())))
 	b.WriteString("Date: " + a.At.UTC().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	body := bodyText(a)
+	// A body without this header is 7bit by definition (RFC 2045), and a
+	// bullet or an accented monitor name is not. Labelling it lets a relay
+	// that has to hand the message to a 7-bit hop convert it instead of
+	// guessing.
+	if !isASCII(body) {
+		b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
+	}
 	b.WriteString("MIME-Version: 1.0\r\n")
 	// Threading: every alert about one incident shares a reference, so a
 	// mail client groups the reminder with the original and the recovery
@@ -321,13 +329,94 @@ func buildMessage(from *mail.Address, to []*mail.Address, a Alert) string {
 		b.WriteString("In-Reply-To: " + ref + "\r\n")
 	}
 	b.WriteString("\r\n")
+	b.WriteString(body)
+	return b.String()
+}
 
+// bodyText is the message body: the title again, the detail and the links.
+func bodyText(a Alert) string {
+	var b strings.Builder
 	b.WriteString(a.Title() + "\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(a.Body(), "\n", "\r\n") + "\r\n")
 	if links := linkLines(a); links != "" {
 		b.WriteString("\r\n" + strings.ReplaceAll(links, "\n", "\r\n") + "\r\n")
 	}
 	return b.String()
+}
+
+// maxEncodedLine is the longest a header line holding an encoded word may be
+// (RFC 2047, section 2).
+const maxEncodedLine = 76
+
+// subjectHeader renders the Subject line, CRLF included.
+//
+// A header is ASCII (RFC 5322); text outside it travels as RFC 2047 encoded
+// words, which every mail client decodes. Written raw, a monitor named
+// "Bücherei Zürich" reached the relay as UTF-8 bytes, which a legacy reader
+// shows as mojibake, and which Postfix answers with a bounce when the next
+// hop lacks SMTPUTF8, because net/smtp asks for SMTPUTF8 whenever a relay
+// offers it. An ASCII title is written exactly as before. So is one that
+// merely looks encoded: "=?" in a name is encoded too, or a client would
+// decode the name into something else.
+func subjectHeader(title string) string {
+	if isPlainHeaderText(title) {
+		return "Subject: " + title + "\r\n"
+	}
+	const open, closing = "=?utf-8?q?", "?="
+	var b strings.Builder
+	b.WriteString("Subject: " + open)
+	line := len("Subject: " + open)
+	for _, r := range title {
+		enc := qEncodeRune(r)
+		// The word is closed and the line folded before a character
+		// that would push it past the limit; a character is never split
+		// across two words (RFC 2047, section 5).
+		if line+len(enc)+len(closing) > maxEncodedLine {
+			b.WriteString(closing + "\r\n " + open)
+			line = len(" " + open)
+		}
+		b.WriteString(enc)
+		line += len(enc)
+	}
+	b.WriteString(closing + "\r\n")
+	return b.String()
+}
+
+// isPlainHeaderText reports whether s can stand in a header as typed:
+// printable ASCII, and nothing a reader would take for an encoded word.
+func isPlainHeaderText(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < ' ' || s[i] > '~' {
+			return false
+		}
+	}
+	return !strings.Contains(s, "=?")
+}
+
+// qEncodeRune is one character in RFC 2047 "Q" encoding: printable ASCII as
+// itself, a space as "_", and every other byte as =XX.
+func qEncodeRune(r rune) string {
+	if r == ' ' {
+		return "_"
+	}
+	if r > ' ' && r <= '~' && r != '=' && r != '?' && r != '_' {
+		return string(r)
+	}
+	var b strings.Builder
+	for _, c := range []byte(string(r)) {
+		fmt.Fprintf(&b, "=%02X", c)
+	}
+	return b.String()
+}
+
+// isASCII reports whether s holds only 7-bit bytes.
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 // sanitiseHeader strips CR and LF from a header value.

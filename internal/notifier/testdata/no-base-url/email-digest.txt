@@ -3,6 +3,7 @@ To: ops@example.com
 Subject: 1 of 2 monitors still down after quiet hours
 Date: Fri, 02 Oct 2026 07:14:10 +0000
 Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
 MIME-Version: 1.0
 
 1 of 2 monitors still down after quiet hours
