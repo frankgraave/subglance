@@ -74,6 +74,18 @@ func (db *DB) BackupTo(ctx context.Context, dest string) (int64, error) {
 		return 0, fmt.Errorf("store: backup directory %s is not a directory", dir)
 	}
 
+	// Created owner-only before SQLite writes into it (VACUUM INTO accepts an
+	// empty file): a backup holds everything the database does, and SQLite
+	// would create it readable by everyone, often in a directory such as
+	// ~/backups that others can list. Exclusive, so a file that appeared
+	// since the check above is refused rather than written into.
+	if err := createOwnerOnly(abs); errors.Is(err, os.ErrExist) {
+		return 0, fmt.Errorf("store: backup destination %s already exists; "+
+			"pick a new filename or remove the old backup first", abs)
+	} else if err != nil {
+		return 0, fmt.Errorf("create backup %s: %w", abs, err)
+	}
+
 	// SQLite takes the VACUUM INTO target as an ordinary expression, so it can
 	// be bound rather than pasted into the statement. That keeps a path
 	// containing a quote from being able to alter the statement at all.

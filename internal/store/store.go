@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -100,6 +101,13 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 		// the same data. Without this, the reader pool would open its own
 		// empty database and every test would fail in a confusing way.
 		opts.Path = "file:subglance-test?mode=memory&cache=shared"
+	} else if !strings.HasPrefix(opts.Path, "file:") {
+		// Created here rather than by SQLite, so that the database and the
+		// -wal and -shm SQLite creates beside it are owner-only from the
+		// first write (see ownerOnly). A URI is left to SQLite.
+		if err := createOwnerOnly(opts.Path); err != nil && !errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("create database %s: %w", opts.Path, err)
+		}
 	}
 
 	writer, err := openPool(opts.Path, 1)
