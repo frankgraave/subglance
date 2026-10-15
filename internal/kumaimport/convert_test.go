@@ -216,7 +216,11 @@ func TestChannels(t *testing.T) {
 			if !tc.check(c) {
 				t.Errorf("channel = %+v", c)
 			}
-			if got := notesOf(res); !strings.Contains(got, tc.note) {
+			if got := notesOf(res); tc.note == "" {
+				if got != "" {
+					t.Errorf("notes = %q, want no notes", got)
+				}
+			} else if !strings.Contains(got, tc.note) {
 				t.Errorf("notes = %q, want %q", got, tc.note)
 			}
 		})
