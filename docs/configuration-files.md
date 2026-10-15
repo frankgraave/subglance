@@ -537,6 +537,14 @@ separately; a status-page link does not become monitor coverage.
   channels, which alert while they are enabled.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
+- Every channel is held to the rules SubGlance holds a saved channel to. Kuma
+  accepted server addresses that no request can reach: a port of 0 or above
+  65535, a hostname the resolver refuses, an ntfy server with a path. Such an
+  address is left out, so the channel comes over switched off with its `url`
+  to fill in, and listed with the reason. A channel whose other settings
+  SubGlance refuses, such as an SMTP port out of range, is kept out of the
+  file and listed with the reason, so one notification cannot stop the rest
+  from importing.
 - A Twilio channel signs in with the account SID and its auth token. When Kuma
   signed in with an API key, its auth token field held the key's secret, which
   does not work with the account SID, so fill in the account's own auth token;
