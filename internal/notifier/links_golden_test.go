@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,7 +96,7 @@ func renderAll(t *testing.T, a Alert) map[string]string {
 	send("gotify", NewGotifySender(nil), func(url string) map[string]string {
 		return map[string]string{"url": url, "token": "app-token"}
 	})
-	out["email"] = buildMessage("subglance@example.com", []string{"ops@example.com"}, a)
+	out["email"] = buildMessage(&mail.Address{Address: "subglance@example.com"}, []*mail.Address{{Address: "ops@example.com"}}, a)
 	out["sms"] = smsMessage(a, "Europe/Amsterdam", 0)
 	return out
 }

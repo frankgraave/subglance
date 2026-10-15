@@ -193,6 +193,10 @@ func TestChannels(t *testing.T) {
 				return c.Config["to"] == "a@example.com, b@example.com" && c.Config["password"] == ""
 			},
 			"Bcc recipients were left out"},
+		{"smtp with a named sender and semicolons", `{"type":"smtp","smtpTo":"a@example.com; b@example.com","smtpHost":"mail","smtpFrom":"\"Uptime Kuma\" <kuma@example.com>"}`,
+			func(c configfile.Channel) bool {
+				return c.Config["to"] == "a@example.com, b@example.com" && c.Config["from"] == `"Uptime Kuma" <kuma@example.com>`
+			}, ""},
 		{"ntfy with a token", `{"type":"ntfy","ntfyserverurl":"https://ntfy.sh/","ntfytopic":"t","ntfyAuthenticationMethod":"accessToken","ntfyaccesstoken":"x"}`,
 			func(c configfile.Channel) bool {
 				return c.Config["url"] == "https://ntfy.sh" && c.Config["token"] == configfile.Placeholder && c.Config["username"] == ""
