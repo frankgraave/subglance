@@ -756,6 +756,13 @@ Or, running from source:
 subglance backup ~/backups/subglance-$(date +%F).db --data-dir /var/lib/subglance
 ```
 
+The backup file is created readable by its owner only (mode 0600), as are
+`subglance.db` and its `-wal` and `-shm` files: they hold password hashes and,
+without `--secret-key`, every channel credential. A database an older version
+created readable by others is narrowed to 0600 when the server starts, and the
+log names the files it changed. On Windows the modes are left to the folder's
+permissions.
+
 The command refuses to overwrite an existing file. That is deliberate: a backup
 command that silently truncates its destination will eventually destroy the one
 good copy you had, most likely when a nightly job reuses a fixed filename and

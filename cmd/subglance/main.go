@@ -163,6 +163,17 @@ func run(args []string, logOut io.Writer) error {
 		return fmt.Errorf("secret-key-previous: %w", err)
 	}
 
+	// Before the open, so that a -wal or -shm SQLite creates now takes the
+	// narrowed mode of the database file. A database an older version or a
+	// copy left readable by others is fixed here once; failing to is not a
+	// reason to stay down, so it is a warning that says what to run.
+	if changed, err := store.RestrictFileModes(cfg.DBPath()); err != nil {
+		log.Warn("the database files are readable by other users and could not be made owner-only",
+			"error", err, "fix", "chmod 600 "+cfg.DBPath()+"*")
+	} else if len(changed) > 0 {
+		log.Info("made the database files readable by their owner only", "files", strings.Join(changed, ", "))
+	}
+
 	db, err := store.Open(openCtx, store.Options{
 		Path:              cfg.DBPath(),
 		SecretKey:         secretKey,
