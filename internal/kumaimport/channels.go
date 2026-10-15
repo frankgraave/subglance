@@ -183,6 +183,9 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 	default:
 		return skip("SubGlance has no " + typ + " channel")
 	}
+	if reason, ok := holdToSender(out, note); !ok {
+		return skip(reason)
+	}
 	return out, true
 }
 

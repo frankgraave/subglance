@@ -1116,3 +1116,71 @@ func TestKumaAppriseImportsAsAWebhook(t *testing.T) {
 		})
 	}
 }
+
+// One Kuma notification with a server address SubGlance refuses used to
+// fail the importer's dry run for the whole converted file. Each address
+// below was accepted by Kuma and refused by the sender: the file now
+// imports, with that channel switched off and its url to fill in.
+func TestKumaRefusedAddressDoesNotFailTheFile(t *testing.T) {
+	cases := map[string]string{
+		"ntfy port":         `{"type":"ntfy","ntfyserverurl":"https://ntfy.example.org:99999"}`,
+		"ntfy port 0":       `{"type":"ntfy","ntfyserverurl":"https://ntfy.example.org:0"}`,
+		"ntfy scheme":       `{"type":"ntfy","ntfyserverurl":"ntfy.example.org"}`,
+		"ntfy onion":        `{"type":"ntfy","ntfyserverurl":"http://abc.onion"}`,
+		"gotify port":       `{"type":"gotify","gotifyserverurl":"https://gotify.example.org:99999"}`,
+		"gotify host":       `{"type":"gotify","gotifyserverurl":"https://gotify example.org"}`,
+		"matrix port":       `{"type":"matrix","homeserverUrl":"https://matrix.example.org:99999","internalRoomId":"!abc:example.org"}`,
+		"matrix host":       `{"type":"matrix","homeserverUrl":"https://bad_host!.example.org","internalRoomId":"!abc:example.org"}`,
+		"signal port":       `{"type":"signal","signalURL":"https://signal.example.org:99999/v2/send"}`,
+		"waha port":         `{"type":"waha","wahaApiUrl":"https://waha.example.org:0","wahaSession":"default"}`,
+		"evolution port":    `{"type":"evolution","evolutionApiUrl":"https://evo.example.org:70000","evolutionInstanceName":"i"}`,
+		"openwa port":       `{"type":"openwa","openwaApiUrl":"https://openwa.example.org:70000","openwaSession":"s"}`,
+		"home assistant":    `{"type":"HomeAssistant","homeAssistantUrl":"https://ha.example.org:70000","notificationService":"notify"}`,
+		"user name refused": `{"type":"gotify","gotifyserverurl":"https://admin:hunter2@gotify.example.org:99999"}`,
+	}
+	for name, config := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+			path := kumaWithNotification(t, "kuma-2.5.5.db", "Refused", config)
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			if strings.Contains(string(file), "hunter2") {
+				t.Errorf("the converted file holds the address's password:\n%s", file)
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s", code, body)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs []string
+			for _, it := range rep.Channels {
+				if it.Key == "refused" {
+					needs = it.NeedsSecrets
+				}
+			}
+			if !slices.Contains(needs, "url") {
+				t.Errorf("refused needs_secrets = %v, want url among them", needs)
+			}
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var found bool
+			for _, c := range chans {
+				if c.Name == "Refused" {
+					found = true
+					if c.Enabled || c.Config["url"] != "" {
+						t.Errorf("stored channel = %+v, want it switched off without a url", c)
+					}
+				}
+			}
+			if !found {
+				t.Error("the channel was not created")
+			}
+		})
+	}
+}

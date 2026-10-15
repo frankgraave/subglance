@@ -293,31 +293,6 @@ func checkRefs(path string, keys []string, known map[string]bool, what string) e
 	return nil
 }
 
-// withheldStandIn satisfies validateChannel for a required value that is
-// still a placeholder. It is never stored: the channel is saved without the
-// value, and switched off. The .invalid top-level domain is reserved and can
-// never resolve (RFC 2606).
-var withheldStandIn = map[string]string{
-	"url":       "https://withheld.invalid/",
-	"bot_token": "0:withheld",
-	// An SMS channel's numbers, password and auth token are all withheld on
-	// export, and the SMS rules require each of them.
-	"numbers":    "+10000000000",
-	"password":   "withheld",
-	"auth_token": "withheld",
-	// ntfy's topic and Gotify's application token are withheld too, and each
-	// is the field its channel type cannot work without.
-	"topic": "withheld",
-	"token": "withheld",
-}
-
-// withheldTypeStandIn overrides withheldStandIn where a type's sender holds
-// the value to a shape of its own: a Discord channel's URL has to name
-// Discord, and the generic stand-in does not.
-var withheldTypeStandIn = map[string]map[string]string{
-	store.ChannelDiscord: {"url": "https://discord.com/api/webhooks/0/withheld"},
-}
-
 func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConfig, path string, c configfile.Channel) error {
 	existing, found := ex.channels[c.Key]
 	item := importItem{Key: c.Key, Name: c.Name, Action: actionCreate}
@@ -388,10 +363,7 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 		req.Config = map[string]string{}
 	}
 	for _, k := range missing {
-		if v, ok := withheldStandIn[k]; ok {
-			req.Config[k] = v
-		}
-		if v, ok := withheldTypeStandIn[next.Type][k]; ok {
+		if v, ok := configfile.WithheldStandIn(next.Type, k); ok {
 			req.Config[k] = v
 		}
 	}
