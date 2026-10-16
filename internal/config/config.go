@@ -525,8 +525,11 @@ func load(args []string, usage io.Writer) (Config, error) {
 // operator can still tell. The watchdog URL is shown as scheme and host,
 // the form every log line uses, and so is the backup endpoint, which
 // startup refuses with a user name and password in it but the usage text
-// prints before startup gets that far. The values themselves are
-// untouched: DefValue is only what the usage text prints.
+// prints before startup gets that far. The base URL and the backup target
+// are refused with a user part for the same reason, and are printed with
+// that part masked and the rest as set: their path is the prefix links and
+// backups are written under, and worth reading in --help. The values
+// themselves are untouched: DefValue is only what the usage text prints.
 func hideCredentialDefaults(fs *flag.FlagSet) {
 	for _, name := range []string{"secret-key", "secret-key-previous"} {
 		f := fs.Lookup(name)
@@ -540,6 +543,28 @@ func hideCredentialDefaults(fs *flag.FlagSet) {
 			f.DefValue = checker.ShownURL(f.DefValue)
 		}
 	}
+	for _, name := range []string{"base-url", "backup-target"} {
+		f := fs.Lookup(name)
+		f.DefValue = maskedUserPart(f.DefValue)
+	}
+}
+
+// maskedUserPart is raw with everything between the scheme and the last "@"
+// replaced by "***", the form the --base-url refusal quotes, and raw itself
+// when it holds no "@". The last "@" anywhere rather than the one Go's parser
+// picks, because a password may hold a "/" or a "#" that ends the authority
+// early, as in s3://KEYID:abc/def@bucket; an "@" in a path is masked too,
+// which costs a line of --help and never a credential.
+func maskedUserPart(raw string) string {
+	at := strings.LastIndex(raw, "@")
+	if at < 0 {
+		return raw
+	}
+	start := 0
+	if i := strings.Index(raw, "//"); i >= 0 && i < at {
+		start = i + 2
+	}
+	return raw[:start] + "***" + raw[at:]
 }
 
 // refuseStrayArgument fails when parsing stopped before the end of args.

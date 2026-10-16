@@ -41,9 +41,11 @@ rather than restoring into `/data`.
 `--help`, and every flag that does not parse, prints the flags with the value
 each one has after the environment is read, so the list shows what this start
 would run with. The exceptions are the values that can hold a credential:
-`--secret-key` and `--secret-key-previous` say only that a key is set, and
+`--secret-key` and `--secret-key-previous` say only that a key is set,
 `--watchdog-url` and `--backup-endpoint` are shown as their scheme and host,
-as in the log.
+as in the log, and `--base-url` and `--backup-target` are shown as set except
+for a user name and password, which read `***` (startup refuses both with
+one).
 
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
