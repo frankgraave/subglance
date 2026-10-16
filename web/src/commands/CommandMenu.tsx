@@ -188,9 +188,16 @@ export function CommandMenu({ client, open = true, canWrite, onClose, onOpenMoni
         <span className="command-keys" aria-hidden="true">
           <span><kbd>{"\u2191"}</kbd><kbd>{"\u2193"}</kbd> to move</span>
           <span><kbd>Enter</kbd> to select</span>
+          <span><kbd>Esc</kbd> to close</span>
         </span>
+        {/*
+         * The Esc keycap stands with the other hints, not inside this button:
+         * text drawn inside a control is part of its visible label, and WCAG
+         * 2.5.3 wants that label inside the accessible name. "Close" is the
+         * start of "Close command menu"; "Close Esc" is not.
+         */}
         <button type="button" onClick={onClose} aria-label="Close command menu" aria-keyshortcuts="Escape">
-          Close <kbd aria-hidden="true">Esc</kbd>
+          Close
         </button>
       </div>
     </dialog>
