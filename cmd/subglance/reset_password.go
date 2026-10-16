@@ -84,16 +84,11 @@ func resetPassword(args []string, out io.Writer, secrets secretSource) error {
 		return err
 	}
 
-	// Checked before the lock and before opening anything: store.Open would
-	// otherwise create an empty database in a mistyped directory and report
-	// that the account does not exist, which sends the operator looking for
-	// the wrong problem.
+	// Checked before the lock and before opening anything (see
+	// requireDatabase).
 	dbPath := cfg.DBPath()
-	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("there is no database at %s; point --data-dir (or SUBGLANCE_DATA_DIR) "+
-			"at the directory the server uses", dbPath)
-	} else if err != nil {
-		return fmt.Errorf("check database %s: %w", dbPath, err)
+	if err := requireDatabase(dbPath); err != nil {
+		return err
 	}
 
 	lock, err := datalock.Acquire(cfg.DataDir)

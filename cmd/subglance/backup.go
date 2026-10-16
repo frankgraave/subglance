@@ -23,7 +23,7 @@ const backupTimeout = 10 * time.Minute
 const (
 	backupUsage = "usage: subglance backup <path> [--data-dir DIR]"
 	backupAbout = "Writes a consistent snapshot of the database to <path>, which must not exist yet. " +
-		"Safe while the server runs."
+		"Safe while the server runs. Refuses a data directory that holds no database."
 )
 
 // runBackup writes a consistent snapshot of the database to a file.
@@ -59,6 +59,12 @@ func runBackup(args []string, out io.Writer) error {
 
 	cfg, err := config.Load(args[1:])
 	if err != nil {
+		return err
+	}
+	// A data directory without a database is the wrong directory, not an
+	// empty instance: backing it up would create a database there and
+	// report success for a copy of nothing (see requireDatabase).
+	if err := requireDatabase(cfg.DBPath()); err != nil {
 		return err
 	}
 
