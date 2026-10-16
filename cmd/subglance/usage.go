@@ -62,6 +62,19 @@ func loadConfig(name string, args []string) (config.Config, error) {
 	return cfg, err
 }
 
+// unparsedFlag returns loadConfig's refusal when args hold a flag the
+// configuration cannot parse, and nil for anything else. A subcommand that
+// refuses its command line for another reason before reading the
+// configuration (a missing argument) asks this first, so a mistyped flag is
+// always what it names.
+func unparsedFlag(name string, args []string) error {
+	_, err := config.LoadWithoutUsage(args)
+	if fe := (*config.FlagError)(nil); errors.As(err, &fe) {
+		return flagRefusal(name, fe.Err)
+	}
+	return nil
+}
+
 // printUsage writes a subcommand's usage: the usage line, what it does, the
 // flags that are its own (fs may be nil when there are none) and the note
 // that the server's settings are listed elsewhere.

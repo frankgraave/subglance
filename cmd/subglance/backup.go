@@ -52,6 +52,12 @@ func runBackup(args []string, out io.Writer) error {
 		return flag.ErrHelp
 	}
 	if len(args) == 0 || args[0] == "" || strings.HasPrefix(args[0], "-") {
+		// A flag that does not parse is named before the missing path, in
+		// the one line every subcommand refuses it with; otherwise
+		// `backup --nope` answers with the usage and never names --nope.
+		if err := unparsedFlag("backup", args); err != nil {
+			return err
+		}
 		return errors.New("backup needs a destination path\n\n" + backupUsage)
 	}
 	dest := args[0]

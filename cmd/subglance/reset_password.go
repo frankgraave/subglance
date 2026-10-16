@@ -76,14 +76,16 @@ func resetPassword(args []string, out io.Writer, secrets secretSource) error {
 	if err := fs.Parse(own); err != nil {
 		return flagRefusal("reset-password", err)
 	}
-	address := strings.TrimSpace(*email)
-	if address == "" {
-		return errors.New("--email is required: the address of the account whose password to reset")
-	}
-
+	// The configuration is read before --email is asked for, so a server
+	// flag that does not parse is named first instead of hidden behind the
+	// missing address: `reset-password --nope` asked only for --email.
 	cfg, err := loadConfig("reset-password", rest)
 	if err != nil {
 		return err
+	}
+	address := strings.TrimSpace(*email)
+	if address == "" {
+		return errors.New("--email is required: the address of the account whose password to reset")
 	}
 
 	// Checked before the lock and before opening anything (see

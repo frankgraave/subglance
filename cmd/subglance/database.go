@@ -19,7 +19,7 @@ import (
 // It is checked before the data directory is locked or anything is opened,
 // so a refusal leaves the directory exactly as it was.
 func requireDatabase(dbPath string) error {
-	_, err := os.Stat(dbPath)
+	_, err := os.Stat(dbPath) //nolint:gosec // G703: the configured database path, only stat'ed
 	if errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("there is no database at %s; point --data-dir (or SUBGLANCE_DATA_DIR) "+
 			"at the directory the server uses", dbPath)
