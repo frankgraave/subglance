@@ -20,6 +20,13 @@ info:
     request field or query parameter, a `field` naming it (see the `Error`
     schema).
 
+    A path this document lists, reached with a method it does not list for
+    that path, is answered 405 with an `Allow` header naming the methods it
+    does take (`Allow: GET, HEAD, POST` for `DELETE /api/v1/monitors`); HEAD
+    is allowed wherever GET is. A path under `/api` it does not list at all
+    is answered 404 with the error `no such endpoint`. Neither is repeated
+    under each operation below.
+
     A JSON request body is one JSON object and nothing after it, with no
     field the operation does not document, of at most 1 MiB (256 KiB for the
     bulk tag and channel operations). A larger body is answered with 413. A

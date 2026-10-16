@@ -226,7 +226,7 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isAPIPath(r.URL.Path) {
+		if IsAPIPath(r.URL.Path) {
 			apiNotFound.ServeHTTP(w, r)
 			return
 		}
@@ -310,9 +310,11 @@ func writeUnbuilt(w http.ResponseWriter) {
 		"The API at /api/v1 is unaffected.\n")
 }
 
-// isAPIPath reports whether a path belongs to the JSON API.
+// IsAPIPath reports whether a path belongs to the JSON API.
 //
 // Exactly "/api" counts too: that is a caller aiming at the API, not a page.
-func isAPIPath(p string) bool {
+// The API's own method refusal asks the same question (internal/api), so the
+// line between JSON and the dashboard is drawn in one place.
+func IsAPIPath(p string) bool {
 	return p == "/api" || strings.HasPrefix(p, "/api/")
 }
