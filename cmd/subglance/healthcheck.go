@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,12 @@ import (
 // --health-timeout is 30s; staying well under it means the container reports
 // unhealthy because the answer was bad, not because the probe was killed.
 const healthcheckTimeout = 5 * time.Second
+
+const (
+	healthcheckUsage = "usage: subglance healthcheck [--addr ADDRESS]"
+	healthcheckAbout = "Asks the server on --addr whether it is ready to serve, and exits 0 when it is and 1 when it is not. " +
+		"Meant for a container HEALTHCHECK."
+)
 
 // runHealthcheck probes a running instance and reports whether it can serve
 // traffic. It exists because the shipped image is distroless static: there is
@@ -35,6 +42,10 @@ const healthcheckTimeout = 5 * time.Second
 // process, which inherits the container environment but not the flags given to
 // the entrypoint.
 func runHealthcheck(args []string, out io.Writer) error {
+	if asksForHelp(args) {
+		printUsage(out, healthcheckUsage, healthcheckAbout, nil)
+		return flag.ErrHelp
+	}
 	cfg, err := config.Load(args)
 	if err != nil {
 		return err

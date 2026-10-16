@@ -47,6 +47,12 @@ as in the log, and `--base-url` and `--backup-target` are shown as set except
 for a user name and password, which read `***` (startup refuses both with
 one).
 
+A subcommand's `--help` (`subglance restore --help`, `backup`, `healthcheck`,
+`import`, `reset-password`) prints that subcommand's usage line and its own
+flags, such as `restore --from`, and exits without touching the data
+directory. The settings a subcommand reads the way the server does, such as
+`--data-dir`, are listed by `subglance --help`.
+
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
 | `--addr` | `SUBGLANCE_ADDR` | `:8080` | HTTP listen address |
