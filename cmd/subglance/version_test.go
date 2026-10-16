@@ -189,9 +189,9 @@ func TestWantsVersionRecognisesEverySpelling(t *testing.T) {
 const versionSubprocessEnv = "SUBGLANCE_TEST_RUN_MAIN"
 
 // TestVersionSubprocessMain is not a test. It is the child half of
-// TestVersionNeedsNoDataDirNoConfigAndNoPort: when the marker is set it hands
-// control to main() with the arguments the parent chose, so the real entry
-// point is exercised rather than a reimplementation of it.
+// TestVersionNeedsNoDataDirNoConfigAndNoPort and of runMain: when the marker
+// is set it hands control to main() with the arguments the parent chose, so
+// the real entry point is exercised rather than a reimplementation of it.
 func TestVersionSubprocessMain(t *testing.T) {
 	if os.Getenv(versionSubprocessEnv) == "" {
 		t.Skip("child half of TestVersionNeedsNoDataDirNoConfigAndNoPort")

@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/frankgraave/subglance/internal/config"
 )
 
 // healthcheckTimeout bounds the whole probe. Docker's own default
@@ -46,7 +44,7 @@ func runHealthcheck(args []string, out io.Writer) error {
 		printUsage(out, healthcheckUsage, healthcheckAbout, nil)
 		return flag.ErrHelp
 	}
-	cfg, err := config.Load(args)
+	cfg, err := loadConfig("healthcheck", args)
 	if err != nil {
 		return err
 	}

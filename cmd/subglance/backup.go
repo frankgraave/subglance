@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -44,7 +43,7 @@ const (
 // quietly snapshot the wrong file.
 func runBackup(args []string, out io.Writer) error {
 	// The destination is taken as the first argument and split off before
-	// config.Load, because Go's flag package stops parsing at the first
+	// the configuration is read, because Go's flag package stops parsing at the first
 	// non-flag: leaving the path in the list would make
 	// `backup /tmp/x.db --data-dir /data` silently ignore the flag and
 	// snapshot the default directory instead.
@@ -53,11 +52,17 @@ func runBackup(args []string, out io.Writer) error {
 		return flag.ErrHelp
 	}
 	if len(args) == 0 || args[0] == "" || strings.HasPrefix(args[0], "-") {
+		// A flag that does not parse is named before the missing path, in
+		// the one line every subcommand refuses it with; otherwise
+		// `backup --nope` answers with the usage and never names --nope.
+		if err := unparsedFlag("backup", args); err != nil {
+			return err
+		}
 		return errors.New("backup needs a destination path\n\n" + backupUsage)
 	}
 	dest := args[0]
 
-	cfg, err := config.Load(args[1:])
+	cfg, err := loadConfig("backup", args[1:])
 	if err != nil {
 		return err
 	}

@@ -51,7 +51,11 @@ A subcommand's `--help` (`subglance restore --help`, `backup`, `healthcheck`,
 `import`, `reset-password`) prints that subcommand's usage line and its own
 flags, such as `restore --from`, and exits without touching the data
 directory. The settings a subcommand reads the way the server does, such as
-`--data-dir`, are listed by `subglance --help`.
+`--data-dir`, are listed by `subglance --help`. A flag a subcommand cannot
+parse, whether its own or one of the server's (a typo, a flag that does not
+exist, a value left off), is refused in one line on stderr that names the flag
+and points at that subcommand's `--help`, with exit code 1 and nothing
+touched; the server's list of flags is printed only by the server itself.
 
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|

@@ -35,11 +35,17 @@ func runImport(args []string, out io.Writer) error {
 
 func importTo(args []string, out, report io.Writer) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
-	fs.SetOutput(report)
 	dest := fs.String("o", "", "write the configuration to `FILE` instead of standard output")
-	fs.Usage = func() {
+	// Silent, as for the other subcommands: a flag that does not parse is
+	// refused in one line (see flagRefusal), and usage is printed only when
+	// asked for.
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
+	if asksForHelp(args) {
 		_, _ = fmt.Fprintln(report, importUsage)
+		fs.SetOutput(report)
 		fs.PrintDefaults()
+		return flag.ErrHelp
 	}
 
 	// Positional arguments and -o in any order: Go's flag package stops at
@@ -49,7 +55,7 @@ func importTo(args []string, out, report io.Writer) error {
 	rest := args
 	for {
 		if err := fs.Parse(rest); err != nil {
-			return err
+			return flagRefusal("import", err)
 		}
 		if fs.NArg() == 0 {
 			break

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/backup"
-	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/datalock"
 )
 
@@ -49,22 +48,22 @@ func runRestore(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("subglance restore", flag.ContinueOnError)
 	from := fs.String("from", "", "object name of the backup to restore (default: the newest)")
 	force := fs.Bool("force", false, "restore even though something answers on --addr (never while a server holds the data directory)")
-	fs.SetOutput(out)
-	fs.Usage = func() {
-		printUsage(fs.Output(), restoreUsage, restoreAbout, fs)
-	}
+	// Silent: a flag that does not parse is refused in one line (see
+	// flagRefusal), and usage is printed only when asked for.
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
 	if asksForHelp(args) {
-		fs.Usage()
+		printUsage(out, restoreUsage, restoreAbout, fs)
 		return flag.ErrHelp
 	}
 	// Only the restore's own flags are parsed here; everything else is
-	// server configuration and goes to config.Load unchanged.
+	// server configuration and goes to config unchanged.
 	own, rest := splitRestoreFlags(args)
 	if err := fs.Parse(own); err != nil {
-		return err
+		return flagRefusal("restore", err)
 	}
 
-	cfg, err := config.Load(rest)
+	cfg, err := loadConfig("restore", rest)
 	if err != nil {
 		return err
 	}

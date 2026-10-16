@@ -14,7 +14,6 @@ import (
 	"golang.org/x/term"
 
 	"github.com/frankgraave/subglance/internal/auth"
-	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/datalock"
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -63,25 +62,30 @@ const (
 // in: either would put it in the shell history or the process list.
 func resetPassword(args []string, out io.Writer, secrets secretSource) error {
 	fs := flag.NewFlagSet("subglance reset-password", flag.ContinueOnError)
-	fs.SetOutput(out)
+	// Silent, as for restore: usage is printed only when asked for.
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
 	email := fs.String("email", "", "address of the account to reset (required)")
 	generate := fs.Bool("generate", false, "make up a password and show it once, instead of asking for one")
 	force := fs.Bool("force", false, "reset even though something answers on --addr (never while a server holds the data directory)")
-	fs.Usage = func() {
-		printUsage(fs.Output(), accountResetUsage, accountResetAbout, fs)
+	if asksForHelp(args) {
+		printUsage(out, accountResetUsage, accountResetAbout, fs)
+		return flag.ErrHelp
 	}
 	own, rest := splitResetPasswordFlags(args)
 	if err := fs.Parse(own); err != nil {
+		return flagRefusal("reset-password", err)
+	}
+	// The configuration is read before --email is asked for, so a server
+	// flag that does not parse is named first instead of hidden behind the
+	// missing address: `reset-password --nope` asked only for --email.
+	cfg, err := loadConfig("reset-password", rest)
+	if err != nil {
 		return err
 	}
 	address := strings.TrimSpace(*email)
 	if address == "" {
 		return errors.New("--email is required: the address of the account whose password to reset")
-	}
-
-	cfg, err := config.Load(rest)
-	if err != nil {
-		return err
 	}
 
 	// Checked before the lock and before opening anything (see
@@ -177,7 +181,7 @@ func newPassword(email string, generate bool, secrets secretSource) (string, err
 }
 
 // splitResetPasswordFlags separates --email, --generate, --force and help
-// from the server flags, which go to config.Load unchanged.
+// from the server flags, which go to the configuration unchanged.
 func splitResetPasswordFlags(args []string) (own, rest []string) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]

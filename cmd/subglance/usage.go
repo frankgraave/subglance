@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/frankgraave/subglance/internal/config"
 )
 
 // serverSettingsNote ends the usage of every subcommand that loads the
@@ -35,6 +38,41 @@ func asksForHelp(args []string) bool {
 		}
 	}
 	return false
+}
+
+// flagRefusal is how a subcommand refuses a command line the flag parser
+// could not read: one line, in the parser's words, which name the flag, and
+// where the subcommand's flags are listed. It replaces what the flag package
+// does on its own, which is to print the error, then a usage list, and leave
+// the caller to print the error again; for a server flag that list was the
+// server's, some fifty lines in a HEALTHCHECK or cron log on every attempt,
+// and none of them the subcommand's own flags.
+func flagRefusal(name string, err error) error {
+	return fmt.Errorf("%w (subglance %s --help lists the flags)", err, name)
+}
+
+// loadConfig reads the server's configuration for a subcommand. A command
+// line that does not parse is refused with flagRefusal instead of the
+// server's usage; every other error is returned as it is.
+func loadConfig(name string, args []string) (config.Config, error) {
+	cfg, err := config.LoadWithoutUsage(args)
+	if fe := (*config.FlagError)(nil); errors.As(err, &fe) {
+		return cfg, flagRefusal(name, fe.Err)
+	}
+	return cfg, err
+}
+
+// unparsedFlag returns loadConfig's refusal when args hold a flag the
+// configuration cannot parse, and nil for anything else. A subcommand that
+// refuses its command line for another reason before reading the
+// configuration (a missing argument) asks this first, so a mistyped flag is
+// always what it names.
+func unparsedFlag(name string, args []string) error {
+	_, err := config.LoadWithoutUsage(args)
+	if fe := (*config.FlagError)(nil); errors.As(err, &fe) {
+		return flagRefusal(name, fe.Err)
+	}
+	return nil
 }
 
 // printUsage writes a subcommand's usage: the usage line, what it does, the
