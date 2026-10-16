@@ -70,6 +70,9 @@ var senderRefusals = map[string][]struct {
 		{map[string]string{"url": "https://-hooks.example.com/in"}, "url"},
 		{map[string]string{"url": "https://hooks.example.com:99999/in"}, "url"},
 		{map[string]string{"url": "https://hooks.example.com/in", "headers": "not-a-header"}, "headers"},
+		{map[string]string{"url": "https://hooks.example.com/in", "headers": "X Api: k"}, "headers"},
+		{map[string]string{"url": "https://hooks.example.com/in", "headers": "X-Api: a\x00b"}, "headers"},
+		{map[string]string{"url": "https://hooks.example.com/in", "headers": "X-Api: a\nx-api: b"}, "headers"},
 		{map[string]string{"url": "https://hooks.example.com/in", "body": `{"x": {{summary}}}`}, "body"},
 	},
 	store.ChannelSMS: {

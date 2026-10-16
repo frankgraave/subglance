@@ -143,14 +143,20 @@ func channelNameProblem(name, stored string) problem {
 }
 
 // validateChannel refuses a channel the notifier could not deliver through,
-// naming the request field the refusal is about. storedName is the name the
-// channel has now, "" on create; see channelNameProblem.
+// naming the request field the refusal is about. stored is the channel as it
+// is now, nil on create: a name or a webhook's header lines equal to the
+// stored ones are not refused by a rule added after they were saved (see
+// channelNameProblem and notifier.ValidateEditedConfig).
 //
 // Each sentence already starts with the key it is about; the field carries
 // the same name on the wire, so a form can put the sentence under the input
 // that has to change rather than below the whole form, and never has to
 // read the key back out of the wording.
-func validateChannel(req channelRequest, storedName string) problem {
+func validateChannel(req channelRequest, stored *store.Channel) problem {
+	storedName := ""
+	if stored != nil {
+		storedName = stored.Name
+	}
 	if p := channelNameProblem(req.Name, storedName); !p.ok() {
 		return p
 	}
@@ -182,7 +188,7 @@ func validateChannel(req channelRequest, storedName string) problem {
 		}
 	}
 
-	if p := validatePushChannel(req); !p.ok() {
+	if p := validatePushChannel(req, stored); !p.ok() {
 		return p
 	}
 
@@ -272,7 +278,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if p := validateChannel(req, ""); !p.ok() {
+	if p := validateChannel(req, nil); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
@@ -374,7 +380,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p := validateChannel(req, existing.Name); !p.ok() {
+	if p := validateChannel(req, &existing); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
@@ -606,8 +612,9 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 // type's sender holds the settings to (notifier.ValidateConfig). The sender
 // rules are the ones that decide whether an alert can go out, so a channel
 // that passes here is one its sender accepts; checking them on save is what
-// puts the message on the form instead of in a failed delivery.
-func validatePushChannel(req channelRequest) problem {
+// puts the message on the form instead of in a failed delivery. stored is
+// as for validateChannel.
+func validatePushChannel(req channelRequest, stored *store.Channel) problem {
 	cfg := req.Config
 	switch req.Type {
 	case store.ChannelNtfy:
@@ -654,7 +661,7 @@ func validatePushChannel(req channelRequest) problem {
 	// SMS channel's numbers, an email channel's host, sender and port, a
 	// Telegram chat, a Discord URL. The type is known here (validateChannel
 	// refused any other before this point).
-	if err := notifier.ValidateConfig(req.Type, cfg); err != nil {
+	if err := notifier.ValidateEditedConfig(req.Type, cfg, stored); err != nil {
 		return notifierProblem(err)
 	}
 	return problem{}

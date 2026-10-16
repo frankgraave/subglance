@@ -367,9 +367,9 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 			req.Config[k] = v
 		}
 	}
-	stored := ""
+	var stored *store.Channel
 	if found {
-		stored = existing.Name
+		stored = &existing
 	}
 	if pr := validateChannel(req, stored); !pr.ok() {
 		return apiProblemAt(path, pr)

@@ -2865,7 +2865,10 @@ paths:
         name of up to 11 letters and digits). Optional for sms:
         `hourly_limit` (1 to 100, default 10), `recoveries` (`false` sends
         outages only) and `timezone` (IANA, for the times in a message).
-        A webhook accepts `headers` (one `Name: value` per line), `method`
+        A webhook accepts `headers` (one `Name: value` per line; a name that
+        is not an HTTP token, a value with a control character other than a
+        tab, or one header on two lines is a 400 on `config.headers`, except
+        for lines an edit leaves as stored), `method`
         (`POST`, the default, or `PUT`) and `body`, a template of up to 8192
         characters sent instead of the alert JSON, with `{{name}}`
         placeholders filled in; an unknown placeholder, or a body that is not
