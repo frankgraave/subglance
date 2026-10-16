@@ -365,6 +365,26 @@ func Load(args []string) (Config, error) {
 	return load(args, os.Stderr)
 }
 
+// LoadWithoutUsage is Load for a subcommand. It prints nothing: a command
+// line that does not parse comes back as a *FlagError for the subcommand to
+// report in its own words. Load answers such a line with the server's list
+// of flags, which under a subcommand is the wrong list: `restore --form x`
+// printed some fifty server flags, none of them the --from that was meant.
+func LoadWithoutUsage(args []string) (Config, error) {
+	return load(args, io.Discard)
+}
+
+// FlagError is a command line the flag parser refused: a flag that is not
+// defined, one without its value, or a value of the wrong kind. Its text is
+// the parser's own, which names the flag.
+type FlagError struct {
+	Err error
+}
+
+func (e *FlagError) Error() string { return e.Err.Error() }
+
+func (e *FlagError) Unwrap() error { return e.Err }
+
 // load is Load with the usage text, printed on --help and on a flag that
 // does not parse, written to usage instead of stderr.
 func load(args []string, usage io.Writer) (Config, error) {
@@ -482,7 +502,10 @@ func load(args []string, usage io.Writer) (Config, error) {
 	hideCredentialDefaults(fs)
 
 	if err := fs.Parse(args); err != nil {
-		return Config{}, err
+		if errors.Is(err, flag.ErrHelp) {
+			return Config{}, err
+		}
+		return Config{}, &FlagError{Err: err}
 	}
 	if err := refuseStrayArgument(fs, args); err != nil {
 		return Config{}, err
