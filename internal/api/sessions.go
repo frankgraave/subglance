@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -148,7 +147,7 @@ func (s *Server) handleEndOtherSessions(w http.ResponseWriter, r *http.Request) 
 
 // handleListUserSessions returns any account's sessions. Admin only.
 func (s *Server) handleListUserSessions(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathUserID(w, r)
+	id, ok := pathID(w, r, "user")
 	if !ok {
 		return
 	}
@@ -178,7 +177,7 @@ func (s *Server) handleListUserSessions(w http.ResponseWriter, r *http.Request) 
 // again. Removing the account is what takes the access away.
 func (s *Server) handleEndUserSessions(w http.ResponseWriter, r *http.Request) {
 	caller, _ := UserFromContext(r.Context())
-	id, ok := pathUserID(w, r)
+	id, ok := pathID(w, r, "user")
 	if !ok {
 		return
 	}
@@ -194,17 +193,6 @@ func (s *Server) handleEndUserSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("user sessions ended", "user_id", id, "ended", ended, "by", caller.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"ended": ended})
-}
-
-// pathUserID reads {id} as an account id; pathID words its refusal for
-// monitors.
-func pathUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid user id")
-		return 0, false
-	}
-	return id, true
 }
 
 // describeUserAgent names the browser and the platform a User-Agent header

@@ -1075,7 +1075,7 @@ func hostOnly(target string) string {
 }
 
 func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -1133,7 +1133,7 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -1157,7 +1157,7 @@ func (s *Server) handleResumeMonitor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setEnabled(w http.ResponseWriter, r *http.Request, enabled bool) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -1181,7 +1181,7 @@ func (s *Server) setEnabled(w http.ResponseWriter, r *http.Request, enabled bool
 }
 
 func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -1398,11 +1398,23 @@ func (s *Server) requireMonitor(w http.ResponseWriter, r *http.Request, id int64
 	}
 }
 
-// pathID parses the {id} path segment, writing an error response when invalid.
-func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+// pathID parses the {id} path segment as the id of resource, writing a 400
+// that names the resource when the segment is not a positive integer.
+//
+// The noun is the caller's because one parser serves every numeric-id route:
+// when it named monitors on its own, a channel, token or user id was refused
+// as "invalid monitor id", and a client went looking for a monitor id it had
+// never sent.
+func pathID(w http.ResponseWriter, r *http.Request, resource string) (int64, bool) {
+	return pathWildcardID(w, r, "id", resource)
+}
+
+// pathWildcardID is pathID for a wildcard other than {id}, such as the
+// {monitor_id} of a routing-rule exclusion.
+func pathWildcardID(w http.ResponseWriter, r *http.Request, wildcard, resource string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(wildcard), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid monitor id")
+		writeError(w, http.StatusBadRequest, "invalid "+resource+" id")
 		return 0, false
 	}
 	return id, true
@@ -1493,7 +1505,7 @@ type patchMonitorRequest struct {
 // last-write-wins, because making the header mandatory would break every
 // script written before it existed.
 func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}

@@ -147,7 +147,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFromContext(r.Context())
 
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "token")
 	if !ok {
 		return
 	}
@@ -237,7 +237,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	caller, _ := UserFromContext(r.Context())
 
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "user")
 	if !ok {
 		return
 	}
@@ -279,7 +279,7 @@ type updateUserRequest struct {
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	caller, _ := UserFromContext(r.Context())
 
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "user")
 	if !ok {
 		return
 	}

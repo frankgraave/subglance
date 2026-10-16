@@ -20,7 +20,7 @@ type quietHoursRequest struct {
 
 // handleSetQuietHours creates or replaces a channel's quiet hours.
 func (s *Server) handleSetQuietHours(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -69,7 +69,7 @@ func quietHoursProblem(err error) problem {
 // holding is released at once rather than left waiting for a window that no
 // longer exists.
 func (s *Server) handleClearQuietHours(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}

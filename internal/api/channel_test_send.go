@@ -43,7 +43,7 @@ func (s *Server) handleTestChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}

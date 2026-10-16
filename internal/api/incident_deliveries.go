@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -102,9 +101,8 @@ func incidentDeliveryState(d store.Delivery) string {
 // none is listed here, and the notice about a failing channel goes out
 // directly for the same reason: neither is an alert about this incident.
 func (s *Server) handleListIncidentDeliveries(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid incident id")
+	id, ok := pathID(w, r, "incident")
+	if !ok {
 		return
 	}
 	ctx := r.Context()
