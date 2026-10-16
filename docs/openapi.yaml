@@ -1264,7 +1264,11 @@ paths:
             rejected: a job reporting its own failure should never have that
             report refused because the error it pasted was long. Bytes rather
             than characters, so a message of multi-byte runes is cut earlier
-            than its character count suggests.
+            than its character count suggests. Bytes that are not valid UTF-8,
+            as a job under a Latin-1 locale sends them, are replaced with
+            U+FFFD (one per run of invalid bytes) before the cut, so the note
+            is not cut short at them and shows where an unreadable character
+            stood.
           schema:
             type: string
           example: 'restic: repository locked'
@@ -1337,7 +1341,8 @@ paths:
           in: query
           required: false
           description: |
-            As on the GET form: truncated to 500 bytes on a rune boundary.
+            As on the GET form: invalid UTF-8 replaced with U+FFFD, then
+            truncated to 500 bytes on a rune boundary.
           schema:
             type: string
       responses:

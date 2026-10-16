@@ -415,6 +415,60 @@ func TestPushMessageIsTruncatedOnARuneBoundary(t *testing.T) {
 	}
 }
 
+// pushDownWithMessage sends one failing report with the given, already
+// percent-encoded, note and returns the note the recorder was handed.
+func pushDownWithMessage(t *testing.T, encodedMsg string) string {
+	t.Helper()
+	srv, _ := testServerWithDB(t)
+	created := createPushMonitor(t, srv, pushMonitorBody)
+	pusher := &fakePusher{}
+	srv.WithPushRecorder(pusher)
+	path := created.PushURL[strings.Index(created.PushURL, "/api/v1/push/"):]
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, path+"?status=down&msg="+encodedMsg, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if len(pusher.calls) != 1 {
+		t.Fatalf("recorder got %d reports", len(pusher.calls))
+	}
+	return pusher.calls[0].Message
+}
+
+// TestPushMessageReplacesInvalidUTF8: a job under a Latin-1 locale sends
+// bytes that are not UTF-8. They are stored as U+FFFD, not as raw bytes the
+// TEXT column holds and the JSON encoder later rewrites anyway.
+func TestPushMessageReplacesInvalidUTF8(t *testing.T) {
+	// "/home/m\xfcller: disk full" as a Latin-1 shell would send it.
+	msg := pushDownWithMessage(t, "%2Fhome%2Fm%FCller%3A+disk+full")
+	if !utf8.ValidString(msg) {
+		t.Fatalf("message %q is not valid UTF-8", msg)
+	}
+	if want := "/home/m\uFFFDller: disk full"; msg != want {
+		t.Errorf("message = %q, want %q", msg, want)
+	}
+}
+
+// TestPushMessageWithAnInvalidByteKeepsItsFirst500Bytes: one invalid byte near
+// the start of a long note must not cut the note back to the bytes before it.
+// The cut removes the tail only.
+func TestPushMessageWithAnInvalidByteKeepsItsFirst500Bytes(t *testing.T) {
+	msg := pushDownWithMessage(t, "ok%FFthen+"+strings.Repeat("x", 2*maxPushMessageLen))
+	if !utf8.ValidString(msg) {
+		t.Fatalf("message %q is not valid UTF-8", msg)
+	}
+	if !strings.HasPrefix(msg, "ok\uFFFDthen x") {
+		t.Errorf("message starts %.20q, want the note's own start with U+FFFD in place of the bad byte", msg)
+	}
+	// U+FFFD is three bytes and the rest is ASCII, so the cut lands exactly
+	// on the limit.
+	if len(msg) != maxPushMessageLen {
+		t.Errorf("message is %d bytes, want %d", len(msg), maxPushMessageLen)
+	}
+}
+
 // TestPatchCannotConvertToOrFromPush. Both directions break something the user
 // cannot see, so both are refused.
 func TestPatchCannotConvertToOrFromPush(t *testing.T) {
