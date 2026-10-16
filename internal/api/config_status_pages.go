@@ -108,7 +108,13 @@ func planPage(p *importPlan, ex existingConfig, path string, sp configfile.Statu
 		return problemAt(sub(path, "selection"), "is required when tag_key or tag_value is given")
 	}
 
+	// An existing page is checked as an edit, so a title or description
+	// saved before the control character rule survives an import of the
+	// instance's own export, as it survives an edit in the API.
 	normalised, err := store.NormaliseStatusPage(next)
+	if found {
+		normalised, err = store.NormaliseStatusPageEdit(next, existing)
+	}
 	if err != nil {
 		var invalid *store.StatusPageError
 		if errors.As(err, &invalid) {
@@ -118,7 +124,11 @@ func planPage(p *importPlan, ex existingConfig, path string, sp configfile.Statu
 	}
 	next = normalised
 
-	if err := checkPageMonitors(sub(path, "monitors"), sp.Monitors, monitorKnown); err != nil {
+	var stored map[string]string
+	if found {
+		stored = storedPageNames(ex, ex.entries[existing.ID])
+	}
+	if err := checkPageMonitors(sub(path, "monitors"), sp.Monitors, monitorKnown, stored); err != nil {
 		return err
 	}
 
@@ -154,9 +164,28 @@ func setIf[T any](dst *T, src *T) {
 	}
 }
 
+// storedPageNames maps the key of each monitor on a stored page to the public
+// name it has there.
+func storedPageNames(ex existingConfig, have []store.StatusPageEntry) map[string]string {
+	keys := make(map[int64]string, len(ex.monitors))
+	for key, m := range ex.monitors {
+		keys[m.ID] = key
+	}
+	out := make(map[string]string, len(have))
+	for _, e := range have {
+		if key, ok := keys[e.MonitorID]; ok {
+			out[key] = e.DisplayName
+		}
+	}
+	return out
+}
+
 // checkPageMonitors applies the entry rules of the status page API to a
-// file's list, naming the place in the file instead of a monitor id.
-func checkPageMonitors(path string, list []configfile.StatusPageMonitor, monitorKnown map[string]bool) error {
+// file's list, naming the place in the file instead of a monitor id. stored
+// maps a monitor key to the public name it has on the page now, so a name
+// saved before the control character rule is kept when the file sends it
+// back unchanged.
+func checkPageMonitors(path string, list []configfile.StatusPageMonitor, monitorKnown map[string]bool, stored map[string]string) error {
 	if len(list) > store.MaxStatusPageEntries {
 		return problemAt(path, "at most %d monitors per page", store.MaxStatusPageEntries)
 	}
@@ -170,7 +199,7 @@ func checkPageMonitors(path string, list []configfile.StatusPageMonitor, monitor
 			return problemAt(sub(at, "monitor"), "monitor %q is listed twice", m.Monitor)
 		}
 		seen[m.Monitor] = true
-		if _, msg := store.NormaliseStatusPageDisplayName(m.Name); msg != "" {
+		if _, msg := store.NormaliseStatusPageDisplayName(m.Name, stored[m.Monitor]); msg != "" {
 			return problemAt(sub(at, "name"), "%s", msg)
 		}
 	}
@@ -213,7 +242,7 @@ func samePageMonitors(ex existingConfig, have []store.StatusPageEntry, want []co
 	ids := ex.monitorIDs()
 	for i, m := range want {
 		id, ok := ids[m.Monitor]
-		name, _ := store.NormaliseStatusPageDisplayName(m.Name)
+		name, _ := store.NormaliseStatusPageDisplayName(m.Name, "")
 		if !ok || have[i].MonitorID != id || have[i].DisplayName != name {
 			return false
 		}

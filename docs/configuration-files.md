@@ -71,6 +71,10 @@ Import follows three rules.
 Monitor, channel and maintenance names must not contain line breaks, tabs or
 other control characters (Unicode category Cc). An existing monitor or channel
 may keep a name saved before this rule when the file sends it back unchanged.
+The same holds for a status page's title and the public names of its
+monitors; its description may hold line breaks and tabs, and no other control
+character. An existing page keeps a title, description or public name saved
+before the rule when the file sends it back unchanged.
 A maintenance window with such a name is kept only when the entire window is
 unchanged; another window must use a name that meets the rule.
 
@@ -414,7 +418,8 @@ skipped with a note, including pages with invalid or reserved slugs (`api`,
 `assets`, `fonts` and `logos`). Slugs allow 1–63 lowercase letters, digits or
 dashes and must start with a letter or digit. Titles allow 1–120 characters
 and descriptions at most 500. Public monitor names must be 1–80 characters,
-without line breaks or tabs, and a page may contain at most 200 monitors.
+without line breaks, tabs or other control characters, and a page may contain
+at most 200 monitors.
 Entries that cannot meet these limits are skipped and listed, rather than
 silently renamed or truncated.
 

@@ -47,7 +47,10 @@ func TestStatusPageValidation(t *testing.T) {
 		"empty title":         func(p *StatusPage) { p.Title = "  " },
 		"long title":          func(p *StatusPage) { p.Title = strings.Repeat("t", 121) },
 		"title line break":    func(p *StatusPage) { p.Title = "a\nb" },
+		"title escape":        func(p *StatusPage) { p.Title = "a\x1bb" },
+		"title C1 control":    func(p *StatusPage) { p.Title = "a\u0085b" },
 		"long description":    func(p *StatusPage) { p.Description = strings.Repeat("d", 501) },
+		"description NUL":     func(p *StatusPage) { p.Description = "a\x00b" },
 		"unknown zone":        func(p *StatusPage) { p.Timezone = "Mars/Olympus" },
 		"local zone":          func(p *StatusPage) { p.Timezone = "Local" },
 		"unknown selection":   func(p *StatusPage) { p.Selection = "all" },
@@ -245,6 +248,7 @@ func TestSetStatusPageEntriesRefusesBadInputAndChangesNothing(t *testing.T) {
 		{"unknown after valid", p.ID, []StatusPageEntryInput{{MonitorID: a.ID, DisplayName: "New"}, {MonitorID: 999, DisplayName: "X"}}, ErrUnknownMonitor},
 		{"empty name", p.ID, []StatusPageEntryInput{{MonitorID: a.ID, DisplayName: "  "}}, ErrInvalidStatusPage},
 		{"long name", p.ID, []StatusPageEntryInput{{MonitorID: a.ID, DisplayName: strings.Repeat("n", 81)}}, ErrInvalidStatusPage},
+		{"name with escape", p.ID, []StatusPageEntryInput{{MonitorID: a.ID, DisplayName: "A\x1bB"}}, ErrInvalidStatusPage},
 		{"listed twice", p.ID, []StatusPageEntryInput{{MonitorID: a.ID, DisplayName: "A"}, {MonitorID: a.ID, DisplayName: "B"}}, ErrInvalidStatusPage},
 	}
 	for _, c := range cases {

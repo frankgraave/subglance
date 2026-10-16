@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -146,6 +147,20 @@ func invalidStatusPage(field, format string, args ...any) error {
 	return &StatusPageError{Field: field, Msg: fmt.Sprintf(format, args...)}
 }
 
+// NoDescriptionControlCharacters ends the sentence that refuses a page
+// description holding a control character other than a line break or a tab.
+const NoDescriptionControlCharacters = "must not contain control characters other than line breaks and tabs"
+
+// hasDescriptionControl reports whether s holds a control character a
+// description cannot keep. The description is a paragraph typed in a text
+// area, so line feed, carriage return and tab are text in it; NUL, escape
+// and the rest are not, and a visitor sees them as a box or as nothing.
+func hasDescriptionControl(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t'
+	})
+}
+
 // NormaliseStatusPage trims and checks a page before it is stored, filling in
 // UTC for an empty time zone. Every failure wraps ErrInvalidStatusPage.
 //
@@ -154,6 +169,19 @@ func invalidStatusPage(field, format string, args ...any) error {
 // storing the lowercase form keeps the URL the operator sees and the one the
 // server answers identical.
 func NormaliseStatusPage(p StatusPage) (StatusPage, error) {
+	return normaliseStatusPage(p, nil)
+}
+
+// NormaliseStatusPageEdit is NormaliseStatusPage for a change to stored, the
+// page as it is saved now. A title or a description equal to the stored one
+// is not refused for a control character: a page saved before that rule
+// keeps its words through every other edit and through an import of its own
+// export, as a monitor keeps its name.
+func NormaliseStatusPageEdit(p, stored StatusPage) (StatusPage, error) {
+	return normaliseStatusPage(p, &stored)
+}
+
+func normaliseStatusPage(p StatusPage, stored *StatusPage) (StatusPage, error) {
 	p.Slug = strings.ToLower(strings.TrimSpace(p.Slug))
 	if !statusPageSlug.MatchString(p.Slug) {
 		return p, invalidStatusPage("slug", "slug must be 1-63 lowercase letters, digits or dashes, starting with a letter or digit")
@@ -166,13 +194,18 @@ func NormaliseStatusPage(p StatusPage) (StatusPage, error) {
 	if n := utf8.RuneCountInString(p.Title); n == 0 || n > maxStatusPageTitle {
 		return p, invalidStatusPage("title", "title must be 1-%d characters", maxStatusPageTitle)
 	}
-	if strings.ContainsAny(p.Title, "\n\r\t") {
-		return p, invalidStatusPage("title", "title must not contain line breaks or tabs")
+	// The title is the heading of a public page and its browser tab: one
+	// line, and nothing in it a visitor cannot see.
+	if HasControlCharacter(p.Title) && (stored == nil || p.Title != stored.Title) {
+		return p, invalidStatusPage("title", "title %s", NoControlCharacters)
 	}
 
 	p.Description = strings.TrimSpace(p.Description)
 	if utf8.RuneCountInString(p.Description) > maxStatusPageDescription {
 		return p, invalidStatusPage("description", "description must be at most %d characters", maxStatusPageDescription)
+	}
+	if hasDescriptionControl(p.Description) && (stored == nil || p.Description != stored.Description) {
+		return p, invalidStatusPage("description", "description %s", NoDescriptionControlCharacters)
 	}
 
 	p.Timezone = strings.TrimSpace(p.Timezone)
@@ -360,7 +393,11 @@ func (db *DB) CreateStatusPage(ctx context.Context, p StatusPage) (StatusPage, e
 // UpdateStatusPage replaces a page's settings and leaves its entries alone.
 // It reports ErrNotFound, ErrInvalidStatusPage or ErrStatusPageSlugTaken.
 func (db *DB) UpdateStatusPage(ctx context.Context, p StatusPage) (StatusPage, error) {
-	p, err := NormaliseStatusPage(p)
+	stored, err := db.GetStatusPage(ctx, p.ID)
+	if err != nil {
+		return StatusPage{}, err
+	}
+	p, err = NormaliseStatusPageEdit(p, stored)
 	if err != nil {
 		return StatusPage{}, err
 	}
@@ -429,13 +466,20 @@ func (db *DB) ListStatusPageEntries(ctx context.Context, pageID int64) ([]Status
 // page. It returns the reason the name is refused, worded to follow "display
 // name ... ", or "" when the name is fine. Exported so a configuration file is
 // held to the same rule before anything is written.
-func NormaliseStatusPageDisplayName(name string) (string, string) {
+//
+// stored is the name the monitor has on the page now, "" when it is not on
+// it. A name equal to it is not refused for a control character, so an
+// entry saved before that rule survives a reorder, an edit of another entry
+// and an import of the instance's own export.
+func NormaliseStatusPageDisplayName(name, stored string) (string, string) {
 	name = strings.TrimSpace(name)
 	if n := utf8.RuneCountInString(name); n == 0 || n > maxStatusPageDisplayName {
 		return name, fmt.Sprintf("must be 1-%d characters", maxStatusPageDisplayName)
 	}
-	if strings.ContainsAny(name, "\n\r\t") {
-		return name, "must not contain line breaks or tabs"
+	// The only name a visitor sees for a service: one line, and nothing
+	// in it that shows as a box or as nothing at all.
+	if HasControlCharacter(name) && name != stored {
+		return name, NoControlCharacters
 	}
 	return name, ""
 }
@@ -453,18 +497,6 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 	if len(entries) > MaxStatusPageEntries {
 		return nil, invalidStatusPage("entries", "at most %d monitors per page", MaxStatusPageEntries)
 	}
-	seen := make(map[int64]bool, len(entries))
-	for i := range entries {
-		name, msg := NormaliseStatusPageDisplayName(entries[i].DisplayName)
-		if msg != "" {
-			return nil, invalidStatusPage("entries", "display name of monitor %d %s", entries[i].MonitorID, msg)
-		}
-		if seen[entries[i].MonitorID] {
-			return nil, invalidStatusPage("entries", "monitor %d is listed twice", entries[i].MonitorID)
-		}
-		seen[entries[i].MonitorID] = true
-		entries[i].DisplayName = name
-	}
 
 	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -481,18 +513,33 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 		return nil, fmt.Errorf("look up status page %d: %w", pageID, err)
 	}
 
-	if err := checkMonitorsExist(ctx, tx, entries); err != nil {
+	// The names are checked inside the transaction, against the entries
+	// as they are stored now, so a name kept from before the control
+	// character rule is the one this page really holds.
+	current, err := existingEntries(ctx, tx, pageID)
+	if err != nil {
 		return nil, err
 	}
-	keys, err := existingEntryKeys(ctx, tx, pageID)
-	if err != nil {
+	seen := make(map[int64]bool, len(entries))
+	for i := range entries {
+		name, msg := NormaliseStatusPageDisplayName(entries[i].DisplayName, current[entries[i].MonitorID].DisplayName)
+		if msg != "" {
+			return nil, invalidStatusPage("entries", "display name of monitor %d %s", entries[i].MonitorID, msg)
+		}
+		if seen[entries[i].MonitorID] {
+			return nil, invalidStatusPage("entries", "monitor %d is listed twice", entries[i].MonitorID)
+		}
+		seen[entries[i].MonitorID] = true
+		entries[i].DisplayName = name
+	}
+	if err := checkMonitorsExist(ctx, tx, entries); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM status_page_entries WHERE page_id = ?", pageID); err != nil {
 		return nil, fmt.Errorf("clear status page entries: %w", err)
 	}
 	for pos, e := range entries {
-		key, kept := keys[e.MonitorID]
+		key, kept := current[e.MonitorID].PublicKey, current[e.MonitorID].PublicKey != ""
 		if !kept {
 			if key, err = newStatusPageKey(); err != nil {
 				return nil, err
@@ -555,25 +602,23 @@ func checkMonitorsExist(ctx context.Context, tx *sql.Tx, entries []StatusPageEnt
 	return nil
 }
 
-func existingEntryKeys(ctx context.Context, tx *sql.Tx, pageID int64) (map[int64]string, error) {
+// existingEntries returns a page's entries as stored, by monitor id.
+func existingEntries(ctx context.Context, tx *sql.Tx, pageID int64) (map[int64]StatusPageEntry, error) {
 	rows, err := tx.QueryContext(ctx,
-		"SELECT monitor_id, public_key FROM status_page_entries WHERE page_id = ?", pageID)
+		"SELECT monitor_id, public_key, display_name FROM status_page_entries WHERE page_id = ?", pageID)
 	if err != nil {
-		return nil, fmt.Errorf("query status page keys: %w", err)
+		return nil, fmt.Errorf("query status page entries: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	keys := map[int64]string{}
+	out := map[int64]StatusPageEntry{}
 	for rows.Next() {
-		var (
-			id  int64
-			key string
-		)
-		if err := rows.Scan(&id, &key); err != nil {
-			return nil, fmt.Errorf("scan status page key: %w", err)
+		var e StatusPageEntry
+		if err := rows.Scan(&e.MonitorID, &e.PublicKey, &e.DisplayName); err != nil {
+			return nil, fmt.Errorf("scan status page entry: %w", err)
 		}
-		keys[id] = key
+		out[e.MonitorID] = e
 	}
-	return keys, rows.Err()
+	return out, rows.Err()
 }
 
 // newStatusPageKey returns 16 hex characters from crypto/rand. Sixty-four

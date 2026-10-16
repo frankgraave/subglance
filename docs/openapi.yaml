@@ -4875,7 +4875,8 @@ paths:
         '400':
           description: |
             Malformed or unknown-field JSON, a missing `entries` list, a
-            missing or too long display name, a monitor listed twice, more
+            missing or too long display name or one holding a control
+            character, a monitor listed twice, more
             than 200 entries, or an unknown monitor id ("monitor 42 does not
             exist; it may have been deleted"). Carries `field: entries` for
             all but malformed or unknown-field JSON.
@@ -6107,13 +6108,19 @@ components:
           example: status
         title:
           type: string
-          description: Shown to visitors. No line breaks or tabs.
+          description: |
+            Shown to visitors. No line breaks, tabs or other control
+            characters (Unicode category Cc); a title saved before that rule
+            is accepted back unchanged.
           minLength: 1
           maxLength: 120
           example: Acme services
         description:
           type: string
-          description: Optional plain text shown under the title.
+          description: |
+            Optional plain text shown under the title. Line breaks and tabs
+            are kept; any other control character is refused, except in a
+            description saved before that rule and sent back unchanged.
           maxLength: 500
         timezone:
           type: string
@@ -6439,7 +6446,10 @@ components:
                 type: string
                 minLength: 1
                 maxLength: 80
-                description: Trimmed; no line breaks or tabs.
+                description: |
+                  Trimmed; no line breaks, tabs or other control characters.
+                  A name the monitor already has on this page is accepted
+                  back unchanged.
     RoutingRule:
       type: object
       required: [id, tag_key, tag_value, channel_ids, excluded_monitor_ids, created_at]
