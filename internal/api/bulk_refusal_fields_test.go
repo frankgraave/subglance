@@ -36,7 +36,7 @@ func TestBulkTagRefusalsNameTheirField(t *testing.T) {
 		"long value":      {`{"action":"remove","monitor_ids":[` + id + `],"key":"env","value":"` + strings.Repeat("v", 65) + `"}`, "value", "longer than 64 characters"},
 		"bad new key":     {`{"action":"rename_key","key":"env","new_key":"bad key"}`, "new_key", "must be lowercase letters"},
 		"same new key":    {`{"action":"rename_key","key":" Env ","new_key":"env"}`, "new_key", "new_key must differ from key"},
-		"bad new value":   {`{"action":"rename_value","key":"env","value":"prod","new_value":"a\tb"}`, "new_value", "must not contain line breaks or tabs"},
+		"bad new value":   {`{"action":"rename_value","key":"env","value":"prod","new_value":"a\tb"}`, "new_value", "must not contain line breaks, tabs or other control characters"},
 		"same new value":  {`{"action":"rename_value","key":"env","value":"prod","new_value":"prod"}`, "new_value", "new_value must differ from value"},
 		"empty new value": {`{"action":"rename_value","key":"env","value":"prod","new_value":""}`, "new_value", "must have a value"},
 	} {

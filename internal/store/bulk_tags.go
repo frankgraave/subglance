@@ -110,14 +110,25 @@ func (op TagOperation) normalised() (TagOperation, error) {
 	// The key is checked on its own first, with a stand-in value, as routing
 	// rules check theirs: one tag rule refuses both halves of the pair, so
 	// without this step an empty value would be blamed on the key.
-	if _, err := NormaliseTags(map[string]string{op.Key: "-"}); err != nil {
+	keyOnly, err := NormaliseTags(map[string]string{op.Key: "-"})
+	if err != nil {
 		return bad("key", err.Error())
 	}
 	value := op.Value
 	if op.Action == "rename_key" {
 		value = "key"
 	}
-	tags, err := NormaliseTags(map[string]string{op.Key: value})
+	// Removing a value and renaming it only select the monitors that carry
+	// it; nothing writes it. A value saved before tag values were held to
+	// one line can therefore still be named, which is how it is renamed
+	// away. Only apply writes op.Value.
+	var selects map[string]string
+	if op.Action == "remove" || op.Action == "rename_value" {
+		for key := range keyOnly {
+			selects = map[string]string{key: strings.TrimSpace(value)}
+		}
+	}
+	tags, err := NormaliseTagsEdit(map[string]string{op.Key: value}, selects)
 	if err != nil {
 		return bad("value", err.Error())
 	}
@@ -267,7 +278,15 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 		if maps.Equal(next, row.Tags) {
 			continue
 		}
-		if _, err := NormaliseTags(next); err != nil {
+		// Only a value this operation writes is held to the rules a new
+		// tag is: a value the monitor already carries, under its own key
+		// or moved to a new one, is kept as it is.
+		kept := row.Tags
+		if _, exists := row.Tags[op.NewKey]; op.Action == "rename_key" && !exists {
+			kept = maps.Clone(row.Tags)
+			kept[op.NewKey] = row.Tags[op.Key]
+		}
+		if _, err := NormaliseTagsEdit(next, kept); err != nil {
 			// About the result, not one input: no field to blame.
 			return empty, "", &TagOperationError{Msg: fmt.Sprintf("monitor %d: %v", row.ID, err)}
 		}

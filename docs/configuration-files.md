@@ -78,6 +78,13 @@ before the rule when the file sends it back unchanged.
 A maintenance window with such a name is kept only when the entire window is
 unchanged; another window must use a name that meets the rule.
 
+Tag values follow the same rule: no line breaks, tabs or other control
+characters, in a monitor's `tags` and in the `tag_value` of a routing rule, a
+maintenance window or a status page. A value saved before this rule is kept
+when the file sends it back unchanged on the object that already has it: a
+monitor's tag under the same key, a rule or a page with the same pair, a
+window that is unchanged as a whole.
+
 A field the file leaves out keeps its current value on an existing object, and
 gets the same default the API gives a new one. A hand-written file can
 therefore rename one monitor without restating everything else about it:
@@ -442,7 +449,8 @@ separately; a status-page link does not become monitor coverage.
 
 A monitor, channel or maintenance name containing control characters is put on
 one line, replacing runs of controls and whitespace with a space. The report
-notes the change. If nothing remains, the converter supplies a fallback name,
+notes the change. A tag value, and a group name that becomes the `group` tag,
+is put on one line the same way, with its own note. If nothing remains, the converter supplies a fallback name,
 so the converted file still imports. Names without controls are not flattened.
 
 - An interval below 20 seconds becomes 20, and values outside SubGlance's other

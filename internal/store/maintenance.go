@@ -62,8 +62,13 @@ func NormaliseMaintenance(w MaintenanceWindow) (MaintenanceWindow, error) {
 	w.Timezone = strings.TrimSpace(w.Timezone)
 	w.TagKey = strings.TrimSpace(w.TagKey)
 	w.TagValue = strings.TrimSpace(w.TagValue)
+	// The text rules a new window is held to and a stored one is not: see
+	// Validate.
+	if HasControlCharacter(w.Name) {
+		return w, invalidMaintenance("name", "name %s", NoControlCharacters)
+	}
 	if w.TagKey != "" {
-		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue)
+		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue, false)
 		if err != nil {
 			return w, err
 		}
@@ -74,12 +79,17 @@ func NormaliseMaintenance(w MaintenanceWindow) (MaintenanceWindow, error) {
 
 // normaliseMaintenanceTag applies the monitor tag rules to a window's pair.
 // The key is checked on its own first, with a stand-in value, so a refusal
-// names the input that is actually wrong.
-func normaliseMaintenanceTag(key, value string) (string, string, error) {
+// names the input that is actually wrong. A stored pair is not refused for
+// a control character in its value (see Validate).
+func normaliseMaintenanceTag(key, value string, stored bool) (string, string, error) {
 	if _, _, err := NormaliseRoutingTag(key, "-"); err != nil {
 		return "", "", invalidMaintenance("tag_key", "%s", err.Error())
 	}
-	k, v, err := NormaliseRoutingTag(key, value)
+	var storedKey, storedValue string
+	if stored {
+		storedKey, storedValue = strings.ToLower(key), value
+	}
+	k, v, err := NormaliseRoutingTagEdit(key, value, storedKey, storedValue)
 	if err != nil {
 		return "", "", invalidMaintenance("tag_value", "%s", err.Error())
 	}
@@ -90,12 +100,15 @@ func normaliseMaintenanceTag(key, value string) (string, string, error) {
 // NormaliseMaintenance does that before a window is saved, and a stored
 // window that is not in normal form is refused rather than quietly read as
 // some other tag. Every refusal is a *MaintenanceError.
+//
+// A control character in the name or the tag value is not refused here.
+// NormaliseMaintenance refuses one in a new window, but a window saved before
+// that rule still holds it, and the incident list validates every stored
+// window before it answers: refusing the old text here made one such window
+// fail the whole list.
 func (w MaintenanceWindow) Validate() error {
 	if strings.TrimSpace(w.Name) == "" || utf8.RuneCountInString(w.Name) > maxMaintenanceName {
 		return invalidMaintenance("name", "name must contain 1–%d characters", maxMaintenanceName)
-	}
-	if HasControlCharacter(w.Name) {
-		return invalidMaintenance("name", "name %s", NoControlCharacters)
 	}
 	if w.MonitorID < 0 {
 		return invalidMaintenance("monitor_id", "monitor_id must be a positive id")
@@ -107,7 +120,7 @@ func (w MaintenanceWindow) Validate() error {
 		return invalidMaintenance("", "choose exactly one monitor or tag pair")
 	}
 	if w.TagKey != "" {
-		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue)
+		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue, true)
 		if err != nil {
 			return err
 		}

@@ -47,7 +47,22 @@ var tagKeyPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$`)
 // It returns a new map and never mutates its argument, because the API layer
 // hands it a map decoded straight from the request body and also reports that
 // body back in error messages.
+//
+// A value is one line of visible text: it is a chip in the inventory, a group
+// heading on the dashboard, and the exact string a routing rule, a
+// maintenance window or a tag-selected status page matches. NUL, escape and
+// the rest of Unicode category Cc show as nothing, so `prod` and `pr<NUL>od`
+// would read the same and a rule written for one would match nothing.
 func NormaliseTags(in map[string]string) (map[string]string, error) {
+	return NormaliseTagsEdit(in, nil)
+}
+
+// NormaliseTagsEdit is NormaliseTags for a change to stored, the tags as they
+// are saved now. A value equal to the one stored under the same key is not
+// refused for a control character: tags saved before that rule are kept
+// through every other edit and through an import of the instance's own
+// export, as a monitor keeps its name. Every other rule still applies.
+func NormaliseTagsEdit(in, stored map[string]string) (map[string]string, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -86,8 +101,8 @@ func NormaliseTags(in map[string]string) (map[string]string, error) {
 		if utf8.RuneCountInString(value) > maxTagValueLen {
 			return nil, fmt.Errorf("value of tag %q is longer than %d characters", key, maxTagValueLen)
 		}
-		if strings.ContainsAny(value, "\n\r\t") {
-			return nil, fmt.Errorf("value of tag %q must not contain line breaks or tabs", key)
+		if HasControlCharacter(value) && stored[key] != value {
+			return nil, fmt.Errorf("value of tag %q %s", key, NoControlCharacters)
 		}
 		out[key] = value
 	}

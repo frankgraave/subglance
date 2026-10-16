@@ -1,6 +1,7 @@
 package kumaimport
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -178,6 +179,27 @@ func TestTags(t *testing.T) {
 	}
 	if !strings.Contains(notesOf(res), "at most 20 tags") {
 		t.Errorf("the dropped tags are not reported: %s", notesOf(res))
+	}
+}
+
+// SubGlance refuses a control character in a tag value and Kuma does not:
+// each run of controls and spaces becomes one space, and the report says so.
+func TestTagValueControlCharactersBecomeSpaces(t *testing.T) {
+	var res Result
+	got := convertTags("Site", []kumaTag{{"env", "pr\x00od"}, {"region", "eu\x1b \u0085west"}, {"tier", "gold"}},
+		"Edge\nservers", &res)
+	want := map[string]string{"group": "Edge servers", "env": "pr od", "region": "eu west", "tier": "gold"}
+	if !maps.Equal(got, want) {
+		t.Errorf("tags = %q, want %q", got, want)
+	}
+	notes := notesOf(res)
+	for _, key := range []string{"group", "env", "region"} {
+		if !strings.Contains(notes, "control characters in the value of tag "+key+" were replaced with spaces") {
+			t.Errorf("notes %q do not report tag %s", notes, key)
+		}
+	}
+	if strings.Contains(notes, "tag tier") {
+		t.Errorf("notes %q report a tag that had no control character", notes)
 	}
 }
 
