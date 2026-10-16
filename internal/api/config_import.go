@@ -699,7 +699,11 @@ func monitorChanges(before, after store.Monitor) []string {
 }
 
 func planRule(p *importPlan, ex existingConfig, path string, r configfile.RoutingRule) error {
-	key, value, pr := routingTagProblem(r.TagKey, r.TagValue)
+	// A rule already on the instance is checked as an edit, so a tag value
+	// saved before tag values were held to one line survives an import of
+	// the instance's own export.
+	stored := ex.rules[strings.ToLower(strings.TrimSpace(r.TagKey))+"="+strings.TrimSpace(r.TagValue)]
+	key, value, pr := routingTagProblem(r.TagKey, r.TagValue, stored.TagKey, stored.TagValue)
 	if !pr.ok() {
 		return problemAt(sub(path, pr.field), "%s", pr.msg)
 	}
@@ -777,6 +781,15 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 	if savedName {
 		check.Name = "-"
 	}
+	// The same for a tag value saved before tag values were held to one
+	// line: a stand-in passes the check, and the window is kept only when
+	// it is already here.
+	tagKey, tagValue := strings.ToLower(strings.TrimSpace(w.TagKey)), strings.TrimSpace(w.TagValue)
+	savedTag := store.HasControlCharacter(tagValue) && slices.ContainsFunc(ex.windows,
+		func(cur store.MaintenanceWindow) bool { return cur.TagKey == tagKey && cur.TagValue == tagValue })
+	if savedTag {
+		check.TagValue = "-"
+	}
 	normal, err := store.NormaliseMaintenance(check)
 	if err != nil {
 		var invalid *store.MaintenanceError
@@ -798,6 +811,9 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 	if savedName {
 		win.Name = name
 	}
+	if savedTag {
+		win.TagValue = tagValue
+	}
 
 	item := importItem{Name: win.Name, Action: actionCreate}
 	if w.Monitor == "" || onInstance {
@@ -810,6 +826,9 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 	}
 	if savedName && item.Action == actionCreate {
 		return problemAt(sub(path, "name"), "name %s", store.NoControlCharacters)
+	}
+	if savedTag && item.Action == actionCreate {
+		return problemAt(sub(path, "tag_value"), "value of tag %q %s", tagKey, store.NoControlCharacters)
 	}
 	p.report.Maintenance = append(p.report.Maintenance, item)
 	if item.Action == actionCreate {

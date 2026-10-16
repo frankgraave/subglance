@@ -1794,7 +1794,10 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		m.ChannelIDs = append([]int64{}, (*req.ChannelIDs)...)
 	}
 	if req.Tags != nil {
-		tags, err := store.NormaliseTags(*req.Tags)
+		// Checked against the tags the monitor has, so a value saved
+		// before tag values were held to one line is kept when sent back,
+		// as an unchanged name is.
+		tags, err := store.NormaliseTagsEdit(*req.Tags, m.Tags)
 		if err != nil {
 			return fieldProblem("tags", err.Error())
 		}

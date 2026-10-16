@@ -110,7 +110,8 @@ func TestOpenAPITagKeyPatternMatchesValidation(t *testing.T) {
 	}
 
 	valuePattern := mustCompile(t, schema.AdditionalProperties.Pattern)
-	for _, value := range []string{"prod", "Acme", "https://example.com:8443", "two\nlines", "a\tb"} {
+	for _, value := range []string{"prod", "Acme", "https://example.com:8443", "two\nlines", "a\tb",
+		"pr\x00od", "pr\x1bod", "pr\x7fod", "pr\u0085od", "pr\u009fod", "team\u200dops", "\u00a0prod"} {
 		_, err := store.NormaliseTags(map[string]string{"env": value})
 		if got, want := valuePattern.MatchString(strings.TrimSpace(value)), err == nil; got != want {
 			t.Errorf("value %q: schema pattern accepts=%v, NormaliseTags accepts=%v", value, got, want)

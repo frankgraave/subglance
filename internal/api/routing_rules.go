@@ -60,13 +60,14 @@ func (s *Server) handleListRoutingRules(w http.ResponseWriter, r *http.Request) 
 }
 
 // decodeRoutingRule reads and normalises a rule body. It writes the 400
-// itself and reports false when the body is unusable.
-func decodeRoutingRule(w http.ResponseWriter, r *http.Request) (store.RoutingRule, bool) {
+// itself and reports false when the body is unusable. stored is the rule as
+// it is saved now, or the zero rule for a new one.
+func decodeRoutingRule(w http.ResponseWriter, r *http.Request, stored store.RoutingRule) (store.RoutingRule, bool) {
 	var req routingRuleRequest
 	if !readJSON(w, r, &req) {
 		return store.RoutingRule{}, false
 	}
-	key, value, pr := routingTagProblem(req.TagKey, req.TagValue)
+	key, value, pr := routingTagProblem(req.TagKey, req.TagValue, stored.TagKey, stored.TagValue)
 	if !pr.ok() {
 		writeProblem(w, http.StatusBadRequest, pr)
 		return store.RoutingRule{}, false
@@ -79,11 +80,15 @@ func decodeRoutingRule(w http.ResponseWriter, r *http.Request) (store.RoutingRul
 // stand-in value, as maintenance windows and status pages check theirs: one
 // tag rule refuses both halves, so without that step a missing value would be
 // blamed on the key. A configuration file's rules are held to the same check.
-func routingTagProblem(key, value string) (string, string, problem) {
+//
+// storedKey=storedValue is the pair the rule names now, empty for a new rule:
+// that pair sent back unchanged is not refused for a control character saved
+// before tag values were held to one line.
+func routingTagProblem(key, value, storedKey, storedValue string) (string, string, problem) {
 	if _, _, err := store.NormaliseRoutingTag(key, "-"); err != nil {
 		return "", "", fieldProblem("tag_key", err.Error())
 	}
-	k, v, err := store.NormaliseRoutingTag(key, value)
+	k, v, err := store.NormaliseRoutingTagEdit(key, value, storedKey, storedValue)
 	if err != nil {
 		return "", "", fieldProblem("tag_value", err.Error())
 	}
@@ -110,7 +115,7 @@ func (s *Server) writeRoutingRuleError(w http.ResponseWriter, err error, action 
 }
 
 func (s *Server) handleCreateRoutingRule(w http.ResponseWriter, r *http.Request) {
-	rule, ok := decodeRoutingRule(w, r)
+	rule, ok := decodeRoutingRule(w, r, store.RoutingRule{})
 	if !ok {
 		return
 	}
@@ -128,7 +133,13 @@ func (s *Server) handleUpdateRoutingRule(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	rule, ok := decodeRoutingRule(w, r)
+	// A rule that does not exist is left to the update, which answers 404.
+	stored, err := s.db.GetRoutingRule(r.Context(), id)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.writeRoutingRuleError(w, err, "update", id)
+		return
+	}
+	rule, ok := decodeRoutingRule(w, r, stored)
 	if !ok {
 		return
 	}

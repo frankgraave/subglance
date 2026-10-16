@@ -245,7 +245,14 @@ func normaliseStatusPage(p StatusPage, stored *StatusPage) (StatusPage, error) {
 		if _, _, err := NormaliseRoutingTag(p.TagKey, "-"); err != nil {
 			return p, invalidStatusPage("tag_key", "%s", err.Error())
 		}
-		key, value, err := NormaliseRoutingTag(p.TagKey, p.TagValue)
+		// A page saved before tag values were held to one line keeps
+		// its pair through an edit that sends it back, as it keeps its
+		// title.
+		var storedKey, storedValue string
+		if stored != nil && stored.Selection == StatusPageSelectTag {
+			storedKey, storedValue = stored.TagKey, stored.TagValue
+		}
+		key, value, err := NormaliseRoutingTagEdit(p.TagKey, p.TagValue, storedKey, storedValue)
 		if err != nil {
 			return p, invalidStatusPage("tag_value", "%s", err.Error())
 		}

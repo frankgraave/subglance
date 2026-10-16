@@ -41,7 +41,18 @@ type RoutingRule struct {
 // can only name a tag a monitor could actually carry. A key a monitor can
 // never have would make a rule that silently matches nothing.
 func NormaliseRoutingTag(key, value string) (string, string, error) {
-	norm, err := NormaliseTags(map[string]string{key: value})
+	return NormaliseRoutingTagEdit(key, value, "", "")
+}
+
+// NormaliseRoutingTagEdit is NormaliseRoutingTag for a change to an object
+// that names storedKey=storedValue now: that pair, sent back unchanged, is not
+// refused for a control character in its value (see NormaliseTagsEdit).
+func NormaliseRoutingTagEdit(key, value, storedKey, storedValue string) (string, string, error) {
+	var stored map[string]string
+	if storedKey != "" {
+		stored = map[string]string{storedKey: storedValue}
+	}
+	norm, err := NormaliseTagsEdit(map[string]string{key: value}, stored)
 	if err != nil {
 		return "", "", err
 	}

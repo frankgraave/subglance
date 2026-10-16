@@ -101,9 +101,15 @@ func oneLineName(name string) (string, bool) {
 	if !store.HasControlCharacter(name) {
 		return name, false
 	}
-	return strings.Join(strings.FieldsFunc(name, func(r rune) bool {
+	return collapseControls(name), true
+}
+
+// collapseControls replaces each run of spaces and control characters in s
+// with one space and trims both ends.
+func collapseControls(s string) string {
+	return strings.Join(strings.FieldsFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r)
-	}), " "), true
+	}), " ")
 }
 
 // nameOnOneLine is the note a name put on one line leaves in the report.
@@ -601,8 +607,11 @@ func convertTags(monitor string, tags []kumaTag, group string, res *Result) map[
 			note("tag " + strconv.Quote(name) + " has no letters or digits to make a key from and was left out")
 			return
 		}
-		if utf8.RuneCountInString(strings.Join(strings.Fields(value), " ")) > maxTagValueLen {
+		if utf8.RuneCountInString(collapseControls(value)) > maxTagValueLen {
 			note("tag " + key + " was shortened to " + strconv.Itoa(maxTagValueLen) + " characters")
+		}
+		if store.HasControlCharacter(value) {
+			note("line breaks, tabs and other control characters in the value of tag " + key + " were replaced with spaces")
 		}
 		value = tagValue(value)
 		if cur, dup := out[key]; dup {
@@ -627,12 +636,15 @@ func convertTags(monitor string, tags []kumaTag, group string, res *Result) map[
 }
 
 // tagValue makes a SubGlance tag value from a Kuma tag value or group name,
-// as the server stores it: spaces collapsed, at most maxTagValueLen
-// characters, and no space at either end, which the server would trim and a
-// maintenance window on the tag would then no longer match. A SubGlance tag
-// always has a value; a bare Kuma tag is a flag, and "yes" says that.
+// as the server stores it: spaces and control characters collapsed to one
+// space, at most maxTagValueLen characters, and no space at either end,
+// which the server would trim and a maintenance window on the tag would then
+// no longer match. The server refuses a control character in a tag value;
+// Kuma takes one, and left in, it would make the whole file fail its import.
+// A SubGlance tag always has a value; a bare Kuma tag is a flag, and "yes"
+// says that.
 func tagValue(s string) string {
-	v := strings.Join(strings.Fields(s), " ")
+	v := collapseControls(s)
 	if utf8.RuneCountInString(v) > maxTagValueLen {
 		v = strings.TrimSpace(string([]rune(v)[:maxTagValueLen]))
 	}

@@ -5299,7 +5299,7 @@ components:
       example: env
     TagValue:
       type: string
-      description: After trimming, 1–64 Unicode characters. No line breaks or tabs; colons and commas are preserved.
+      description: After trimming, 1–64 Unicode characters. No line breaks, tabs or other control characters (Unicode category Cc); colons and commas are preserved.
       example: prod
     TagOperationResult:
       type: object
@@ -6058,8 +6058,11 @@ components:
         After normalisation a key must be 1-32 characters of lowercase
         letters, digits, dash, underscore or dot, starting and ending with a
         letter or digit. A value must be 1-64 characters and must not contain
-        line breaks or tabs; a blank value is rejected, because a bare tag is
-        not a tag. At most 20 tags per monitor, one value per key. Anything
+        line breaks, tabs or other control characters (Unicode category Cc,
+        which includes NUL and escape); a blank value is rejected, because a
+        bare tag is not a tag. A value the monitor already has, saved before
+        control characters were refused, is kept when it is sent back
+        unchanged. At most 20 tags per monitor, one value per key. Anything
         else is a 400.
       propertyNames:
         type: string
@@ -6070,7 +6073,7 @@ components:
         type: string
         minLength: 1
         maxLength: 64
-        pattern: '^[^\n\r\t]+$'
+        pattern: '^[^\x00-\x1F\x7F-\x9F]+$'
       maxProperties: 20
       example:
         env: prod

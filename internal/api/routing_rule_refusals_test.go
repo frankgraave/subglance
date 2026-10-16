@@ -31,7 +31,7 @@ func TestRoutingRuleRefusalsNameTheirField(t *testing.T) {
 		// value's fault even though one tag rule refuses the pair.
 		"missing value": {`{"tag_key":"env"}`, "tag_value", "must have a value"},
 		"value with tab": {`{"tag_key":"env","tag_value":"a\tb"}`, "tag_value",
-			"must not contain line breaks or tabs"},
+			"must not contain line breaks, tabs or other control characters"},
 	}
 	for name, tc := range cases {
 		for _, method := range []string{http.MethodPost, http.MethodPut} {
