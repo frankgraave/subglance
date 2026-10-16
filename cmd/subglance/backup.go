@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -18,6 +19,12 @@ import (
 // backup fails inside a cron window instead of running until the next one
 // starts.
 const backupTimeout = 10 * time.Minute
+
+const (
+	backupUsage = "usage: subglance backup <path> [--data-dir DIR]"
+	backupAbout = "Writes a consistent snapshot of the database to <path>, which must not exist yet. " +
+		"Safe while the server runs."
+)
 
 // runBackup writes a consistent snapshot of the database to a file.
 //
@@ -41,8 +48,12 @@ func runBackup(args []string, out io.Writer) error {
 	// non-flag: leaving the path in the list would make
 	// `backup /tmp/x.db --data-dir /data` silently ignore the flag and
 	// snapshot the default directory instead.
+	if asksForHelp(args) {
+		printUsage(out, backupUsage, backupAbout, nil)
+		return flag.ErrHelp
+	}
 	if len(args) == 0 || args[0] == "" || strings.HasPrefix(args[0], "-") {
-		return errors.New("backup needs a destination path\n\nusage: subglance backup <path> [--data-dir DIR]")
+		return errors.New("backup needs a destination path\n\n" + backupUsage)
 	}
 	dest := args[0]
 

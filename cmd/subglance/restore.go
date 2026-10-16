@@ -20,6 +20,11 @@ import (
 // download is the whole database over whatever uplink the host has.
 const restoreTimeout = 30 * time.Minute
 
+const (
+	restoreUsage = "usage: subglance restore [--from NAME] [--force] [--data-dir DIR]"
+	restoreAbout = "Downloads a backup from the configured backup target and puts it in place of the database. Stop the server first."
+)
+
 // runRestore downloads a backup from the configured S3 target and puts it in
 // place of the database.
 //
@@ -44,6 +49,14 @@ func runRestore(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("subglance restore", flag.ContinueOnError)
 	from := fs.String("from", "", "object name of the backup to restore (default: the newest)")
 	force := fs.Bool("force", false, "restore even though something answers on --addr (never while a server holds the data directory)")
+	fs.SetOutput(out)
+	fs.Usage = func() {
+		printUsage(fs.Output(), restoreUsage, restoreAbout, fs)
+	}
+	if asksForHelp(args) {
+		fs.Usage()
+		return flag.ErrHelp
+	}
 	// Only the restore's own flags are parsed here; everything else is
 	// server configuration and goes to config.Load unchanged.
 	own, rest := splitRestoreFlags(args)

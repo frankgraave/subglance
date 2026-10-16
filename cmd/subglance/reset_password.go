@@ -39,6 +39,11 @@ func runResetPassword(args []string, out io.Writer) error {
 	return resetPassword(args, out, terminalSecrets{in: os.Stdin, prompt: os.Stderr})
 }
 
+const (
+	accountResetUsage = "usage: subglance reset-password --email ADDRESS [--generate] [--force] [--data-dir DIR]"
+	accountResetAbout = "Sets a new password for an account and signs it out everywhere. Stop the server first."
+)
+
 // resetPassword is runResetPassword with the password source passed in.
 //
 // The trust boundary is the data directory. Whoever can read and write it
@@ -63,8 +68,7 @@ func resetPassword(args []string, out io.Writer, secrets secretSource) error {
 	generate := fs.Bool("generate", false, "make up a password and show it once, instead of asking for one")
 	force := fs.Bool("force", false, "reset even though something answers on --addr (never while a server holds the data directory)")
 	fs.Usage = func() {
-		_, _ = fmt.Fprintln(fs.Output(), "usage: subglance reset-password --email ADDRESS [--generate] [--force] [--data-dir DIR]")
-		fs.PrintDefaults()
+		printUsage(fs.Output(), accountResetUsage, accountResetAbout, fs)
 	}
 	own, rest := splitResetPasswordFlags(args)
 	if err := fs.Parse(own); err != nil {
