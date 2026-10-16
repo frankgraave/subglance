@@ -5204,14 +5204,15 @@ components:
     InvalidId:
       description: |
         The path id was not a positive integer. The message names the
-        resource the path addresses: `invalid channel id` on a channel's
-        path, `invalid monitor id` on a monitor's.
+        resource the path addresses: `invalid monitor id` on a monitor's
+        path, `invalid channel id` on a channel's, `invalid token id` on a
+        token's. No example is given here because this response is shared
+        by all three, and any single message would be wrong for the other
+        two.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            error: invalid channel id
   schemas:
     TagOperationRequest:
       description: |
