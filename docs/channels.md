@@ -38,6 +38,17 @@ Either mistake parses as a URL and then fails every delivery before it leaves
 the process, so it is refused on `config.url` when the channel is saved,
 edited or imported rather than discovered when an alert is lost.
 
+A webhook's `headers` are held to the rules an `http` monitor's request
+headers are: each line is `Name: value`, the name is an HTTP token (letters,
+digits and ``!#$%&'*+-.^_`|~``, no spaces), the value holds no control
+character other than a tab, and no header is set on two lines, since names
+ignore case and only one of them would be sent. A line that breaks a rule is
+refused on `config.headers` by its line number; the value is never quoted,
+because a header is where a credential goes. A channel saved before these
+rules keeps its header lines through an edit that leaves them as they are,
+such as a rename or switching it off, and through an import of its own
+export.
+
 An email channel's `host` is the relay's name or address alone, held to the
 rule a `tcp` monitor's host is: a name the resolver will look up, written in
 its `xn--` form when it is internationalised, or an IP address (IPv6 without

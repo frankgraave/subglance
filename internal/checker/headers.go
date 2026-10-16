@@ -43,10 +43,10 @@ func isTokenChar(b byte) bool {
 	return strings.IndexByte("!#$%&'*+-.^_`|~", b) >= 0
 }
 
-// validHeaderValue reports whether net/http will send a header value: no
+// ValidHeaderValue reports whether net/http will send a header value: no
 // control character other than a horizontal tab. Bytes above 0x7f pass, as
 // they do in net/http.
-func validHeaderValue(v string) bool {
+func ValidHeaderValue(v string) bool {
 	for i := 0; i < len(v); i++ {
 		if b := v[i]; (b < ' ' && b != '\t') || b == 0x7f {
 			return false
@@ -72,7 +72,7 @@ func RequestHeaderProblem(headers map[string]string) string {
 		if !ValidHeaderName(k) {
 			return fmt.Sprintf("header name %q is not valid: a name cannot be empty or contain spaces, colons or other separators", k)
 		}
-		if !validHeaderValue(headers[k]) {
+		if !ValidHeaderValue(headers[k]) {
 			return fmt.Sprintf("header %q has a line break or another control character in its value", k)
 		}
 		folded := strings.ToLower(k)
