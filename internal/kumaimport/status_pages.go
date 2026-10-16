@@ -89,7 +89,7 @@ func convertStatusPages(src source, keys map[int64]string, res *Result) {
 					continue
 				}
 				seen[key] = true
-				name, problem := store.NormaliseStatusPageDisplayName(names[key])
+				name, problem := store.NormaliseStatusPageDisplayName(names[key], "")
 				if problem != "" {
 					changed(fmt.Sprintf("monitor %q was left off this page: its public name %s", label, problem))
 					continue
