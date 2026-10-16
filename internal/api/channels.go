@@ -238,7 +238,7 @@ func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -313,7 +313,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 // be no way to remove a key. Sending the whole object each time keeps deletion
 // expressible.
 func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -432,7 +432,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -458,7 +458,7 @@ func (s *Server) handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
 // a monitor with no channels of its own alerts through it. Setting one moves
 // the flag, so there is never more than one.
 func (s *Server) handleSetDefaultChannel(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -482,7 +482,7 @@ func (s *Server) handleSetDefaultChannel(w http.ResponseWriter, r *http.Request)
 // a client acting on a stale screen cannot unset a default chosen after that
 // screen was drawn.
 func (s *Server) handleClearDefaultChannel(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "channel")
 	if !ok {
 		return
 	}
@@ -502,7 +502,7 @@ func (s *Server) handleClearDefaultChannel(w http.ResponseWriter, r *http.Reques
 
 // handleListMonitorChannels returns the channels a monitor alerts through.
 func (s *Server) handleListMonitorChannels(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -545,7 +545,7 @@ type setMonitorChannelsRequest struct {
 
 // handleSetMonitorChannels replaces a monitor's channel assignments.
 func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}

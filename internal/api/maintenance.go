@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -71,12 +70,11 @@ func writeMaintenanceProblem(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) handleDeleteMaintenance(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid maintenance id")
+	id, ok := pathID(w, r, "maintenance")
+	if !ok {
 		return
 	}
-	err = s.db.DeleteMaintenance(r.Context(), id)
+	err := s.db.DeleteMaintenance(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, 404, "maintenance window not found")
 		return

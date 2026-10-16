@@ -37,7 +37,7 @@ type uptimeWindow struct {
 }
 
 func (s *Server) handleMonitorUptime(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}

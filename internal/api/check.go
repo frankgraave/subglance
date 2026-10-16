@@ -91,7 +91,7 @@ type checkResponse struct {
 //     probe still runs and the result is still returned, because "is it back
 //     yet?" is exactly what someone asks before un-pausing.
 func (s *Server) handleCheckMonitor(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}

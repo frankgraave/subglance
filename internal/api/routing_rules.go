@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -125,7 +124,7 @@ func (s *Server) handleCreateRoutingRule(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleUpdateRoutingRule(w http.ResponseWriter, r *http.Request) {
-	id, ok := ruleID(w, r)
+	id, ok := pathID(w, r, "routing rule")
 	if !ok {
 		return
 	}
@@ -144,7 +143,7 @@ func (s *Server) handleUpdateRoutingRule(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteRoutingRule(w http.ResponseWriter, r *http.Request) {
-	id, ok := ruleID(w, r)
+	id, ok := pathID(w, r, "routing rule")
 	if !ok {
 		return
 	}
@@ -207,23 +206,13 @@ func missingRuleOrMonitor(err error) string {
 	return "the routing rule or the monitor does not exist"
 }
 
-func ruleID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid routing rule id")
-		return 0, false
-	}
-	return id, true
-}
-
 func ruleAndMonitorID(w http.ResponseWriter, r *http.Request) (int64, int64, bool) {
-	id, ok := ruleID(w, r)
+	id, ok := pathID(w, r, "routing rule")
 	if !ok {
 		return 0, 0, false
 	}
-	monitorID, err := strconv.ParseInt(r.PathValue("monitor_id"), 10, 64)
-	if err != nil || monitorID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid monitor id")
+	monitorID, ok := pathWildcardID(w, r, "monitor_id", "monitor")
+	if !ok {
 		return 0, 0, false
 	}
 	return id, monitorID, true

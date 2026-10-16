@@ -339,7 +339,7 @@ func parseResolvedCursor(v string) (resolvedPageCursor, error) {
 
 // handleListMonitorIncidents returns the incident history for one monitor.
 func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
+	id, ok := pathID(w, r, "monitor")
 	if !ok {
 		return
 	}
@@ -379,13 +379,12 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 // without claiming the problem is solved, which is the honest middle state
 // between alerting and resolving.
 func (s *Server) handleAckIncident(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid incident id")
+	id, ok := pathID(w, r, "incident")
+	if !ok {
 		return
 	}
 
-	err = s.db.AckIncident(r.Context(), id, time.Now())
+	err := s.db.AckIncident(r.Context(), id, time.Now())
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "incident not found")
 		return
