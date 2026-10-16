@@ -804,10 +804,20 @@ func (s *Server) Handler() http.Handler {
 	requireWrite := s.requireRole(store.Role.CanWrite, "your role does not allow changes")
 	requireAdmin := s.requireRole(store.Role.CanAdmin, "this action requires an administrator")
 
-	for _, rt := range s.routes() {
-		h := s.handlerFor(rt)
-		if h == nil {
+	routes := s.routes()
+	allow := newAllowIndex(routes)
+
+	for _, rt := range routes {
+		hf := s.handlerFor(rt)
+		if hf == nil {
 			panic("api: no handler for route " + rt.Method + " " + rt.Pattern)
+		}
+		var h http.Handler = hf
+		if rt.Method == anyMethod {
+			// The catch-all also receives a known path under a method
+			// the table does not serve; that is a 405, not an unknown
+			// path (method_not_allowed.go).
+			h = allow.refuseWrongMethod(h)
 		}
 
 		// net/http wants "METHOD /path", or a bare path for any method.

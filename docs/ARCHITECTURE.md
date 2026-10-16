@@ -260,7 +260,11 @@ to deploy next to it. The handler is mounted on the catch-all route `/`, so it
 also receives everything no API pattern matched, and the two cases get opposite
 answers: an unknown page path is client-side routing and gets `index.html`,
 while an unknown path under `/api` stays a JSON 404 — HTML arriving in a JSON
-client's decoder is a bug that surfaces far from its cause. Hashed assets are
+client's decoder is a bug that surfaces far from its cause. Because that
+catch-all takes every method, net/http's own 405 for a known path under the
+wrong verb never fires; the catch-all asks the route table instead, and a path
+the table serves under other methods gets a 405 with `Allow` (JSON under
+`/api`) rather than being called unknown. Hashed assets are
 cached immutably; `index.html` never is, because it names those hashes. The
 shell carries its own Content-Security-Policy, which allows the pre-paint theme
 script by SHA-256 hash rather than by `unsafe-inline`.
