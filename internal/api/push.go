@@ -242,22 +242,40 @@ func parsePushReport(r *http.Request) (monitor.PushReport, problem) {
 			"status must be up, down, or a shell exit code")
 	}
 
-	// Truncate at maxPushMessageLen bytes, backing off to a rune boundary.
-	// Cutting mid-sequence would store invalid UTF-8 in a STRICT TEXT column
-	// and render as a replacement character in the one place the text exists
-	// to be read. Bytes rather than runes because the limit exists to bound
-	// what one token can write to disk, and a byte is what disk is measured
-	// in.
-	msg := q.Get("msg")
-	if len(msg) > maxPushMessageLen {
-		msg = msg[:maxPushMessageLen]
-		for len(msg) > 0 && !utf8.ValidString(msg) {
-			msg = msg[:len(msg)-1]
-		}
-	}
-	rep.Message = msg
+	rep.Message = pushMessage(q.Get("msg"))
 
 	return rep, problem{}
+}
+
+// pushMessage makes a job's failure note safe to store: valid UTF-8 and at
+// most maxPushMessageLen bytes.
+//
+// The query string is whatever bytes the job sent, and a job under a Latin-1
+// locale, or one piping a tool's raw output into the URL, sends bytes that
+// are not UTF-8. Each run of invalid bytes becomes one U+FFFD rather than
+// being dropped: a dropped byte turns "/home/m\xfcller" into "/home/mller", a
+// different path that reads as real, where the replacement character says a
+// character stood there and could not be read.
+//
+// The replacement comes first and the cut second, so the cut only ever
+// removes the tail. Searching for a valid prefix of the raw text instead cuts
+// the note back to just before its first invalid byte, wherever that is.
+//
+// The cut is at maxPushMessageLen bytes, backing off to a rune boundary.
+// Cutting mid-sequence would store invalid UTF-8 in a STRICT TEXT column and
+// render as a replacement character in the one place the text exists to be
+// read. Bytes rather than runes because the limit exists to bound what one
+// token can write to disk, and a byte is what disk is measured in.
+func pushMessage(raw string) string {
+	msg := strings.ToValidUTF8(raw, string(utf8.RuneError))
+	if len(msg) <= maxPushMessageLen {
+		return msg
+	}
+	cut := maxPushMessageLen
+	for cut > 0 && !utf8.RuneStart(msg[cut]) {
+		cut--
+	}
+	return msg[:cut]
 }
 
 // validatePushWindow checks the push fields of a create request.
