@@ -790,6 +790,12 @@ good copy you had, most likely when a nightly job reuses a fixed filename and
 that run fails halfway. Give each run a new name — `$(date +%F)` above — and
 prune old ones yourself.
 
+It also refuses a data directory that holds no `subglance.db`, and names the
+path it looked for. A mistyped `--data-dir`, or a `SUBGLANCE_DATA_DIR` that is
+not set where the server has it, is the wrong directory rather than an empty
+instance: backing it up would create a database there and report a successful
+copy of nothing, every night, until the day the copy is needed.
+
 The subcommand exists because the shipped image is distroless: there is no
 shell and no `sqlite3` binary in it, so the only thing that can take a backup
 inside the container is the binary that is already there.
