@@ -98,9 +98,11 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// WithBaseURL records the address alerts link to, so the settings page can
-// show it. It does not change what the API serves or where: the server
-// answers on whatever address reaches it.
+// WithBaseURL records the address SubGlance is reached at (--base-url), in
+// the form notifier.ParseBaseURL returns. The settings page shows it, and a
+// new push monitor's URL is built on it (see pushURL). It does not change
+// what the API serves or where: the server answers on whatever address
+// reaches it.
 func (s *Server) WithBaseURL(baseURL string) *Server {
 	s.baseURL = baseURL
 	return s

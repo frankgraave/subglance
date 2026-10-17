@@ -349,14 +349,28 @@ func validatePushTimezone(typ string, interval int, zone string) problem {
 	return problem{}
 }
 
+// pushPath is where a push URL points under the address SubGlance is
+// reached at. The route table registers the same path with {token}.
+const pushPath = "/api/v1/push/"
+
 // pushURL builds the absolute URL a job should ping.
 //
-// The host comes from the request rather than from configuration, because the
-// only host that is certainly correct is the one the user just reached the API
-// on. A configured base URL would be one more thing to get wrong behind a
-// reverse proxy, and getting it wrong here produces a URL that silently never
-// reports — the exact failure a dead man's switch exists to catch.
-func pushURL(r *http.Request, token string) string {
+// With --base-url set, the URL is built on it, like every link in an alert.
+// The operator declared that address as the one SubGlance is reached at, and
+// behind a reverse proxy it is the only source that is right: the request
+// that creates the monitor arrives with the proxy's upstream Host (nginx
+// sends 127.0.0.1:8080 unless told otherwise), often without
+// X-Forwarded-Proto, and never with the path prefix the proxy serves
+// SubGlance under. A URL built from that request names an address the job
+// cannot reach, and it is shown once: the job's pings never arrive, and the
+// push monitor alerts on a job that ran.
+//
+// Without --base-url the request is all there is, so the host comes from it
+// and the scheme from TLS or X-Forwarded-Proto.
+func (s *Server) pushURL(r *http.Request, token string) string {
+	if s.baseURL != "" {
+		return s.baseURL + pushPath + token
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -364,12 +378,12 @@ func pushURL(r *http.Request, token string) string {
 	// Behind a TLS-terminating proxy the request arrives as plain HTTP, so
 	// the header the proxy sets is the only evidence of the original scheme.
 	// Only the scheme is taken from it: the host is not, because trusting a
-	// client-supplied Host for a secret URL would let anyone who can reach
-	// the API mint a link pointing at their own server.
+	// client-supplied X-Forwarded-Host for a secret URL would let anyone who
+	// can reach the API mint a link pointing at their own server.
 	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "https" {
 		scheme = "https"
 	}
-	return scheme + "://" + r.Host + "/api/v1/push/" + token
+	return scheme + "://" + r.Host + pushPath + token
 }
 
 // tokenBucket is a rate limit with no background goroutine: it refills lazily

@@ -60,8 +60,9 @@ type Config struct {
 
 	// BaseURL is the address SubGlance is reached at, such as
 	// https://status.example.com or https://example.com/subglance behind a
-	// reverse proxy. Alerts link to the incident and the monitor under it.
-	// Empty means alerts carry no links, and is the default.
+	// reverse proxy. Alerts link to the incident and the monitor under it,
+	// and a new push monitor's URL is built on it. Empty means alerts carry
+	// no links and push URLs follow the request, and is the default.
 	//
 	// A start-up setting, not a field on the settings page, because the
 	// address belongs to the installation: it changes when the proxy in
@@ -459,7 +460,7 @@ func load(args []string, usage io.Writer) (Config, error) {
 		"PEM file of certificate authorities checks trust besides the system trust store (empty = none)")
 	fs.StringVar(&c.BaseURL, "base-url", c.BaseURL,
 		"the address SubGlance is reached at, such as https://status.example.com, so alerts link "+
-			"to the incident and the monitor (empty = alerts carry no links)")
+			"to the incident and the monitor and push URLs point at it (empty = alerts carry no links)")
 	fs.DurationVar(&c.RawRetention, "raw-retention", c.RawRetention,
 		"how long raw heartbeats are kept before being rolled up into hourly buckets (0 = forever; "+
 			"setting it here locks the settings page field)")
