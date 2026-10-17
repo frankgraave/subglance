@@ -683,6 +683,10 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if p := validateRequestHeaders(req.Headers); !p.ok() {
 		return p
 	}
+	if p := unreadSettingsProblem(requestedSettings(req.Type, req.Method, req.ExpectedStatus,
+		req.Keyword, req.KeywordMode, req.Headers, req.Body, req.SSLWarnDays, req.MinTLSVersion), nil); !p.ok() {
+		return p
+	}
 	if req.JSONAssertion != nil {
 		if p := jsonAssertionTypeProblem(req.Type); !p.ok() {
 			return p
@@ -1643,6 +1647,7 @@ func writeConflict(w http.ResponseWriter, id int64) {
 // and that combination has to be rejected just as firmly as a bad create.
 func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	wasType := m.Type
+	before := *m
 	if req.Name != nil {
 		if strings.TrimSpace(*req.Name) == "" {
 			return fieldProblem("name", "name cannot be empty")
@@ -1854,6 +1859,9 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		}
 	}
 	if p := applyDomainPatch(m, wasType, req); !p.ok() {
+		return p
+	}
+	if p := applyUnreadSettings(m, before, req); !p.ok() {
 		return p
 	}
 	if req.PushIntervalS != nil || req.PushGraceS != nil {

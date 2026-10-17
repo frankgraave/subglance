@@ -182,6 +182,13 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	// Judged on the type the preview resolved, so an address worked out as
+	// tcp is refused a keyword here rather than on save.
+	if p := unreadSettingsProblem(requestedSettings(typ, req.Method, req.ExpectedStatus,
+		req.Keyword, req.KeywordMode, req.Headers, req.Body, req.SSLWarnDays, req.MinTLSVersion), nil); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 	tags, err := store.NormaliseTags(req.Tags)
 	if err != nil {
 		writeProblem(w, http.StatusBadRequest, fieldProblem("tags", err.Error()))

@@ -138,6 +138,14 @@ tokens too. Without a role, a token acts with the creator's role.
 | `domain` | `example.com` (a domain name, no scheme or port) | The domain's registration has not expired, with a warning a number of days before |
 | `push` | none — the job reports in | That the job reported inside its window |
 
+The request settings, `method`, `expected_status`, `keyword`, `headers` and
+`body`, are read only by an `http` check, and `ssl_warn_days` and
+`min_tls_version` only by an `http` or `ssl` check. Set on another type, they
+would sit in the monitor's settings and never change a check: a keyword on a
+`tcp` monitor passes whatever the service answers. So the API refuses them on
+`field`, and the forms offer each one only where it is read. Changing a
+monitor's type resets the settings the new type does not read.
+
 Creating or editing a monitor rejects whitespace inside its hostname, including
 Unicode spaces such as a nonbreaking space, with an error on `target`. Internal
 spaces are never removed to turn the input into a different hostname. Ping,
