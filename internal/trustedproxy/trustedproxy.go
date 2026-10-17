@@ -74,15 +74,7 @@ func (s Set) Contains(ip string) bool {
 		// guessing would mean trusting on a parse failure.
 		return false
 	}
-	// An IPv4 address arriving over a dual-stack listener is written
-	// ::ffff:10.0.0.1, which matches no IPv4 prefix until it is unmapped.
-	addr = addr.Unmap()
-	for _, p := range s.nets {
-		if p.Contains(addr) {
-			return true
-		}
-	}
-	return false
+	return s.contains(addr)
 }
 
 // String renders the configured set, for startup logging.
@@ -95,4 +87,119 @@ func (s Set) String() string {
 		out = append(out, p.String())
 	}
 	return strings.Join(out, ",")
+}
+
+// ClientAddr resolves the address a request came from.
+//
+// peer is the address that opened the connection. forwardedFor holds every
+// X-Forwarded-For line of the request, in the order they arrived, and realIP
+// the X-Real-Ip header; both are read only when peer is in the set.
+//
+// The chain is read from the right. Each proxy appends the address it was
+// reached from, so the rightmost entries are written by proxies in the set and
+// everything to the left of the first address outside it was written by the
+// client — which can put any text there. Taking the leftmost entry instead,
+// which is what a replacing proxy leaves behind, lets a client behind an
+// appending one (nginx's $proxy_add_x_forwarded_for, HAProxy's forwardfor,
+// most load balancers) pick its own rate-limit bucket per request. Walking
+// from the right gives the same answer behind a replacing proxy and the right
+// one behind an appending proxy.
+//
+// Every hop must be an address; a port after it is dropped. Text that is not
+// an address never becomes the client: the walk stops there and keeps the
+// last address it read, or the peer when there was none. When every hop is in
+// the set, the request started inside it and the leftmost hop is that host.
+//
+// X-Real-Ip is used only when there is no forwarding chain at all, and only
+// when it is an address. The result is canonical — an IPv4 address that arrived
+// IPv6-mapped is written as IPv4, and a zone is dropped — so one host has one
+// bucket however it connected.
+func (s Set) ClientAddr(peer string, forwardedFor []string, realIP string) string {
+	peerAddr, ok := parseHop(peer)
+	if !ok {
+		return peer
+	}
+	if !s.contains(peerAddr) {
+		return canonical(peerAddr)
+	}
+
+	if client, present := s.fromChain(forwardedFor); present {
+		if client.IsValid() {
+			return canonical(client)
+		}
+		return canonical(peerAddr)
+	}
+
+	if addr, ok := parseHop(strings.TrimSpace(realIP)); ok {
+		return canonical(addr)
+	}
+	return canonical(peerAddr)
+}
+
+// fromChain walks a forwarding chain from the right and returns the first hop
+// outside the set, or the leftmost hop when all of them are inside it.
+// present reports whether the chain named any hop at all.
+//
+// A hop that is not an address ends the walk. Every hop to its right was
+// written by a proxy in the set, so the last address read is the nearest
+// client known for certain; when the very first hop is not an address, no
+// client is returned and the caller falls back to the peer.
+func (s Set) fromChain(lines []string) (client netip.Addr, present bool) {
+	for i := len(lines) - 1; i >= 0; i-- {
+		rest := lines[i]
+		for rest != "" {
+			var entry string
+			if j := strings.LastIndexByte(rest, ','); j >= 0 {
+				entry, rest = rest[j+1:], rest[:j]
+			} else {
+				entry, rest = rest, ""
+			}
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			present = true
+			addr, ok := parseHop(entry)
+			if !ok {
+				return client, true
+			}
+			client = addr
+			if !s.contains(addr) {
+				return client, true
+			}
+		}
+	}
+	return client, present
+}
+
+// contains reports whether an already parsed address is in the set.
+//
+// An IPv4 address arriving over a dual-stack listener is written
+// ::ffff:10.0.0.1, which matches no IPv4 prefix until it is unmapped.
+func (s Set) contains(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	for _, p := range s.nets {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseHop reads one hop of a forwarding chain: an address, or an address
+// with a port ("192.0.2.1:443", "[2001:db8::1]:443"), which some proxies
+// write.
+func parseHop(hop string) (netip.Addr, bool) {
+	if addr, err := netip.ParseAddr(hop); err == nil {
+		return addr, true
+	}
+	if ap, err := netip.ParseAddrPort(hop); err == nil {
+		return ap.Addr(), true
+	}
+	return netip.Addr{}, false
+}
+
+// canonical writes an address in one form per host.
+func canonical(addr netip.Addr) string {
+	return addr.Unmap().WithZone("").String()
 }

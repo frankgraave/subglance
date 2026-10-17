@@ -494,21 +494,13 @@ func isHTTPS(r *http.Request) bool {
 // spraying with the limiter switched off. Falling back to the peer address
 // costs a shared bucket for everyone behind an unconfigured proxy — the safe
 // direction to be wrong in, and fixed by naming the proxy in --trusted-proxies.
+//
+// Behind a proxy, the chain is read from the right rather than the left: see
+// trustedproxy.Set.ClientAddr. The leftmost entry is the one the client wrote
+// whenever the proxy appends to the header instead of replacing it.
 func (s *Server) clientIP(r *http.Request) string {
-	peer := peerIP(r)
-	if !s.trustedProxies.Contains(peer) {
-		return peer
-	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if first, _, found := strings.Cut(xff, ","); found {
-			return strings.TrimSpace(first)
-		}
-		return strings.TrimSpace(xff)
-	}
-	if ip := r.Header.Get("X-Real-Ip"); ip != "" {
-		return strings.TrimSpace(ip)
-	}
-	return peer
+	return s.trustedProxies.ClientAddr(peerIP(r),
+		r.Header.Values("X-Forwarded-For"), r.Header.Get("X-Real-Ip"))
 }
 
 // peerIP is the address of the machine that actually opened the connection.

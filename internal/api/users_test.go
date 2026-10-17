@@ -213,6 +213,12 @@ func TestClientIPExtraction(t *testing.T) {
 			"10.0.0.0/8", nil, "10.0.0.1:1234", "10.0.0.1"},
 		{"a peer outside the trusted range",
 			"10.0.0.0/8", map[string]string{"X-Forwarded-For": "203.0.113.5"}, "192.0.2.9:1234", "192.0.2.9"},
+		{"a forged first entry from an appending proxy",
+			"10.0.0.1", map[string]string{"X-Forwarded-For": "198.51.100.1, 203.0.113.5"}, "10.0.0.1:1234", "203.0.113.5"},
+		{"text that is not an address from a trusted proxy",
+			"10.0.0.1", map[string]string{"X-Forwarded-For": "evil\tlabel"}, "10.0.0.1:1234", "10.0.0.1"},
+		{"x-real-ip that is not an address from a trusted proxy",
+			"10.0.0.1", map[string]string{"X-Real-Ip": "not an address"}, "10.0.0.1:1234", "10.0.0.1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -229,6 +235,24 @@ func TestClientIPExtraction(t *testing.T) {
 				t.Errorf("clientIP() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestClientIPReadsEveryForwardedLine: a proxy may add an X-Forwarded-For line
+// of its own instead of extending the client's, and the last line is then the
+// nearest proxy's word. Reading only the first line hands the choice back to
+// the client.
+func TestClientIPReadsEveryForwardedLine(t *testing.T) {
+	srv, err := New(testLogger(), nil).WithTrustedProxies("10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "10.0.0.1:1234"
+	r.Header.Add("X-Forwarded-For", "198.51.100.1")
+	r.Header.Add("X-Forwarded-For", "203.0.113.5")
+	if got := srv.clientIP(r); got != "203.0.113.5" {
+		t.Errorf("clientIP() = %q, want 203.0.113.5, the address the proxy added", got)
 	}
 }
 

@@ -306,6 +306,16 @@ under Settings → Account, and in the log lines that name a caller:
 --trusted-proxies 127.0.0.1,172.16.0.0/12
 ```
 
+Name every proxy in the chain: a CDN in front of a load balancer in front of
+nginx is three entries (or the ranges they connect from). SubGlance reads
+`X-Forwarded-For` from the right, skipping each address in this list, and
+takes the first one that is not in it as the client. A proxy that appends to
+the header (nginx's `$proxy_add_x_forwarded_for`, HAProxy's `option
+forwardfor`, most load balancers) and one that replaces it both work, because
+whatever a visitor wrote into the header stands to the left of the address the
+proxy added and is never reached. An entry that is not an IP address stops the
+walk, and so does nothing to the left of it.
+
 Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
@@ -1139,10 +1149,7 @@ server {
     # listen and TLS settings as for any other site
 
     proxy_set_header Host $host;
-    # Replace the header rather than append to it: SubGlance reads the
-    # first address in it, and an appended list starts with whatever the
-    # visitor sent.
-    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
     location = / {
         proxy_pass http://127.0.0.1:8080/status/acme/;
@@ -1160,5 +1167,6 @@ server {
 ```
 
 Name the proxy in `--trusted-proxies` so the rate limit sees each visitor's
-own address. Caddy replaces `X-Forwarded-For` by default; nginx needs the line
-above.
+own address. Caddy sets `X-Forwarded-For` by default; nginx needs the line
+above. Appending to the header, as that line does, is safe: SubGlance reads
+the chain from the right (see [trusted proxies](#trusted-proxies)).
