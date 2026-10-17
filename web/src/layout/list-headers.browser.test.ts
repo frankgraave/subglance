@@ -368,6 +368,154 @@ describe("phone header targets", () => {
   });
 });
 
+describe("phone tab rows", () => {
+  /*
+   * On a phone a list's tabs scroll sideways when they do not fit (SUB-327).
+   * A row cut off at its edge with nothing to say so reads as the whole
+   * list: on the dashboard the last visible tab stopped half way through a
+   * word, and the tabs past it went unseen unless someone happened to swipe
+   * the row. So, for every list headed by `ListTabs`:
+   *
+   *  - no tab is covered by a header button: the row ends before them;
+   *  - a tab the row cuts off has a fade on the side it is cut, read from
+   *    the computed mask, so a row without the hint fails here;
+   *  - scrolled to its end, the row stops fading there and fades at the
+   *    start instead, where the first tabs now stand past the edge.
+   *
+   * 320px as well as 390: the narrowest phone still in use is where a row
+   * that only just fits at 390 is cut. A row that fits draws no fade. The
+   * fixture cuts the dashboard's row at both widths and fits the incidents
+   * row at both, so the two tests after the loop hold that each row is
+   * really cut somewhere: the dashboard's as it stands, the incidents row
+   * once it is narrower than its tabs.
+   */
+  const ROWS = [
+    { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']", header: ".mon-board > .card-head" },
+    { name: "incidents", path: "/incidents", ready: ".inc-line", header: ".inc-board > .card-head" },
+  ];
+
+  type Row = {
+    row: { left: number; right: number; top: number; bottom: number };
+    cut: ("start" | "end")[];
+    covered: string[];
+    fades: { start: boolean; end: boolean };
+  };
+
+  // Everything is read in the page: the boxes, and which ends of the row the
+  // computed mask makes transparent. A mask is alpha only, so a transparent
+  // stop is the fade and an opaque one is no fade, whatever the theme.
+  async function read(page: Page, header: string): Promise<Row> {
+    return page.evaluate((sel: string) => {
+      const head = document.querySelector(sel)!;
+      const tabs = head.querySelector(".mon-tabs")!;
+      const r = tabs.getBoundingClientRect();
+      const cut: ("start" | "end")[] = [];
+      for (const tab of tabs.children) {
+        const t = tab.getBoundingClientRect();
+        // Half a pixel either way is subpixel layout, not a cut.
+        if (t.left < r.left - 0.5 && t.right > r.left) cut.push("start");
+        if (t.right > r.right + 0.5 && t.left < r.right) cut.push("end");
+      }
+      const covered = [...head.querySelectorAll(".card-head-action :is(button, input)")]
+        .map((el) => ({ el, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.width > 1 && b.top < r.bottom && r.top < b.bottom && b.left < r.right && r.left < b.right)
+        .map(({ el }) => el.getAttribute("aria-label") ?? el.tagName);
+      // The computed gradient, its stops in paint order: `to left` reversed.
+      const mask = getComputedStyle(tabs).maskImage;
+      const fades = { start: false, end: false };
+      const gradient = /^linear-gradient\((.*)\)$/.exec(mask);
+      if (gradient !== null) {
+        const parts = gradient[1]!.split(/,(?![^(]*\))/).map((part) => part.trim());
+        const reversed = parts[0] === "to left";
+        const stops = /^(?:to |-?[\d.]+deg)/.test(parts[0]!) ? parts.slice(1) : parts;
+        const clear = (stop: string) => /^(?:transparent|rgba\(0, 0, 0, 0\))/.test(stop);
+        const [first, last] = [clear(stops[0]!), clear(stops[stops.length - 1]!)];
+        fades.start = reversed ? last : first;
+        fades.end = reversed ? first : last;
+      }
+      return { row: { left: r.left, right: r.right, top: r.top, bottom: r.bottom }, cut, covered, fades };
+    }, header);
+  }
+
+  async function scrollToEnd(page: Page, header: string): Promise<void> {
+    await page.evaluate((sel: string) => {
+      const tabs = document.querySelector(`${sel} .mon-tabs`)!;
+      tabs.scrollLeft = tabs.scrollWidth;
+    }, header);
+    await settle(page);
+  }
+
+  async function settle(page: Page): Promise<void> {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+  }
+
+  for (const { name, path, ready, header } of ROWS) {
+    it.each([320, 390])(`${name}: a cut-off tab is never covered and fades on the side it is cut at %ipx`, async (width) => {
+      const page = await open(path, ready, width);
+      try {
+        const seen = await read(page, header);
+        expect(seen.covered, "header controls standing over the tabs").toEqual([]);
+        for (const side of seen.cut) {
+          expect(seen.fades[side], `a tab is cut at the ${side} of the row with no fade there`).toBe(true);
+        }
+        // A row that fits draws no fade at all: a faded last tab that is not
+        // cut would read as one that is.
+        if (seen.cut.length === 0) expect(seen.fades).toEqual({ start: false, end: false });
+
+        if (!seen.cut.includes("end")) return;
+        await scrollToEnd(page, header);
+        const end = await read(page, header);
+        expect(end.cut, "scrolled to the end, only the start is cut").not.toContain("end");
+        expect(end.fades.end, "scrolled to the end, the end stops fading").toBe(false);
+        expect(end.fades.start, "scrolled to the end, the start fades").toBe(true);
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
+  it("cuts the dashboard's row at 390px, so the check above is not vacuous", async () => {
+    // The fixture's four status tabs do not fit beside Filter and View at a
+    // phone width. If they ever do, the hint is no longer exercised and the
+    // fixture needs a longer row.
+    const page = await open("/", ROWS[0]!.ready, 390);
+    try {
+      expect((await read(page, ROWS[0]!.header)).cut).toContain("end");
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("fades the incidents row once it is cut, so its hint is exercised too", async () => {
+    // The incidents screen's three tabs fit at every phone width the fixture
+    // reaches, so the loop above only ever sees that row whole. Narrowing the
+    // row to half its width cuts it the way longer counts would, and holds
+    // that this instance marks and fades its cut sides like the dashboard's.
+    const { path, ready, header } = ROWS[1]!;
+    const page = await open(path, ready, 390);
+    try {
+      expect((await read(page, header)).cut, "the fixture's incidents row fits at 390px").toEqual([]);
+      await page.evaluate((sel: string) => {
+        const tabs = document.querySelector<HTMLElement>(`${sel} .mon-tabs`)!;
+        tabs.style.maxWidth = `${tabs.getBoundingClientRect().width / 2}px`;
+      }, header);
+      await settle(page);
+      const cut = await read(page, header);
+      expect(cut.cut, "half its width, the row is cut at the end").toContain("end");
+      expect(cut.fades, "cut at the end only, the row fades at the end only").toEqual({ start: false, end: true });
+
+      await scrollToEnd(page, header);
+      const end = await read(page, header);
+      expect(end.cut, "scrolled to the end, only the start is cut").not.toContain("end");
+      expect(end.fades, "scrolled to the end, the row fades at the start only").toEqual({ start: true, end: false });
+    } finally {
+      await page.close();
+    }
+  });
+});
+
 describe("notifications header", () => {
   it.each([320, 390, 820, 1440])("reads in focus order at %ipx", async (width) => {
     /*
