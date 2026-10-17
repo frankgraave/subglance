@@ -17,7 +17,8 @@
  *  - the header holding the filter starts directly under the masthead, one
  *    content gutter and one card edge below it at most;
  *  - at 1440px the header is one line;
- *  - at 390px nothing scrolls sideways.
+ *  - at 390px nothing scrolls sideways;
+ *  - between those widths no header control stands over a tab.
  *
  * A last block walks every route, the detail page included, and fails on a
  * bar between the masthead and `<main>`, so a new screen cannot bring one
@@ -286,6 +287,86 @@ describe("dashboard header", () => {
       await page.close();
     }
   });
+});
+
+describe("tablet header controls", () => {
+  /*
+   * Between a phone and a wide desktop a list's header holds its tabs and
+   * its controls on one line while they fit, and wraps the controls under
+   * the tabs when they do not. The controls' group used to be allowed to
+   * shrink to nothing: between about 700 and 1100px it went narrower than
+   * its own filter and buttons, and `flex-end` pushed them out of its left
+   * edge, over the last tabs (SUB-328: "Up 3" sat under the filter's
+   * placeholder at 1024px beside the sidebar). So, for every list headed by
+   * `ListTabs`, beside the sidebar and beside the rail:
+   *
+   *  - no header control's box intersects any tab's box;
+   *  - every control ends inside the header: a floor that stops the overlap
+   *    by pushing the group out of the right edge instead is no fix;
+   *  - the text filter is never drawn below rung 4, where its placeholder
+   *    is no longer whole.
+   */
+  const SCREENS = [
+    { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']", header: ".mon-board > .card-head" },
+    { name: "incidents", path: "/incidents", ready: ".inc-line", header: ".inc-board > .card-head" },
+  ];
+  const TABLET = [641, 700, 820, 900, 960, 1024, 1100];
+
+  for (const { name, path, ready, header } of SCREENS) {
+    for (const sidebar of ["expanded", "collapsed"] as const) {
+      it.each(TABLET)(`${name} beside the ${sidebar === "expanded" ? "sidebar" : "rail"}: no control stands over a tab at %ipx`, async (width) => {
+        const page = await browser.newPage();
+        try {
+          await page.evaluateOnNewDocument((state: string) => localStorage.setItem("subglance:sidebar", state), sidebar);
+          await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+          await page.goto(server.url + path, { waitUntil: "domcontentloaded" });
+          await page.waitForSelector(ready, { timeout: 15_000 });
+          await page.evaluate(() => document.fonts.ready.then(() => undefined));
+          await page.evaluate(
+            () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+          );
+          const seen = await page.evaluate((sel: string) => {
+            const head = document.querySelector(sel)!;
+            const probe = document.createElement("div");
+            probe.style.width = "var(--size-col-4)";
+            document.body.append(probe);
+            const rung4 = probe.getBoundingClientRect().width;
+            probe.remove();
+            const tabs = [...head.querySelectorAll(".mon-tabs > *")]
+              .map((el) => ({ name: (el.textContent ?? "").trim(), b: el.getBoundingClientRect() }))
+              .filter(({ b }) => b.width > 1);
+            const controls = [...head.querySelectorAll(".card-head-action :is(button, .shell-search)")]
+              .map((el) => ({ name: el.getAttribute("aria-label") ?? el.className, b: el.getBoundingClientRect() }))
+              .filter(({ b }) => b.width > 1);
+            const over: string[] = [];
+            for (const c of controls) {
+              for (const t of tabs) {
+                if (c.b.left < t.b.right && t.b.left < c.b.right && c.b.top < t.b.bottom && t.b.top < c.b.bottom) {
+                  over.push(`${c.name} over ${t.name}`);
+                }
+              }
+            }
+            const edge = head.getBoundingClientRect().right;
+            return {
+              tabs: tabs.length,
+              controls: controls.length,
+              over,
+              outside: controls.filter(({ b }) => b.right > edge + 0.5).map(({ name }) => name),
+              filter: head.querySelector(".card-head-action > .shell-search")?.getBoundingClientRect().width ?? 0,
+              rung4,
+            };
+          }, header);
+          expect(seen.tabs, "tabs in the header").toBeGreaterThanOrEqual(2);
+          expect(seen.controls, "controls in the header").toBeGreaterThanOrEqual(2);
+          expect(seen.over, "header controls standing over a tab").toEqual([]);
+          expect(seen.outside, "header controls past the header's right edge").toEqual([]);
+          expect(seen.filter, "text filter width").toBeGreaterThanOrEqual(seen.rung4 - 0.5);
+        } finally {
+          await page.close();
+        }
+      });
+    }
+  }
 });
 
 describe("phone header targets", () => {
