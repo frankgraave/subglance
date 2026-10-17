@@ -39,7 +39,8 @@ func (s *SlackSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 	// @channel unless the text object is verbatim, so the two sections
 	// that carry the alert's text are. The links section is not: its
 	// links are SubGlance's own.
-	title, body := slackText(a.Title()), slackText(a.Body())
+	title := slackText(a.Title())
+	body := slackText(fitBody(a.Body(), slackSectionMax, utf16Len, slackText))
 	payload := map[string]any{
 		"text": title,
 		"blocks": []map[string]any{

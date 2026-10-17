@@ -443,6 +443,37 @@ message; an address in the alert's own text shows as the address it is.
 
 Telegram, ntfy, Gotify, email and SMS send plain text and need none of this.
 
+## A long alert
+
+Four services refuse a message whose text is over a fixed length, or show it
+as something else, and an alert can quote text of any length: a target with a
+long signed query, an error that quotes a long keyword. So the alert's text
+is shortened to fit before it is sent:
+
+- Slack: 3,000 characters in each section, Slack's limit for one; a longer
+  section is refused as `invalid_blocks`.
+- Discord: 4,096 characters in the embed's description, the links included.
+- Telegram: 4,096 characters in the message, title and links included.
+- ntfy: 4,096 bytes in the message, ntfy's default `message-size-limit`; a
+  longer one arrives as an attached file instead of as the notification's
+  text, or is refused by a server that keeps no attachments.
+
+The longest lines give way first, each cut to the same length, so a target
+thousands of characters long is shortened and the cause, the error and the
+time under it stay. A shortened line keeps its start and its end, with `…`
+where the middle was. Characters are counted in UTF-16 units, as Telegram
+counts them, so an emoji counts as two, and after the escaping described
+above, because the escaped text is what the service measures. The title and
+the links SubGlance adds are never shortened. A shortened target may still
+show as a link, but it no longer opens the page it names; the monitor's page
+in SubGlance has the address whole.
+
+A short alert is sent unchanged. SMS has its own fitting (see
+[one message, 160 characters](#one-message-160-characters)), and
+email, Gotify and the webhook payload are sent whole. A webhook with a body
+of its own is sent whole as well, because SubGlance does not know the limit
+of the service behind it.
+
 ## The webhook payload
 
 A `webhook` channel sends one request per alert: a `POST`, or a `PUT` when

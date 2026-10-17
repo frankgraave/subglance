@@ -65,12 +65,15 @@ func (s *TelegramSender) Send(ctx context.Context, cfg map[string]string, a Aler
 		marker = "🔴"
 	}
 
-	text := fmt.Sprintf("%s %s\n\n%s", marker, a.Title(), a.Body())
+	head := fmt.Sprintf("%s %s\n\n", marker, a.Title())
+	tail := ""
 	if links := linkLines(a); links != "" {
 		// Bare addresses: the text is sent without a parse mode, and
 		// Telegram makes a URL in plain text clickable by itself.
-		text += "\n\n" + links
+		tail = "\n\n" + links
 	}
+	message := func(body string) string { return head + body + tail }
+	text := message(fitBody(a.Body(), telegramTextMax, utf16Len, message))
 
 	payload := map[string]any{
 		"chat_id": cfg["chat_id"],

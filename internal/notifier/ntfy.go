@@ -105,7 +105,7 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 	payload := map[string]any{
 		"topic":    strings.TrimSpace(cfg["topic"]),
 		"title":    a.Title(),
-		"message":  a.Body(),
+		"message":  fitBody(a.Body(), ntfyMessageMax, jsonLen, func(s string) string { return s }),
 		"priority": priority,
 		// A tag that names an emoji is drawn in front of the title, which
 		// is what makes an outage and a recovery tell apart on a lock
