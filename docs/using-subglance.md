@@ -22,6 +22,9 @@ password, creates the first administrator from them and signs you in. That
 screen closes permanently once an account exists; from then on the same
 address shows a sign-in form, and Sign out sits at the bottom of the sidebar.
 
+An account's address is one line of at most 254 characters, the longest
+address mail can be delivered to, and it cannot be changed later.
+
 Passwords must be at least 12 characters. There is no complexity rule: length
 is what makes a password hard to crack, and demanding a digit and a symbol
 mostly produces predictable substitutions, so a few ordinary words beat a

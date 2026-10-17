@@ -2,9 +2,11 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/auth"
 	"github.com/frankgraave/subglance/internal/store"
@@ -327,9 +329,21 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 // emailProblem refuses an address that is blank or has no @ between other
 // characters. The address is checked after NormaliseEmail, so one made only
 // of spaces is blank.
+//
+// It also refuses an address no mail system could deliver to: one over
+// store.MaxEmailLen characters, or one holding a line break or another
+// control character, which splits the line every list of accounts and every
+// log of a sign-in prints it on. Only a new account is held to this. An
+// address cannot be changed once it is saved, and sign-in looks up whatever
+// it is given, so an account saved before the rule still signs in.
 func emailProblem(email string) problem {
-	if email == "" || !containsAt(email) {
+	switch {
+	case email == "" || !containsAt(email):
 		return fieldProblem("email", "a valid email address is required")
+	case utf8.RuneCountInString(email) > store.MaxEmailLen:
+		return fieldProblem("email", fmt.Sprintf("email must be %d characters or fewer", store.MaxEmailLen))
+	case store.HasControlCharacter(email):
+		return fieldProblem("email", "email "+store.NoControlCharacters)
 	}
 	return problem{}
 }

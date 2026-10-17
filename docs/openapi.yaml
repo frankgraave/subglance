@@ -1063,7 +1063,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Credentials'
+              $ref: '#/components/schemas/SetupRequest'
       responses:
         '201':
           description: |
@@ -5747,7 +5747,31 @@ components:
         email:
           type: string
           format: email
-          description: Must contain an `@`. Stored case-insensitively.
+          description: |
+            The address the account was created with. Upper and lower case
+            sign in to one account. No length limit applies here, so an
+            account saved before new addresses were held to 254 characters
+            still signs in.
+          example: ops@example.com
+        password:
+          type: string
+          format: password
+          description: Must satisfy the instance's password strength rules.
+          example: correct-horse-battery-staple
+      additionalProperties: false
+    SetupRequest:
+      type: object
+      description: The email address and password of the first administrator.
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: |
+            Must contain an `@`, and no line break or other control
+            character. At most 254 characters, the longest address mail can
+            be delivered to.
           example: ops@example.com
         password:
           type: string
@@ -5801,7 +5825,11 @@ components:
         email:
           type: string
           format: email
-          description: Must contain an `@` and be unique.
+          maxLength: 254
+          description: |
+            Must contain an `@`, no line break or other control character,
+            and be unique. At most 254 characters, the longest address mail
+            can be delivered to.
           example: dev@example.com
         password:
           type: string

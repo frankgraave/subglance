@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -652,11 +654,30 @@ func (db *DB) RevokeAPIToken(ctx context.Context, id, userID int64) error {
 	return nil
 }
 
+// MaxEmailLen is the longest address an account can be created with,
+// counted in characters. No mail system delivers to a longer one: SMTP
+// caps a path at 256 octets, two of them the angle brackets (RFC 5321,
+// section 4.5.3.1.3).
+const MaxEmailLen = 254
+
 // LoginAttemptEmailKey is the identifier failed sign-ins are counted under
 // for an address. The address is lowered so that "Ann@" and "ann@" share one
 // count, as they share one account.
+//
+// The sign-in route takes any address, also one no account could have, and
+// the key is stored for every failure and logged once the limit is reached.
+// An address longer than MaxEmailLen bytes is therefore counted under its
+// SHA-256 digest instead: one request could otherwise write a megabyte to
+// the database and the log. The digest has a prefix of its own, so it can
+// never equal the key of a shorter address, and it stays one count per
+// address, which a cut at a fixed length would not be.
 func LoginAttemptEmailKey(email string) string {
-	return "email:" + strings.ToLower(email)
+	lower := strings.ToLower(email)
+	if len(lower) <= MaxEmailLen {
+		return "email:" + lower
+	}
+	sum := sha256.Sum256([]byte(lower))
+	return "email-sha256:" + hex.EncodeToString(sum[:])
 }
 
 // RecordLoginAttempt logs a failed login for rate limiting.
