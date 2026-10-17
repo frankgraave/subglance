@@ -182,3 +182,25 @@ func TestNtfyFitsALongAlertInItsMessageLimit(t *testing.T) {
 	}
 	wantKept(t, "ntfy", message+"\n"+got["click"].(string))
 }
+
+// TestNtfySendsWholeAMessageThatFitsDecoded checks that ntfy's limit is
+// counted on the decoded message. A thousand < are 1,000 bytes of message
+// and 6,000 in the JSON request, which ntfy takes unchanged.
+func TestNtfySendsWholeAMessageThatFitsDecoded(t *testing.T) {
+	a := longAlert("https://shop.example.com/health")
+	a.LastError = `keyword "` + strings.Repeat("<", 1000) + `" not found in response`
+	srv, body := recordedBody(t)
+	if err := NewNtfySender(nil).Send(t.Context(), map[string]string{"url": srv.URL, "topic": "alerts"}, a); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(*body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if message := got["message"].(string); message != a.Body() {
+		t.Errorf("message was shortened to %d bytes, want the %d-byte body whole", len(message), len(a.Body()))
+	}
+	if n := len(*body); n > 2*ntfyMessageMax {
+		t.Errorf("request body is %d bytes, over the %d ntfy reads", n, 2*ntfyMessageMax)
+	}
+}

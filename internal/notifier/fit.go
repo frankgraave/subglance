@@ -1,7 +1,6 @@
 package notifier
 
 import (
-	"encoding/json"
 	"strings"
 	"unicode"
 	"unicode/utf16"
@@ -23,10 +22,10 @@ const (
 	// telegramTextMax is the most sendMessage takes, after entities are
 	// parsed. The text is sent without a parse mode, so it is all text.
 	telegramTextMax = 4096
-	// ntfyMessageMax is ntfy's default message-size-limit, in bytes. A
-	// longer message is published as an attachment file instead of as the
-	// notification's text, or refused when the server keeps no
-	// attachments.
+	// ntfyMessageMax is ntfy's default message-size-limit, in bytes of the
+	// decoded message. A longer message is published as an attachment file
+	// instead of as the notification's text, or refused when the server
+	// keeps no attachments. ntfy reads a JSON request up to twice this.
 	ntfyMessageMax = 4096
 )
 
@@ -40,19 +39,6 @@ func utf16Len(s string) int {
 		n += utf16.RuneLen(r)
 	}
 	return n
-}
-
-// jsonLen is the length of s as encoding/json writes it in a request body,
-// quotes and escapes included. Measuring the encoded string rather than the
-// text keeps ntfy's message under its limit and the whole JSON body, which
-// ntfy reads up to twice that limit, well under its own: json.Marshal writes
-// each <, > and & as six bytes.
-func jsonLen(s string) int {
-	b, err := json.Marshal(s)
-	if err != nil {
-		return len(s)
-	}
-	return len(b)
 }
 
 // fitBody returns body, shortened when render(body) measures more than limit

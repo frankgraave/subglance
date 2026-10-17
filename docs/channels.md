@@ -456,14 +456,19 @@ is shortened to fit before it is sent:
 - Telegram: 4,096 characters in the message, title and links included.
 - ntfy: 4,096 bytes in the message, ntfy's default `message-size-limit`; a
   longer one arrives as an attached file instead of as the notification's
-  text, or is refused by a server that keeps no attachments.
+  text, or is refused by a server that keeps no attachments. ntfy also reads
+  the whole JSON request only up to 8,192 bytes, so a message of many `<`,
+  `>` or `&`, each written as six bytes in JSON, is shortened to fit that
+  too.
 
 The longest lines give way first, each cut to the same length, so a target
 thousands of characters long is shortened and the cause, the error and the
 time under it stay. A shortened line keeps its start and its end, with `…`
-where the middle was. Characters are counted in UTF-16 units, as Telegram
-counts them, so an emoji counts as two, and after the escaping described
-above, because the escaped text is what the service measures. The title and
+where the middle was. For Slack, Discord and Telegram, characters are
+counted in UTF-16 units, as Telegram counts them, so an emoji counts as two,
+and after the escaping described above, because the escaped text is what the
+service measures. ntfy counts the message in bytes as it arrives, after the
+JSON is decoded, so an emoji counts as four there. The title and
 the links SubGlance adds are never shortened. A shortened target may still
 show as a link, but it no longer opens the page it names; the monitor's page
 in SubGlance has the address whole.
