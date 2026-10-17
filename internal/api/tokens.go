@@ -330,8 +330,8 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 // characters. The address is checked after NormaliseEmail, so one made only
 // of spaces is blank.
 //
-// It also refuses an address no mail system could deliver to: one over
-// store.MaxEmailLen characters, or one holding a line break or another
+// It also refuses an address over store.MaxEmailLen characters, the longest
+// plain-ASCII address SMTP carries, or one holding a line break or another
 // control character, which splits the line every list of accounts and every
 // log of a sign-in prints it on. Only a new account is held to this. An
 // address cannot be changed once it is saved, and sign-in looks up whatever

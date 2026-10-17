@@ -5770,8 +5770,8 @@ components:
           maxLength: 254
           description: |
             Must contain an `@`, and no line break or other control
-            character. At most 254 characters, the longest address mail can
-            be delivered to.
+            character. At most 254 characters, the longest plain-ASCII
+            address mail can be delivered to.
           example: ops@example.com
         password:
           type: string
@@ -5828,8 +5828,8 @@ components:
           maxLength: 254
           description: |
             Must contain an `@`, no line break or other control character,
-            and be unique. At most 254 characters, the longest address mail
-            can be delivered to.
+            and be unique. At most 254 characters, the longest plain-ASCII
+            address mail can be delivered to.
           example: dev@example.com
         password:
           type: string

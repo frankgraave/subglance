@@ -655,9 +655,11 @@ func (db *DB) RevokeAPIToken(ctx context.Context, id, userID int64) error {
 }
 
 // MaxEmailLen is the longest address an account can be created with,
-// counted in characters. No mail system delivers to a longer one: SMTP
-// caps a path at 256 octets, two of them the angle brackets (RFC 5321,
-// section 4.5.3.1.3).
+// counted in characters, the unit the OpenAPI maxLength uses. The number is
+// SMTP's: a path is at most 256 octets, two of them the angle brackets
+// (RFC 5321, section 4.5.3.1.3). That limit counts bytes, so an address with
+// non-ASCII characters can stay within this one and still be longer than
+// mail can carry. LoginAttemptEmailKey reads the same number as bytes.
 const MaxEmailLen = 254
 
 // LoginAttemptEmailKey is the identifier failed sign-ins are counted under
