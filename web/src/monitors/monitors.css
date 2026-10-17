@@ -336,7 +336,38 @@
   .mon-board > .card-head { flex-wrap: nowrap; }
   .mon-board > .card-head > .card-head-lead { flex: 1 1 auto; min-width: 0; }
   .mon-board > .card-head > .card-head-action { flex: none; }
-  .mon-tabs { overflow-x: auto; scrollbar-width: none; }
+  .mon-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Focus scrolls a tab clear of the fade below, not into it. */
+    scroll-padding-inline: var(--space-8);
+  }
+
+  /*
+   * A row that scrolls says so: it fades out over the last 32px on each side
+   * with more tabs past it (`data-more`, set by ListTabs), so the tab at the
+   * edge dissolves instead of ending on a hard cut that reads as the end of
+   * the list. Without it, Expiring soon, Paused and Up were tabs nobody saw
+   * unless they happened to swipe the row. A mask, not a gradient laid over
+   * the tabs, so it fades whatever fill is behind the card in either theme;
+   * a mask reads only alpha, so `black` is its opaque stop, never a colour
+   * on screen.
+   */
+  .mon-tabs[data-more="end"] {
+    mask-image: linear-gradient(to right, black calc(100% - var(--space-8)), transparent);
+  }
+  .mon-tabs[data-more="start"] {
+    mask-image: linear-gradient(to right, transparent, black var(--space-8));
+  }
+  .mon-tabs[data-more="start end"] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--space-8),
+      black calc(100% - var(--space-8)),
+      transparent
+    );
+  }
 
   .mon-head-button {
     justify-content: center;
