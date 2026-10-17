@@ -176,6 +176,17 @@ scheme's default. A monitor saved before these rules keeps its target until
 it is edited; the check reports it as a DNS or connection failure, as it did
 before.
 
+A monitor's free-text settings have ceilings, as its name does: the target,
+`keyword`, `expected_status` and a JSON assertion's path and expected value
+take 2048 characters each, a request `body` 65,536, and `headers` at most 64
+entries with each `Name: value` line at most 8190 bytes. Past them a server
+refuses the request on every check (nginx stops a request line at 8 KB, and
+Apache httpd a header line at 8190 bytes), and an export of the monitor could
+grow past what an import accepts. Creating, editing, previewing and importing
+all refuse a longer value on its field. A monitor saved before the limits
+keeps its values through any other edit, and through an edit or an import
+that sends them back unchanged.
+
 An HTTP monitor's own request headers — an `Authorization` or `X-Api-Key`, for
 instance — are sent only to the origin (scheme, host and port) of its target.
 When a followed redirect leads to another origin, every header the monitor set
