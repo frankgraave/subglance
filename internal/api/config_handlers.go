@@ -112,7 +112,7 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 
 	// A client that disconnects halfway must not stop the writes between an
 	// object and its key.
-	if err := s.applyImport(context.WithoutCancel(ctx), &plan, func(token string) string { return pushURL(r, token) }); err != nil {
+	if err := s.applyImport(context.WithoutCancel(ctx), &plan, func(token string) string { return s.pushURL(r, token) }); err != nil {
 		s.log.Error("apply configuration import", "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

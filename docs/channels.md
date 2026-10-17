@@ -357,10 +357,11 @@ The address has to be an absolute `http://` or `https://` URL. A path prefix
 is kept and a trailing slash does not matter; a user name, a password, a query
 string or a `#fragment` is refused at start-up, because it would be copied
 into every link in every message. Without the setting, every message is
-exactly what it was before links existed. The settings page shows the address
-in use under **Instance**, or that none is set; it cannot be changed there,
-because it belongs to the proxy in front of SubGlance rather than to anything
-edited in it.
+exactly what it was before links existed. A new push monitor's URL is built
+on the same address (see [push monitors](using-subglance.md#push-monitors)).
+The settings page shows the address in use under **Instance**, or that none is
+set; it cannot be changed there, because it belongs to the proxy in front of
+SubGlance rather than to anything edited in it.
 
 How each channel carries the links:
 

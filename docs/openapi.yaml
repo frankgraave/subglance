@@ -3933,9 +3933,9 @@ paths:
         `scheduler` is null when no check pipeline is attached. It is never a
         block of zeros, because zero busy workers is a healthy reading.
 
-        `base_url` is the address alerts link to, set at start-up with
-        `--base-url` or `SUBGLANCE_BASE_URL`, and empty when alerts carry no
-        links. It cannot be changed through the API.
+        `base_url` is the address alerts link to and push URLs are built on,
+        set at start-up with `--base-url` or `SUBGLANCE_BASE_URL`, and empty
+        when alerts carry no links. It cannot be changed through the API.
       x-subglance-access: admin
       responses:
         '200':
@@ -6872,6 +6872,10 @@ components:
             response that created the monitor, and never again: only a hash is
             stored, so it genuinely cannot be looked up afterwards. Lose it and
             the monitor has to be recreated.
+
+            Built on `--base-url` when the server was started with one, path
+            prefix included; otherwise on the host and scheme of the request
+            that created the monitor (`X-Forwarded-Proto: https` gives https).
           example: https://status.example.com/api/v1/push/sgu_Ej4k2...
         push_token_prefix:
           type: string

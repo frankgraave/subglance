@@ -578,11 +578,10 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 
 	// The plaintext push URL exists only in this response. The monitor is
 	// useless without it and it can never be retrieved again, so it is
-	// assembled here — from the request's own host, so a user behind a
-	// reverse proxy is handed a URL that actually works from outside.
+	// assembled here, on --base-url when there is one (see pushURL).
 	resp := s.describeMonitor(r, created)
 	if created.PushToken != "" {
-		resp.PushURL = pushURL(r, created.PushToken)
+		resp.PushURL = s.pushURL(r, created.PushToken)
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }

@@ -613,12 +613,16 @@ authority over every monitor you have. Anyone holding a push URL can report on
 that one monitor and nothing else. Treat it as a secret anyway: a leaked one lets
 someone tell you a job ran when it did not.
 
-The push URL uses whatever scheme you reached the API on, so on a plain-HTTP
-instance it is an `http://` URL — a bearer credential in cleartext. That is fine
-on a host or a LAN you trust, and it is why HTTP is not refused. It is not fine
-across the internet: anyone on the path can read the URL and then report a job as
-healthy forever. If a job pings from outside the network the instance lives on,
-put the instance behind TLS first.
+With [`--base-url`](channels.md#links-back-to-subglance) set, the push URL is
+built on that address, path prefix included, because behind a reverse proxy
+the request that creates the monitor carries the proxy's upstream address and
+not the one a job can reach. Without it, the push URL uses the host and scheme
+you reached the API on, so on a plain-HTTP instance it is an `http://` URL — a
+bearer credential in cleartext. That is fine on a host or a LAN you trust, and
+it is why HTTP is not refused. It is not fine across the internet: anyone on the
+path can read the URL and then report a job as healthy forever. If a job pings
+from outside the network the instance lives on, put the instance behind TLS
+first.
 
 ## How a failure becomes an alert
 

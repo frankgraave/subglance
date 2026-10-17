@@ -146,7 +146,7 @@ type Server struct {
 	retentionPins store.RetentionPins
 
 	// baseURL is the address alerts link to (--base-url), shown on the
-	// settings page; "" when alerts carry no links.
+	// settings page and used for push URLs; "" when alerts carry no links.
 	baseURL string
 
 	// passes starts a retention pass on request, and background bounds the
