@@ -5886,7 +5886,9 @@ components:
           description: |
             Dot notation with array indexes: `checks.db.status`,
             `items[0].ok`, `[0].id` for a top-level array. A key that itself
-            contains a dot or a square bracket cannot be addressed.
+            contains a dot or a square bracket cannot be addressed. A new
+            path is at most 2048 characters; on an edit, a path saved before
+            that limit is accepted back unchanged.
           example: checks.db.status
         operator:
           type: string
@@ -5902,8 +5904,21 @@ components:
           description: |
             A JSON string, number, boolean or `null`, written as itself.
             Required for every operator except `exists`, which refuses it.
-            Must be a number for `less_than` and `greater_than`.
+            Must be a number for `less_than` and `greater_than`. A new value
+            is at most 2048 characters as written, quotes included; on an
+            edit, a value saved before that limit is accepted back unchanged.
           example: up
+    JSONAssertionLimits:
+      type: object
+      description: |
+        The length limit on a JSON assertion's path where every value is new,
+        on create and preview. It is not part of `JSONAssertion`, which an
+        edit shares: there a path saved before the limit is accepted back
+        unchanged, and a `maxLength` cannot see the stored value.
+      properties:
+        path:
+          type: string
+          maxLength: 2048
     DNSCheck:
       type: object
       additionalProperties: false
@@ -6924,10 +6939,14 @@ components:
           $ref: '#/components/schemas/MonitorType'
         target:
           type: string
+          maxLength: 2048
           description: |
             Required for every type except `push`, and validated against
             `type`. A `push` monitor must **not** send one: there is nothing
             to dial, and a placeholder in that column would look like data.
+            At most 2048 characters, counted as characters, as `keyword` and
+            `expected_status` are; a longer value is refused with a 400 whose
+            `field` names it.
           example: https://example.com/health
         interval_s:
           type: integer
@@ -6981,6 +7000,7 @@ components:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
           type: string
+          maxLength: 2048
           description: |
             Acceptable HTTP status codes as a comma-separated list of codes
             (`204`), ranges (`200-299`) and classes (`2xx`), each between 100
@@ -6991,12 +7011,15 @@ components:
           example: 200-299
         keyword:
           type: string
+          maxLength: 2048
           description: Body text to match, used together with `keyword_mode`. Read only by an `http` check.
           example: OK
         keyword_mode:
           $ref: '#/components/schemas/KeywordMode'
         json_assertion:
-          $ref: '#/components/schemas/JSONAssertion'
+          allOf:
+            - $ref: '#/components/schemas/JSONAssertion'
+            - $ref: '#/components/schemas/JSONAssertionLimits'
           description: Optional; only for `http` monitors. Omitted or `null` means none.
         dns:
           $ref: '#/components/schemas/DNSCheck'
@@ -7025,14 +7048,16 @@ components:
           default: true
         headers:
           type: object
-          description: Extra request headers for `http` monitors, refused on any other type. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports. A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, because net/http would not send it and every check would fail before reaching the target.
+          maxProperties: 64
+          description: Extra request headers for `http` monitors, refused on any other type. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports. A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, because net/http would not send it and every check would fail before reaching the target. At most 64 headers, and each header line as sent (name, colon, space and value) at most 8190 bytes, the default limit of Apache httpd, because a server refuses a longer one on every check.
           additionalProperties:
             type: string
           example:
             X-Api-Key: secret
         body:
           type: string
-          description: Request body for `http` monitors using a method that takes one. Refused on any other type.
+          maxLength: 65536
+          description: Request body for `http` monitors using a method that takes one. Refused on any other type. At most 65,536 characters.
         ssl_warn_days:
           type: integer
           description: |
@@ -7180,7 +7205,14 @@ components:
             way to hand back.
         target:
           type: string
-          description: Must not be blank. Re-validated against the resulting type.
+          description: |
+            Must not be blank. Re-validated against the resulting type. The
+            length limits of create apply to a value that differs from the
+            stored one, here and for `keyword`, `expected_status`, `headers`,
+            `body` and `json_assertion`: a monitor saved before them keeps its
+            settings through an edit that sends them back unchanged. That is
+            why this schema states them in words and sets no `maxLength` or
+            `maxProperties`, which cannot see the stored value.
         interval_s:
           type: integer
           description: |
@@ -7590,6 +7622,7 @@ components:
             are never inferred. An explicit value is always obeyed.
         target:
           type: string
+          maxLength: 2048
           description: A URL, a hostname, or a host:port.
           example: example.com
         timeout_s:
@@ -7601,17 +7634,21 @@ components:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
           type: string
+          maxLength: 2048
           description: |
             A value that does not parse is refused with a 400 whose `field` is
             `expected_status`, as on create and update, before any probe.
           example: 200-299
         keyword:
           type: string
+          maxLength: 2048
         keyword_mode:
           type: string
           enum: [absent_ok, must_contain, must_not_contain]
         json_assertion:
-          $ref: '#/components/schemas/JSONAssertion'
+          allOf:
+            - $ref: '#/components/schemas/JSONAssertion'
+            - $ref: '#/components/schemas/JSONAssertionLimits'
           description: |
             Validated exactly as on create and used by the probe, so the
             preview says whether the assertion holds right now.
@@ -7627,11 +7664,13 @@ components:
           type: boolean
         headers:
           type: object
+          maxProperties: 64
           description: A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, as on create and update.
           additionalProperties:
             type: string
         body:
           type: string
+          maxLength: 65536
         ssl_warn_days:
           type: integer
           description: |

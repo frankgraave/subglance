@@ -131,6 +131,11 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
+	// The limits a save applies, before anything parses the values.
+	if p := requestTextProblem(req.Target, req.Keyword, req.ExpectedStatus, req.Body, req.Headers, req.JSONAssertion); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 
 	typ, target, p := resolveTarget(req.Type, req.Target)
 	if !p.ok() {

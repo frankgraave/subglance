@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -611,6 +612,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return fieldProblem("type", "type is required")
 	default:
 		return fieldProblem("type", "unknown type "+req.Type)
+	}
+	if p := requestTextProblem(req.Target, req.Keyword, req.ExpectedStatus, req.Body, req.Headers, req.JSONAssertion); !p.ok() {
+		return p
 	}
 	if p := validatePushWindow(req.Type, req.PushIntervalS, req.PushGraceS); !p.ok() {
 		return p
@@ -1685,6 +1689,15 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		if strings.TrimSpace(*req.Target) == "" {
 			return fieldProblem("target", "target cannot be empty")
 		}
+		// Only a new value is measured, here and for every limit below,
+		// as for the name: a monitor saved before the limits keeps its
+		// settings through any other edit and through an import of its
+		// own export.
+		if *req.Target != m.Target {
+			if p := textLimitProblem("target", *req.Target); !p.ok() {
+				return p
+			}
+		}
 		m.Target = *req.Target
 	}
 
@@ -1736,12 +1749,22 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	if req.ExpectedStatus != nil {
 		// Judged only when sent, like headers: a monitor saved before the
 		// rule can still be renamed or paused without fixing it first.
+		if *req.ExpectedStatus != m.ExpectedStatus {
+			if p := textLimitProblem("expected_status", *req.ExpectedStatus); !p.ok() {
+				return p
+			}
+		}
 		if p := validateExpectedStatus(*req.ExpectedStatus); !p.ok() {
 			return p
 		}
 		m.ExpectedStatus = *req.ExpectedStatus
 	}
 	if req.Keyword != nil {
+		if *req.Keyword != m.Keyword {
+			if p := textLimitProblem("keyword", *req.Keyword); !p.ok() {
+				return p
+			}
+		}
 		m.Keyword = *req.Keyword
 	}
 	if req.KeywordMode != nil {
@@ -1756,12 +1779,22 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	if req.Headers != nil {
 		// Only headers a request sends are judged, so an edit that leaves
 		// them out never fails over headers saved before they were checked.
+		if !maps.Equal(*req.Headers, m.Headers) {
+			if p := headersLimitProblem(*req.Headers); !p.ok() {
+				return p
+			}
+		}
 		if p := validateRequestHeaders(*req.Headers); !p.ok() {
 			return p
 		}
 		m.Headers = *req.Headers
 	}
 	if req.Body != nil {
+		if *req.Body != m.Body {
+			if p := bodyLimitProblem(*req.Body); !p.ok() {
+				return p
+			}
+		}
 		m.Body = *req.Body
 	}
 	if req.SSLWarnDays != nil {
@@ -1817,6 +1850,9 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			if p.field == "" {
 				p = fieldProblem("json_assertion", "json_assertion must be an object with path, operator and expected, or null: "+p.msg)
 			}
+			return p
+		}
+		if p := assertionLimitProblem(wire, m.JSONAssertion); !p.ok() {
 			return p
 		}
 		a, p := jsonAssertionFromWire(wire)

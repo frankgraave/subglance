@@ -593,9 +593,23 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			missing = append(missing, "body")
 		}
 	}
-	// Headers and a body are not part of the patch above, so they are judged
-	// here, on the type the entry ends up with, and only when the file sends
-	// a value the monitor did not already hold for that type.
+	// Headers and a body are not part of the patch above, so their limits
+	// are judged here, on the values the placeholders resolved to, and only
+	// when they differ from what the monitor already holds: a monitor saved
+	// before the limits imports its own export unchanged.
+	if m.Headers != nil && (!found || !maps.Equal(next.Headers, existing.Headers)) {
+		if pr := headersLimitProblem(next.Headers); !pr.ok() {
+			return apiProblemAt(path, pr)
+		}
+	}
+	if m.Body != nil && (!found || next.Body != existing.Body) {
+		if pr := bodyLimitProblem(next.Body); !pr.ok() {
+			return apiProblemAt(path, pr)
+		}
+	}
+	// Nor are they judged against the type, so that happens here too, on
+	// the type the entry ends up with, and only when the file sends a value
+	// the monitor did not already hold for that type.
 	if pr := unreadSettingsProblem(next, func(field string) bool {
 		retyped := !found || existing.Type != next.Type
 		switch field {
