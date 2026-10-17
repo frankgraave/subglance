@@ -16,32 +16,11 @@ import (
 // request and spray as many accounts as it likes without ever filling a bucket.
 func TestCredentialSprayingFromOneSourceIsLimited(t *testing.T) {
 	srv, _ := testServerWithDB(t)
-	h := srv.Handler()
 
-	const attempts = 40
-
-	var lastCode int
-	blocked := 0
-	for i := range attempts {
-		req := jsonRequest(http.MethodPost, "/api/v1/auth/login",
-			fmt.Sprintf(`{"email":"victim%d@example.com","password":"wrong-password-entirely"}`, i))
-		// One host, one connection, a fresh forwarded address per request.
-		req.RemoteAddr = "203.0.113.9:40000"
-		req.Header.Set("X-Forwarded-For", "198.51.100."+strconv.Itoa(i%250+1))
-
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		lastCode = rec.Code
-		if rec.Code == http.StatusTooManyRequests {
-			blocked++
-		}
-	}
-
-	if blocked == 0 {
-		t.Errorf("%d spray attempts from one host were all served (last status %d); "+
-			"a forwarded header from an untrusted peer must not reset the limiter",
-			attempts, lastCode)
-	}
+	// One host, one connection, a fresh forwarded address per request.
+	assertSprayStoppedByIPKey(t, srv.Handler(), "203.0.113.9:40000", func(i int) string {
+		return "198.51.100." + strconv.Itoa(i%250+1)
+	}, "a forwarded header from an untrusted peer must not reset the limiter")
 }
 
 // TestCredentialSprayingBehindAnAppendingProxyIsLimited is the same spray
@@ -54,29 +33,48 @@ func TestCredentialSprayingBehindAnAppendingProxyIsLimited(t *testing.T) {
 	if _, err := srv.WithTrustedProxies("127.0.0.1"); err != nil {
 		t.Fatal(err)
 	}
-	h := srv.Handler()
 
-	const attempts = 40
+	assertSprayStoppedByIPKey(t, srv.Handler(), "127.0.0.1:40000", func(i int) string {
+		return "198.51.100." + strconv.Itoa(i%250+1) + ", 203.0.113.9"
+	}, "the address the client wrote must not pick the limiter's bucket")
+}
 
-	var lastCode int
-	blocked := 0
-	for i := range attempts {
+// assertSprayStoppedByIPKey sends maxLoginAttempts failed sign-ins, each for a
+// different account and with the X-Forwarded-For value xff(i), and then one
+// more. Every account is fresh, so only the per-IP key can refuse the last
+// one: the spray holds that key when the client address does not follow the
+// forwarded value.
+//
+// The count stays far below loginFloodBurst on purpose. The global flood
+// limiter runs first in handleLogin and answers with its own 429, so a spray
+// long enough to reach it would pass whether or not the IP key ever filled.
+// The Retry-After of 900 tells the keyed limiter's refusal apart from the
+// flood limiter's 1.
+func assertSprayStoppedByIPKey(t *testing.T, h http.Handler, remoteAddr string, xff func(int) string, why string) {
+	t.Helper()
+	if maxLoginAttempts+1 >= loginFloodBurst {
+		t.Fatalf("the spray of %d attempts would reach the flood burst of %v", maxLoginAttempts+1, loginFloodBurst)
+	}
+
+	for i := range maxLoginAttempts + 1 {
 		req := jsonRequest(http.MethodPost, "/api/v1/auth/login",
 			fmt.Sprintf(`{"email":"victim%d@example.com","password":"wrong-password-entirely"}`, i))
-		req.RemoteAddr = "127.0.0.1:40000"
-		req.Header.Set("X-Forwarded-For", "198.51.100."+strconv.Itoa(i%250+1)+", 203.0.113.9")
+		req.RemoteAddr = remoteAddr
+		req.Header.Set("X-Forwarded-For", xff(i))
 
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		lastCode = rec.Code
-		if rec.Code == http.StatusTooManyRequests {
-			blocked++
-		}
-	}
 
-	if blocked == 0 {
-		t.Errorf("%d spray attempts from one host behind an appending proxy were all served "+
-			"(last status %d); the address the client wrote must not pick the limiter's bucket",
-			attempts, lastCode)
+		if i < maxLoginAttempts {
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("attempt %d: status %d, want %d before the IP key is full",
+					i+1, rec.Code, http.StatusUnauthorized)
+			}
+			continue
+		}
+		if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "900" {
+			t.Errorf("attempt %d from one host: status %d, Retry-After %q, want %d with the keyed limiter's 900; %s",
+				i+1, rec.Code, rec.Header().Get("Retry-After"), http.StatusTooManyRequests, why)
+		}
 	}
 }
