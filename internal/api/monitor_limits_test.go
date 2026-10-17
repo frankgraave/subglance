@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -262,4 +263,94 @@ func TestHeaderLineRefusalQuotesAShortName(t *testing.T) {
 	if len(p.msg) > 200 {
 		t.Errorf("the refusal is %d bytes long: %.120s...", len(p.msg), p.msg)
 	}
+}
+
+// TestOpenAPIMonitorLimitsMatchTheServer keeps the document's limits where
+// the server applies them to every value, and out of the schema where it
+// does not. Create and preview measure every value, so their schemas carry
+// the limits. An edit accepts a value saved before the limits back
+// unchanged, which a maxLength cannot see, so the PATCH schema and the
+// JSONAssertion it shares state them in words only: with a maxLength there,
+// a validator refuses an edit the server takes.
+func TestOpenAPIMonitorLimitsMatchTheServer(t *testing.T) {
+	spec := loadSpec(t)
+	schema := func(name string) map[string]any {
+		t.Helper()
+		node, ok := spec.Components.Schemas[name]
+		if !ok {
+			t.Fatalf("spec has no components.schemas.%s", name)
+		}
+		var s map[string]any
+		if err := node.Decode(&s); err != nil {
+			t.Fatalf("decode %s: %v", name, err)
+		}
+		return s
+	}
+	prop := func(s map[string]any, field string) map[string]any {
+		props, _ := s["properties"].(map[string]any)
+		p, _ := props[field].(map[string]any)
+		return p
+	}
+	const limitsRef = "#/components/schemas/JSONAssertionLimits"
+	want := map[string]struct {
+		key string
+		n   int
+	}{
+		"target":          {"maxLength", maxMonitorTextLen},
+		"keyword":         {"maxLength", maxMonitorTextLen},
+		"expected_status": {"maxLength", maxMonitorTextLen},
+		"body":            {"maxLength", maxMonitorBodyLen},
+		"headers":         {"maxProperties", maxMonitorHeaders},
+	}
+
+	for _, name := range []string{"CreateMonitorRequest", "PreviewCheckRequest"} {
+		s := schema(name)
+		for field, w := range want {
+			if got := prop(s, field)[w.key]; got != w.n {
+				t.Errorf("%s.%s %s = %v, want %d", name, field, w.key, got, w.n)
+			}
+		}
+		if !slices.Contains(schemaRefs(prop(s, "json_assertion")), limitsRef) {
+			t.Errorf("%s.json_assertion does not take JSONAssertionLimits", name)
+		}
+	}
+	if got := prop(schema("JSONAssertionLimits"), "path")["maxLength"]; got != maxMonitorTextLen {
+		t.Errorf("JSONAssertionLimits.path maxLength = %v, want %d", got, maxMonitorTextLen)
+	}
+
+	patchSchema := schema("PatchMonitorRequest")
+	for field := range want {
+		for _, key := range []string{"maxLength", "maxProperties"} {
+			if got, ok := prop(patchSchema, field)[key]; ok {
+				t.Errorf("PatchMonitorRequest.%s sets %s %v, which refuses a stored value sent back", field, key, got)
+			}
+		}
+	}
+	if slices.Contains(schemaRefs(patchSchema), limitsRef) {
+		t.Errorf("PatchMonitorRequest takes JSONAssertionLimits, which refuses a stored path sent back")
+	}
+	for _, field := range []string{"path", "expected"} {
+		if got, ok := prop(schema("JSONAssertion"), field)["maxLength"]; ok {
+			t.Errorf("JSONAssertion.%s sets maxLength %v, but PATCH shares it", field, got)
+		}
+	}
+}
+
+// schemaRefs lists every $ref inside a decoded schema.
+func schemaRefs(v any) []string {
+	var refs []string
+	switch x := v.(type) {
+	case map[string]any:
+		for k, e := range x {
+			if s, ok := e.(string); ok && k == "$ref" {
+				refs = append(refs, s)
+			}
+			refs = append(refs, schemaRefs(e)...)
+		}
+	case []any:
+		for _, e := range x {
+			refs = append(refs, schemaRefs(e)...)
+		}
+	}
+	return refs
 }

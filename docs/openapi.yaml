@@ -5886,9 +5886,9 @@ components:
           description: |
             Dot notation with array indexes: `checks.db.status`,
             `items[0].ok`, `[0].id` for a top-level array. A key that itself
-            contains a dot or a square bracket cannot be addressed. At most
-            2048 characters.
-          maxLength: 2048
+            contains a dot or a square bracket cannot be addressed. A new
+            path is at most 2048 characters; on an edit, a path saved before
+            that limit is accepted back unchanged.
           example: checks.db.status
         operator:
           type: string
@@ -5904,9 +5904,21 @@ components:
           description: |
             A JSON string, number, boolean or `null`, written as itself.
             Required for every operator except `exists`, which refuses it.
-            Must be a number for `less_than` and `greater_than`. At most 2048
-            characters as written, quotes included.
+            Must be a number for `less_than` and `greater_than`. A new value
+            is at most 2048 characters as written, quotes included; on an
+            edit, a value saved before that limit is accepted back unchanged.
           example: up
+    JSONAssertionLimits:
+      type: object
+      description: |
+        The length limit on a JSON assertion's path where every value is new,
+        on create and preview. It is not part of `JSONAssertion`, which an
+        edit shares: there a path saved before the limit is accepted back
+        unchanged, and a `maxLength` cannot see the stored value.
+      properties:
+        path:
+          type: string
+          maxLength: 2048
     DNSCheck:
       type: object
       additionalProperties: false
@@ -7005,7 +7017,9 @@ components:
         keyword_mode:
           $ref: '#/components/schemas/KeywordMode'
         json_assertion:
-          $ref: '#/components/schemas/JSONAssertion'
+          allOf:
+            - $ref: '#/components/schemas/JSONAssertion'
+            - $ref: '#/components/schemas/JSONAssertionLimits'
           description: Optional; only for `http` monitors. Omitted or `null` means none.
         dns:
           $ref: '#/components/schemas/DNSCheck'
@@ -7191,13 +7205,14 @@ components:
             way to hand back.
         target:
           type: string
-          maxLength: 2048
           description: |
             Must not be blank. Re-validated against the resulting type. The
             length limits of create apply to a value that differs from the
             stored one, here and for `keyword`, `expected_status`, `headers`,
             `body` and `json_assertion`: a monitor saved before them keeps its
-            settings through an edit that sends them back unchanged.
+            settings through an edit that sends them back unchanged. That is
+            why this schema states them in words and sets no `maxLength` or
+            `maxProperties`, which cannot see the stored value.
         interval_s:
           type: integer
           description: |
@@ -7226,14 +7241,12 @@ components:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
           type: string
-          maxLength: 2048
           description: |
             Under the same rules as on create. Only a value in the request is
             checked, so an edit that leaves `expected_status` out is not
             refused over a value already stored.
         keyword:
           type: string
-          maxLength: 2048
         keyword_mode:
           $ref: '#/components/schemas/KeywordMode'
         json_assertion:
@@ -7274,13 +7287,11 @@ components:
           type: boolean
         headers:
           type: object
-          maxProperties: 64
           description: Replaces the whole header map, under the same rules as on create. Only a map in the request is checked, so an edit that leaves `headers` out is not refused over headers already stored.
           additionalProperties:
             type: string
         body:
           type: string
-          maxLength: 65536
         ssl_warn_days:
           type: integer
           description: |
@@ -7635,7 +7646,9 @@ components:
           type: string
           enum: [absent_ok, must_contain, must_not_contain]
         json_assertion:
-          $ref: '#/components/schemas/JSONAssertion'
+          allOf:
+            - $ref: '#/components/schemas/JSONAssertion'
+            - $ref: '#/components/schemas/JSONAssertionLimits'
           description: |
             Validated exactly as on create and used by the probe, so the
             preview says whether the assertion holds right now.
