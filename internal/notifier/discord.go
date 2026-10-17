@@ -52,18 +52,21 @@ func (s *DiscordSender) Send(ctx context.Context, cfg map[string]string, a Alert
 
 	// The description is read as markdown and the title is not, so only the
 	// description's text is escaped: a backslash in the title would show.
-	body := discordText(a.Body())
+	// The title is the link Discord draws most plainly, so it goes to the
+	// incident; the description ends with both, named, for the monitor.
+	links := ""
+	if primaryLink(a) != "" {
+		links = "\n\n" + discordLinks(a)
+	}
+	describe := func(body string) string { return discordText(body) + links }
 	embed := map[string]any{
 		"title":       a.Title(),
-		"description": body,
+		"description": describe(fitBody(a.Body(), discordDescriptionMax, utf16Len, describe)),
 		"color":       colour,
 		"timestamp":   a.At.UTC().Format("2006-01-02T15:04:05Z"),
 	}
-	// The title is the link Discord draws most plainly, so it goes to the
-	// incident; the description ends with both, named, for the monitor.
 	if link := primaryLink(a); link != "" {
 		embed["url"] = link
-		embed["description"] = body + "\n\n" + discordLinks(a)
 	}
 
 	payload := map[string]any{

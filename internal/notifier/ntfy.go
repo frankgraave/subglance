@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -105,7 +106,6 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 	payload := map[string]any{
 		"topic":    strings.TrimSpace(cfg["topic"]),
 		"title":    a.Title(),
-		"message":  a.Body(),
 		"priority": priority,
 		// A tag that names an emoji is drawn in front of the title, which
 		// is what makes an outage and a recovery tell apart on a lock
@@ -119,6 +119,7 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 		payload["click"] = link
 		payload["actions"] = ntfyActions(a)
 	}
+	payload["message"] = fitBody(a.Body(), ntfyMessageMax, ntfySize(payload), func(s string) string { return s })
 
 	req, err := jsonRequest(ctx, server, payload)
 	if err != nil {
@@ -134,6 +135,24 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 		req.SetBasicAuth(cfg["username"], cfg["password"])
 	}
 	return httpSend(ctx, s.client, req)
+}
+
+// ntfySize measures a message the way ntfy does, against two limits. The
+// message itself is counted in bytes as it arrives, after the JSON is
+// decoded, against message-size-limit; and the whole JSON request is read up
+// to twice that limit. A message of <, > and & is up to six times longer
+// encoded, so either limit can be the one it is over. The count is the
+// larger of the message's bytes and the request's bytes less one limit, so
+// it is at most ntfyMessageMax exactly when both fit.
+func ntfySize(payload map[string]any) func(string) int {
+	return func(s string) int {
+		payload["message"] = s
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return len(s)
+		}
+		return max(len(s), len(b)-ntfyMessageMax)
+	}
 }
 
 // ntfyActions is one "view" button per link.
