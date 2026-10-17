@@ -25,6 +25,7 @@ import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 import { PushClockField } from "./PushClockField";
 import { pushIntervalTakesZone, pushZoneFor } from "./pushClock";
+import { readsTlsSettings, settingsReadBy } from "./typeSettings";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -78,9 +79,6 @@ const RANGES: readonly (readonly [string, number, number, string])[] = [
   ...Object.entries(DURATION_LIMITS).map(([key, { min, max, message }]) => [key, min, max, message] as const),
 ];
 
-/** Types whose check reads none of the HTTP and TLS settings. */
-const withoutHttp = (type: string) => type === "dns" || type === "domain";
-
 /** Only settings actually read from the server become editable values. */
 function valuesFor(monitor: InventoryMonitor): Record<string, string> {
   const values: Record<string, string> = { name: monitor.name, tags: tagsToText(monitor.tags) };
@@ -95,7 +93,8 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
   } else {
     // Absence is no opinion, not a pinned default. Keep it in the draft so
     // selecting no opinion can deliberately clear a previously stored floor.
-    values.min_tls_version = monitor.minTlsVersion;
+    // Only a check that makes a TLS handshake has a floor to offer.
+    if (readsTlsSettings(monitor.type)) values.min_tls_version = monitor.minTlsVersion;
     values.target = monitor.target;
     values.interval_s = String(monitor.intervalS);
     if (monitor.timeoutS !== null) values.timeout_s = String(monitor.timeoutS);
@@ -123,9 +122,9 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
     // for an http monitor of an http:// address too, whose target may be
     // edited to https:// and then trust a certificate.
     if (monitor.type === "ssl" || monitor.type === "http") values.trusted_cert_sha256 = monitor.trustedCertSHA256 ?? "";
-    // The detail read sends the HTTP settings for every type; a DNS query
-    // and a registry lookup read none of them, so neither is offered them.
-    for (const [key, value] of Object.entries(withoutHttp(monitor.type) ? {} : monitor.checkSettings ?? {})) {
+    // The detail read sends the HTTP and TLS settings for every type; each
+    // is offered only on a type whose check reads it (typeSettings.ts).
+    for (const [key, value] of Object.entries(settingsReadBy(monitor.type, monitor.checkSettings ?? {}))) {
       if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
     }
@@ -257,7 +256,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     // the interval no longer takes is cleared even though the box is untouched.
     delete patch.push_timezone;
     if ("push_timezone" in values && parsed.push_timezone !== initial.push_timezone) patch.push_timezone = parsed.push_timezone as string;
-    const request: PreviewRequest = { ...(withoutHttp(monitor.type) ? {} : monitor.checkSettings), type: monitor.type, target: values.target?.trim() ?? "" };
+    const request: PreviewRequest = { ...settingsReadBy(monitor.type, monitor.checkSettings ?? {}), type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
     // Preview has no stored assertion to clear: absence means none.
     if (request.json_assertion === null) delete request.json_assertion;
@@ -378,10 +377,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           </div>
           <p className="field-help">{JSON_HELP}</p>
         </>}
-        {!withoutHttp(monitor.type) && <details className="add-advanced">
+        {readsTlsSettings(monitor.type) && <details className="add-advanced">
           <summary className="add-summary">Advanced options</summary>
           <div className="field-grid">
-            <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version}
+            <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version ?? ""}
               onChange={(value) => update("min_tls_version", value)}
               invalid={problem?.field === "min_tls_version"}
               errorId={problem?.field === "min_tls_version" ? `${ids}-error` : undefined}>

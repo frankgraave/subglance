@@ -20,6 +20,7 @@ import { isPush } from "./push";
 import { PushClockField } from "./PushClockField";
 import { pushIntervalTakesZone } from "./pushClock";
 import { TlsFloorField } from "./TlsFloorField";
+import { readsHttpSettings, readsTlsSettings } from "./typeSettings";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
 import { CERTIFICATE_OFFERED, carriesPin, describePreview, suggestName } from "./preview";
@@ -904,8 +905,11 @@ export function AddMonitorForm({
                 />
               </div>
 
-              {/* A DNS query and a registry lookup have no TLS and no body to read. */}
-              {!dns && !domain && <>
+              {/*
+               * Each offered only where the check reads it (typeSettings.ts):
+               * the floor needs a TLS handshake, the keyword a response body.
+               */}
+              {readsTlsSettings(values.type) && (
               <TlsFloorField
                 id={`${ids}-min-tls`}
                 value={values.minTlsVersion}
@@ -924,7 +928,9 @@ export function AddMonitorForm({
                   ids={ids}
                 />
               </TlsFloorField>
+              )}
 
+              {readsHttpSettings(values.type) && (
               <div className="field field-wide">
                 <label className="field-label" htmlFor={`${ids}-keyword`}>
                   Body must contain
@@ -961,7 +967,7 @@ export function AddMonitorForm({
                   ids={ids}
                 />
               </div>
-              </>}
+              )}
 
               {/* Only an HTTP check reads a body; an unset type is inferred and may be one. */}
               {(values.type === "" || values.type === "http") && <>

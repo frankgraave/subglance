@@ -593,6 +593,21 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			missing = append(missing, "body")
 		}
 	}
+	// Headers and a body are not part of the patch above, so they are judged
+	// here, on the type the entry ends up with, and only when the file sends
+	// a value the monitor did not already hold for that type.
+	if pr := unreadSettingsProblem(next, func(field string) bool {
+		retyped := !found || existing.Type != next.Type
+		switch field {
+		case "headers":
+			return m.Headers != nil && (retyped || !maps.Equal(next.Headers, existing.Headers))
+		case "body":
+			return m.Body != nil && (retyped || next.Body != existing.Body)
+		}
+		return false
+	}); !pr.ok() {
+		return apiProblemAt(path, pr)
+	}
 	if len(missing) > 0 {
 		slices.Sort(missing)
 		next.Enabled = false

@@ -6885,6 +6885,14 @@ components:
         is required for `push` and rejected for every other type. Both rules are
         expressed below with `if`/`then`, so a validator enforces the same shape
         the server does.
+
+        Only an `http` check reads `method`, `expected_status`, `keyword` with
+        `keyword_mode`, `headers` and `body`; only an `http` or `ssl` check
+        reads `ssl_warn_days` and `min_tls_version`. On any other type a value
+        that would change the check is refused with a 400 whose `field` names
+        it, because it would be shown in the monitor's settings and never
+        evaluated. The value a field takes when it is left out (`GET`,
+        `200-299`, `absent_ok`, `14`, empty) is accepted on every type.
       required: [name, type]
       allOf:
         - if:
@@ -6983,7 +6991,7 @@ components:
           example: 200-299
         keyword:
           type: string
-          description: Body text to match, used together with `keyword_mode`.
+          description: Body text to match, used together with `keyword_mode`. Read only by an `http` check.
           example: OK
         keyword_mode:
           $ref: '#/components/schemas/KeywordMode'
@@ -7017,19 +7025,20 @@ components:
           default: true
         headers:
           type: object
-          description: Extra request headers for `http` monitors. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports. A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, because net/http would not send it and every check would fail before reaching the target.
+          description: Extra request headers for `http` monitors, refused on any other type. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports. A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, because net/http would not send it and every check would fail before reaching the target.
           additionalProperties:
             type: string
           example:
             X-Api-Key: secret
         body:
           type: string
-          description: Request body for `http` monitors using a method that takes one.
+          description: Request body for `http` monitors using a method that takes one. Refused on any other type.
         ssl_warn_days:
           type: integer
           description: |
             Days before certificate expiry at which to warn; applies to https
-            and ssl checks. Defaults to 14. 0 is rejected rather than read as
+            and ssl checks, and a value other than 14 is refused on any other
+            type. Defaults to 14. 0 is rejected rather than read as
             "never warn", because the stored default would turn it back into
             14 and the client would be told it had disabled a warning it
             still gets.
@@ -7039,7 +7048,8 @@ components:
         min_tls_version:
           $ref: '#/components/schemas/MinTLSVersion'
           description: |
-            The lowest TLS version this monitor will negotiate. Omit it to
+            The lowest TLS version this monitor will negotiate, on an `http`
+            or `ssl` monitor; refused on any other type. Omit it to
             have no opinion and follow SubGlance's default of TLS 1.2; the
             empty string is rejected rather than read as "the default",
             because omitting the field already says that and an empty string
@@ -7145,6 +7155,15 @@ components:
         Every field is optional; only the ones present are changed. Unknown
         fields are rejected. Unlike create, explicit zeroes are validated
         rather than treated as "use the default".
+
+        The settings only some types read (see CreateMonitorRequest) are
+        refused on a type that does not read them when the request sends a
+        value the monitor does not already hold, or sends one with a new
+        `type`. A monitor saved with one before that rule can still be
+        renamed, paused and imported from its own export. A `type` change
+        resets the settings the new type does not read to their defaults,
+        so an `http` monitor's headers are not kept on the `tcp` monitor it
+        becomes.
       properties:
         name:
           type: string
@@ -7559,7 +7578,8 @@ components:
       description: |
         The settings to probe with. Everything that only matters once a monitor
         is stored — name, interval, enabled — is absent, because nothing is
-        scheduled and nothing is written.
+        scheduled and nothing is written. A setting the resolved type does not
+        read is refused as on create, before anything is probed.
       required: [target]
       properties:
         type:

@@ -19,6 +19,7 @@ import {
 import type { PreviewRequest, PreviewState } from "./preview";
 import type { Rejection } from "./AddMonitorForm";
 import type { Channel } from "../notifications/channels";
+import { readsHttpSettings, readsTlsSettings } from "./typeSettings";
 
 /**
  * The data owner for the add-monitor form.
@@ -268,9 +269,11 @@ function bodyFor(
 }
 
 /**
- * The TLS floor and the keyword, sent only for a type that reads them: the
- * form hides both for a dns or domain monitor, and a value typed before
- * switching must not be stored on a monitor that never uses it.
+ * The TLS floor and the keyword, sent only for a type that reads them
+ * (typeSettings.ts): the form hides each where it is not read, and a value
+ * typed before switching must not be stored on a monitor that never uses it.
+ * A type still to be worked out from the address may be HTTP, so it sends
+ * both, and the server refuses them if the address turns out to be TCP.
  *
  * The floor is omitted entirely when the user expressed no opinion. The API
  * rejects an empty string on create precisely so a client cannot store a
@@ -282,12 +285,11 @@ function httpFields(values: AddMonitorValues): {
   keyword?: string;
   keyword_mode?: string;
 } {
-  if (values.type === "dns" || values.type === "domain") return {};
   return {
-    ...(values.minTlsVersion !== ""
+    ...(values.minTlsVersion !== "" && readsTlsSettings(values.type)
       ? { min_tls_version: values.minTlsVersion }
       : {}),
-    ...(values.keyword !== ""
+    ...(values.keyword !== "" && readsHttpSettings(values.type)
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
   };
