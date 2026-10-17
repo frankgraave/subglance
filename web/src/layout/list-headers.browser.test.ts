@@ -383,10 +383,11 @@ describe("phone tab rows", () => {
    *    start instead, where the first tabs now stand past the edge.
    *
    * 320px as well as 390: the narrowest phone still in use is where a row
-   * that only just fits at 390 is cut. A fade can only show what reaches
-   * into it: when the cut falls in the gap between two tabs, as it does for
-   * this fixture at 320, the row ends on whole tabs and the hint has nothing
-   * to dissolve. What is held here at every width is that the mask is there.
+   * that only just fits at 390 is cut. A row that fits draws no fade. The
+   * fixture cuts the dashboard's row at both widths and fits the incidents
+   * row at both, so the two tests after the loop hold that each row is
+   * really cut somewhere: the dashboard's as it stands, the incidents row
+   * once it is narrower than its tabs.
    */
   const ROWS = [
     { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']", header: ".mon-board > .card-head" },
@@ -436,6 +437,20 @@ describe("phone tab rows", () => {
     }, header);
   }
 
+  async function scrollToEnd(page: Page, header: string): Promise<void> {
+    await page.evaluate((sel: string) => {
+      const tabs = document.querySelector(`${sel} .mon-tabs`)!;
+      tabs.scrollLeft = tabs.scrollWidth;
+    }, header);
+    await settle(page);
+  }
+
+  async function settle(page: Page): Promise<void> {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+  }
+
   for (const { name, path, ready, header } of ROWS) {
     it.each([320, 390])(`${name}: a cut-off tab is never covered and fades on the side it is cut at %ipx`, async (width) => {
       const page = await open(path, ready, width);
@@ -450,13 +465,7 @@ describe("phone tab rows", () => {
         if (seen.cut.length === 0) expect(seen.fades).toEqual({ start: false, end: false });
 
         if (!seen.cut.includes("end")) return;
-        await page.evaluate((sel: string) => {
-          const tabs = document.querySelector(`${sel} .mon-tabs`)!;
-          tabs.scrollLeft = tabs.scrollWidth;
-        }, header);
-        await page.evaluate(
-          () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-        );
+        await scrollToEnd(page, header);
         const end = await read(page, header);
         expect(end.cut, "scrolled to the end, only the start is cut").not.toContain("end");
         expect(end.fades.end, "scrolled to the end, the end stops fading").toBe(false);
@@ -474,6 +483,33 @@ describe("phone tab rows", () => {
     const page = await open("/", ROWS[0]!.ready, 390);
     try {
       expect((await read(page, ROWS[0]!.header)).cut).toContain("end");
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("fades the incidents row once it is cut, so its hint is exercised too", async () => {
+    // The incidents screen's three tabs fit at every phone width the fixture
+    // reaches, so the loop above only ever sees that row whole. Narrowing the
+    // row to half its width cuts it the way longer counts would, and holds
+    // that this instance marks and fades its cut sides like the dashboard's.
+    const { path, ready, header } = ROWS[1]!;
+    const page = await open(path, ready, 390);
+    try {
+      expect((await read(page, header)).cut, "the fixture's incidents row fits at 390px").toEqual([]);
+      await page.evaluate((sel: string) => {
+        const tabs = document.querySelector<HTMLElement>(`${sel} .mon-tabs`)!;
+        tabs.style.maxWidth = `${tabs.getBoundingClientRect().width / 2}px`;
+      }, header);
+      await settle(page);
+      const cut = await read(page, header);
+      expect(cut.cut, "half its width, the row is cut at the end").toContain("end");
+      expect(cut.fades, "cut at the end only, the row fades at the end only").toEqual({ start: false, end: true });
+
+      await scrollToEnd(page, header);
+      const end = await read(page, header);
+      expect(end.cut, "scrolled to the end, only the start is cut").not.toContain("end");
+      expect(end.fades, "scrolled to the end, the row fades at the start only").toEqual({ start: true, end: false });
     } finally {
       await page.close();
     }
