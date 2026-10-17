@@ -211,12 +211,15 @@ func (db *DB) UpdateRoutingRule(ctx context.Context, r RoutingRule) (RoutingRule
 	return db.GetRoutingRule(ctx, r.ID)
 }
 
-func replaceRuleChannels(ctx context.Context, tx *sql.Tx, ruleID int64, ids []int64) error {
+// replaceRuleChannels swaps a routing rule's channels for ids inside the
+// caller's transaction. Repeated ids are dropped first, for the reason given
+// on distinctIDs.
+func replaceRuleChannels(ctx context.Context, tx txQuerier, ruleID int64, ids []int64) error {
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM routing_rule_channels WHERE rule_id = ?", ruleID); err != nil {
 		return fmt.Errorf("clear routing rule channels: %w", err)
 	}
-	for _, id := range ids {
+	for _, id := range distinctIDs(ids) {
 		var found int
 		err := tx.QueryRowContext(ctx, "SELECT 1 FROM notif_channels WHERE id = ?", id).Scan(&found)
 		if errors.Is(err, sql.ErrNoRows) {

@@ -403,17 +403,47 @@ func (db *DB) SetMonitorChannels(ctx context.Context, monitorID int64, ids []int
 	return nil
 }
 
+// txQuerier is the part of *sql.Tx the channel assignment helpers use, so a
+// test can count the statements one request costs.
+type txQuerier interface {
+	execer
+	rowQuerier
+}
+
+// distinctIDs returns ids without repeats, each where it first appears.
+//
+// Repeating an id is tolerated, but the assignment helpers query and insert
+// once per entry inside the write transaction, and the store has one writer
+// connection. A 1 MiB body repeating one channel id is about 524,000 entries:
+// measured at 8 s of held writer, with every check result, incident and
+// outbox write on the instance queued behind it. Without repeats the work is
+// bounded by the channels that exist, since the first unknown id ends the
+// request. Order is kept so that refusal still names the first unknown id the
+// client sent.
+func distinctIDs(ids []int64) []int64 {
+	out := make([]int64, 0, min(len(ids), 64))
+	seen := make(map[int64]struct{}, min(len(ids), 64))
+	for _, id := range ids {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
 // replaceMonitorChannels swaps a monitor's own channel assignments for ids
 // inside the caller's transaction. It is shared by SetMonitorChannels and by
 // the monitor create and update paths, which assign channels in the same
 // transaction as the row they write.
-func replaceMonitorChannels(ctx context.Context, tx *sql.Tx, monitorID int64, ids []int64) error {
+func replaceMonitorChannels(ctx context.Context, tx txQuerier, monitorID int64, ids []int64) error {
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM monitor_channels WHERE monitor_id = ?", monitorID); err != nil {
 		return fmt.Errorf("clear monitor channels: %w", err)
 	}
 
-	for _, id := range ids {
+	for _, id := range distinctIDs(ids) {
 		// A foreign-key violation would also catch an unknown channel, but
 		// only as an opaque driver error. Checking here turns it into a
 		// message that names the offending id.
@@ -428,6 +458,8 @@ func replaceMonitorChannels(ctx context.Context, tx *sql.Tx, monitorID int64, id
 
 		// Duplicates in the request are the client repeating itself, not an
 		// error worth rejecting: the resulting set is the same either way.
+		// distinctIDs has dropped them already; the conflict clause stays as
+		// the schema's own guarantee.
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO monitor_channels (monitor_id, channel_id) VALUES (?, ?)
 			ON CONFLICT DO NOTHING`, monitorID, id); err != nil {
