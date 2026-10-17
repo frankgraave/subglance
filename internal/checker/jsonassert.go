@@ -357,14 +357,22 @@ func describeJSON(v any) string {
 
 // compactJSON renders a decoded value back as JSON, shortened so a large
 // value cannot turn one failure message into a page of text.
+//
+// "<", ">" and "&" are written as themselves. json.Marshal escapes them for
+// embedding in HTML, which this text never is, and "<degraded> & slow" read
+// as "\u003cdegraded\u003e \u0026 slow" in the message, the incident and the
+// alert. The cut does not split a character: see cutBytes.
 func compactJSON(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return fmt.Sprint(v)
 	}
+	s := strings.TrimSuffix(buf.String(), "\n")
 	const limit = 120
-	if len(b) > limit {
-		return string(b[:limit]) + "…"
+	if len(s) > limit {
+		return cutBytes(s, limit) + "…"
 	}
-	return string(b)
+	return s
 }

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/checker"
 )
@@ -89,17 +90,40 @@ func blocked(err error) error {
 // Bounded and single-line on purpose: this text ends up in a UI field and in a
 // log, and an endpoint that answers with an HTML error page should not fill
 // either of them.
+//
+// The result is valid UTF-8 whatever the endpoint sent, because it is stored
+// as the channel's delivery error. A byte that is not UTF-8 becomes U+FFFD,
+// which says a character stood there, and the cut backs off to the start of
+// a character instead of keeping half of one. A character the read limit
+// cut in two is dropped rather than replaced: it was valid, only not read
+// whole, and leading spaces trimmed below can bring that end under the cut.
 func readSnippet(r io.Reader) string {
-	b, err := io.ReadAll(io.LimitReader(r, 200))
+	const readLimit = 200
+	b, err := io.ReadAll(io.LimitReader(r, readLimit))
 	if err != nil {
 		return ""
 	}
-	s := strings.TrimSpace(string(b))
+	if len(b) == readLimit {
+		for i := 1; i < utf8.UTFMax && i <= len(b); i++ {
+			if start := len(b) - i; utf8.RuneStart(b[start]) {
+				if !utf8.FullRune(b[start:]) {
+					b = b[:start]
+				}
+				break
+			}
+		}
+	}
+	s := strings.TrimSpace(strings.ToValidUTF8(string(b), string(utf8.RuneError)))
 	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
 		s = s[:i]
 	}
-	if len(s) > 160 {
-		s = s[:160] + "…"
+	const limit = 160
+	if len(s) > limit {
+		cut := limit
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut] + "…"
 	}
 	return s
 }

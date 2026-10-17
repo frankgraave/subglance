@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/auth"
 )
@@ -419,7 +420,7 @@ func (db *DB) CreateSession(ctx context.Context, userID int64, userAgent, ip str
 		INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at, user_agent, ip, public_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		auth.HashToken(token), userID, now.Unix(), now.Add(SessionTTL).Unix(), now.Unix(),
-		truncate(userAgent, 255), truncate(ip, 64), publicID)
+		cutBytes(userAgent, 255), cutBytes(ip, 64), publicID)
 	if err != nil {
 		return "", fmt.Errorf("insert session: %w", err)
 	}
@@ -710,9 +711,21 @@ func nullTime(v sql.NullInt64) *time.Time {
 	return &t
 }
 
-func truncate(s string, max int) string {
-	if len(s) <= max {
+// cutBytes cuts s to at most n bytes, backing off to the start of a
+// character. A User-Agent cut inside one was stored with half a character
+// and listed on the sessions screen with a replacement character at its end.
+// It backs off at most three bytes, the most a character continues past its
+// first byte, so a header that was not UTF-8 is still cut near n.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
 		return s
 	}
-	return s[:max]
+	cut := max(n, 0)
+	for range utf8.UTFMax - 1 {
+		if cut == 0 || utf8.RuneStart(s[cut]) {
+			break
+		}
+		cut--
+	}
+	return s[:cut]
 }

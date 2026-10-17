@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/auth"
 )
@@ -284,5 +285,35 @@ func TestSessionIDMigrationNamesExistingSessions(t *testing.T) {
 			t.Errorf("two existing sessions share id %q", s.ID)
 		}
 		seen[s.ID] = true
+	}
+}
+
+// The User-Agent is cut at 255 bytes. A cut inside a character stored half
+// of it, and the sessions screen listed the browser with a replacement
+// character at its end.
+func TestSessionUserAgentIsCutAtACharacter(t *testing.T) {
+	db := openTestDB(t)
+	ctx := t.Context()
+	user, err := db.CreateUser(ctx, "ua@example.com", "correct-horse-battery-staple", RoleViewer)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	for pad := range 3 {
+		agent := "Mozilla/5.0 " + strings.Repeat("a", pad) + strings.Repeat("€", 100)
+		if _, err := db.CreateSession(ctx, user.ID, agent, "2001:db8::1"); err != nil {
+			t.Fatalf("CreateSession: %v", err)
+		}
+	}
+	sessions, err := db.ListSessions(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 3 {
+		t.Fatalf("got %d sessions, want 3", len(sessions))
+	}
+	for _, s := range sessions {
+		if !utf8.ValidString(s.UserAgent) || len(s.UserAgent) > 255 || len(s.UserAgent) < 252 {
+			t.Errorf("stored User-Agent of %d bytes, valid UTF-8 %v: %q", len(s.UserAgent), utf8.ValidString(s.UserAgent), s.UserAgent)
+		}
 	}
 }
