@@ -675,7 +675,7 @@ func describeDNSMismatch(recordType, name string, expected, got []string) string
 		shown := make([]string, 0, len(values))
 		for _, v := range values {
 			if len(v) > maxDNSValueShown {
-				v = v[:maxDNSValueShown] + "…"
+				v = cutBytes(v, maxDNSValueShown) + "…"
 			}
 			if recordType == DNSRecordTXT {
 				v = strconv.Quote(v)

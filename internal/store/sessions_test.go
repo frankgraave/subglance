@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/auth"
 )
@@ -284,5 +286,46 @@ func TestSessionIDMigrationNamesExistingSessions(t *testing.T) {
 			t.Errorf("two existing sessions share id %q", s.ID)
 		}
 		seen[s.ID] = true
+	}
+}
+
+// The User-Agent is cut at 255 bytes. A cut inside a character stored half
+// of it, and the sessions screen listed the browser with a replacement
+// character at its end. The prefix is 12 bytes and a euro sign is three, so
+// each padding puts the 255-byte cut at a different offset in a character.
+func TestSessionUserAgentIsCutAtACharacter(t *testing.T) {
+	db := openTestDB(t)
+	tests := []struct {
+		name    string
+		pad     int
+		wantLen int
+	}{
+		{"cut between two characters", 0, 255},
+		{"cut two bytes into a character", 1, 253},
+		{"cut one byte into a character", 2, 254},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, err := db.CreateUser(ctx, fmt.Sprintf("ua%d@example.com", i), "correct-horse-battery-staple", RoleViewer)
+			if err != nil {
+				t.Fatalf("CreateUser: %v", err)
+			}
+			agent := "Mozilla/5.0 " + strings.Repeat("a", tt.pad) + strings.Repeat("€", 100)
+			if _, err := db.CreateSession(ctx, user.ID, agent, "2001:db8::1"); err != nil {
+				t.Fatalf("CreateSession: %v", err)
+			}
+			sessions, err := db.ListSessions(ctx, user.ID)
+			if err != nil {
+				t.Fatalf("ListSessions: %v", err)
+			}
+			if len(sessions) != 1 {
+				t.Fatalf("got %d sessions, want 1", len(sessions))
+			}
+			got := sessions[0].UserAgent
+			if !utf8.ValidString(got) || len(got) != tt.wantLen {
+				t.Errorf("stored User-Agent of %d bytes (want %d), valid UTF-8 %v: %q", len(got), tt.wantLen, utf8.ValidString(got), got)
+			}
+		})
 	}
 }

@@ -185,6 +185,10 @@ func TestEvaluateJSONAssertion(t *testing.T) {
 		{"number is not string", `{"n":1}`, assertion("n", JSONEquals, `"1"`),
 			`n was the number 1, expected the string "1"`},
 		{"string differs", `{"s":"down"}`, assertion("s", JSONEquals, `"up"`), `s was "down", expected "up"`},
+		// The message is text, not HTML: json.Marshal's \u003c escaping
+		// made this read as "\u003cdegraded\u003e \u0026 slow".
+		{"html characters as written", `{"s":"<degraded> & slow"}`, assertion("s", JSONEquals, `"ok & <fine>"`),
+			`s was "<degraded> & slow", expected "ok & <fine>"`},
 
 		// Booleans and null.
 		{"true equals true", `{"ok":true}`, assertion("ok", JSONEquals, `true`), ""},
