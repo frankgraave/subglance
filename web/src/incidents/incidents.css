@@ -80,8 +80,14 @@
   flex: 1 1 0;
   justify-content: flex-end;
   align-self: center;
-  min-width: 0;
 }
+
+/* No narrower than its own controls, the filter at rung 4 and History, so
+   the header wraps rather than drawing them over the tabs; the dashboard's
+   rule, for the same reason (monitors.css). Keyed through `.mon-detail`,
+   which this screen wears: detail.css lets that card's action group shrink
+   to nothing, and its selector outranks the one above. */
+.mon-detail > .inc-board > .card-head > .card-head-action { min-width: min-content; }
 
 /* The screen wears `.mon-detail`, whose card headers push a menu to the end
    of its row; here the History button already stands at the end, after the
@@ -89,9 +95,11 @@
 .mon-detail > .inc-board > .card-head .menu { margin-left: 0; }
 
 /* The search field's 280px, giving way to rung 4 (168px), which still shows
-   "Filter by monitor…" whole; 32px tall like the History button beside it. */
+   "Filter by monitor…" whole; 32px tall like the History button beside it.
+   The width is the rung-4 floor the action group's `min-content` counts. */
 .card-head-action > .inc-head-filter {
   flex: 0 1 var(--size-pane-sm);
+  width: var(--size-col-4);
   min-width: var(--size-col-4);
 }
 

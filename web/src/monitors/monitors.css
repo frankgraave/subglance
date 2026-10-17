@@ -46,18 +46,31 @@
    them (two lines at a tablet width, never more). */
 .mon-board > .card-head > .card-head-lead { flex: none; max-width: 100%; }
 
+/*
+ * The controls' floor is their own smallest line: the filter at rung 4 and
+ * the two buttons. With a floor of 0 the group shrank past its content
+ * between about 700 and 1100px, and `flex-end` pushed what did not fit out
+ * of its left edge, over the last status tabs. With `min-content` the group
+ * cannot be narrower than its controls, so the header wraps instead and the
+ * group takes the line under the tabs.
+ */
 .mon-board > .card-head > .card-head-action {
   flex: 1 1 0;
   justify-content: flex-end;
   align-self: center;
-  min-width: 0;
+  min-width: min-content;
 }
 
 /* The text filter: the search field's 280px, giving way to rung 4 (168px),
    which still shows its placeholder whole. 32px tall, and the two buttons
-   beside it take the same height so the three share one top and bottom. */
+   beside it take the same height so the three share one top and bottom.
+   Its width is rung 4, not the search field's 280px: the flex basis sets the
+   size it is drawn at, and the width is what the group's `min-content` floor
+   counts, so the header wraps when the filter would go below rung 4 rather
+   than as soon as it is below 280. */
 .card-head-action > .mon-head-filter {
   flex: 0 1 var(--size-pane-sm);
+  width: var(--size-col-4);
   min-width: var(--size-col-4);
 }
 
