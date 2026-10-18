@@ -320,6 +320,26 @@ Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
 
+### Changes refused as cross-origin
+
+A change made from the dashboard, such as saving a monitor, must come from a
+page at SubGlance's own address; a page on another site cannot act with your
+session. Browsers say where a request came from in `Sec-Fetch-Site`, but only
+to an HTTPS or loopback address. Over plain HTTP at a LAN address or a host
+name, SubGlance compares the page's `Origin` with the `Host` the request
+arrived with, and with the address [`--base-url`](#configuration) names.
+
+A proxy that rewrites `Host` breaks the first comparison: nginx sends its
+upstream address (`127.0.0.1:8080`) unless told otherwise, and so does Apache
+unless `ProxyPreserveHost` is on. Each change is then refused with
+`403 cross-origin request refused`, and the dashboard shows that message
+instead of saving. Either fix works:
+
+- set `--base-url` to the address in the browser's address bar, or
+- have the proxy pass the browser's `Host` on (`proxy_set_header Host $host;`
+  in nginx, `ProxyPreserveHost On` in Apache; Caddy and Traefik do by
+  default).
+
 ### Under a path
 
 SubGlance can share a host with other applications, at a path such as

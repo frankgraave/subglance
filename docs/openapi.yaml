@@ -1186,10 +1186,10 @@ paths:
         Deletes the server-side session and clears the cookie.
 
         Authenticated rather than public, which reads oddly for an endpoint
-        whose job is to discard a credential. The reason is CSRF: that check
-        runs as part of authentication, so a public logout route skips it and
-        any site on the internet can end a visitor's session. A caller holding
-        an expired cookie gets a 401 and is already signed out.
+        whose job is to discard a credential. The reason is the cross-origin
+        check: it runs on authenticated routes only, so a public logout route
+        skips it and any site on the internet can end a visitor's session. A
+        caller holding an expired cookie gets a 401 and is already signed out.
       responses:
         '204':
           description: Signed out; the session cookie was cleared.
@@ -5036,9 +5036,15 @@ components:
         TLS falls back to the name `subglance_session`; a self-hoster on a LAN
         must still be able to log in. Both names are accepted on requests.
 
-        Cookie-authenticated state-changing requests additionally pass a CSRF
-        check based on `Sec-Fetch-Site` (falling back to an `Origin` match for
-        non-browser clients). Bearer-token calls skip it, because a browser
+        Cookie-authenticated state-changing requests additionally pass a
+        cross-origin check. `Sec-Fetch-Site: same-origin` or `none` passes,
+        `cross-site` or `same-site` is refused. Without that header (browsers
+        send it only to HTTPS and loopback addresses), an `Origin` header must
+        name this server: the `Host` the request arrived with, or the origin
+        of `--base-url`, which is the browser's address behind a proxy that
+        rewrites `Host`. A request with neither header is not from a browser
+        and passes. A refused request is answered 403, not 401: the session
+        is still valid. Bearer-token calls skip the check, because a browser
         will not attach a bearer token to a cross-site request.
     bearerToken:
       type: http

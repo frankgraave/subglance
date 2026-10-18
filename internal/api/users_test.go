@@ -257,6 +257,7 @@ func TestClientIPReadsEveryForwardedLine(t *testing.T) {
 }
 
 func TestSameOriginDetection(t *testing.T) {
+	srv, _ := testServerWithDB(t)
 	tests := []struct {
 		origin string
 		host   string
@@ -272,7 +273,7 @@ func TestSameOriginDetection(t *testing.T) {
 		t.Run(tt.origin, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/", nil)
 			r.Host = tt.host
-			if got := sameOrigin(tt.origin, r); got != tt.want {
+			if got := srv.sameOrigin(tt.origin, r); got != tt.want {
 				t.Errorf("sameOrigin(%q, host=%q) = %v, want %v", tt.origin, tt.host, got, tt.want)
 			}
 		})
@@ -286,8 +287,8 @@ func TestCSRFAllowsNonBrowserClients(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/monitors", nil)
-	if !srv.checkCSRF(r) {
-		t.Error("a request with no Fetch metadata and no Origin was blocked")
+	if msg := srv.crossOriginRefusal(r); msg != "" {
+		t.Errorf("a request with no Fetch metadata and no Origin was refused: %s", msg)
 	}
 }
 
@@ -298,13 +299,13 @@ func TestCSRFHonoursOriginWhenFetchMetadataIsAbsent(t *testing.T) {
 	r.Host = "subglance.example.com"
 	r.Header.Set("Origin", "https://evil.example.com")
 
-	if srv.checkCSRF(r) {
+	if srv.crossOriginRefusal(r) == "" {
 		t.Error("a request from a foreign Origin was allowed")
 	}
 
 	r.Header.Set("Origin", "https://subglance.example.com")
-	if !srv.checkCSRF(r) {
-		t.Error("a request from the matching Origin was blocked")
+	if msg := srv.crossOriginRefusal(r); msg != "" {
+		t.Errorf("a request from the matching Origin was refused: %s", msg)
 	}
 }
 

@@ -481,8 +481,10 @@ func TestCSRFBlocksCrossSiteWrite(t *testing.T) {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("status = %d, want 401 — a cross-site write was accepted", rec.Code)
+		// 403, not 401: the session is valid, and a 401 is what tells the
+		// dashboard to show the sign-in form.
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403 — a cross-site write was accepted or read as signed out", rec.Code)
 		}
 	})
 
