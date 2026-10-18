@@ -146,21 +146,21 @@ func splitRestoreFlags(args []string) (own, rest []string) {
 }
 
 // listening reports whether anything accepts a connection on the listen
-// address, dialled the way the healthcheck dials it.
+// address, dialled the way the healthcheck dials it: each loopback address a
+// wildcard listener could be answering on, until one connects.
 func listening(addr string) bool {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return false
 	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(host, port))
-	if err != nil {
-		return false
+	for _, h := range loopbackHosts(host) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(h, port))
+		if err == nil {
+			_ = conn.Close()
+			return true
+		}
 	}
-	_ = conn.Close()
-	return true
+	return false
 }
