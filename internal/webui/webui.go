@@ -140,6 +140,13 @@ type shell struct {
 // request.
 const maxShellDepth = 8
 
+// maxServedDepth is the deepest address the shell is served at. Past
+// maxShellDepth every request builds its own shell, and each level adds a
+// "../" to each of the shell's references, so an unauthenticated request
+// made of slashes would get a response several times its own length. No
+// route of the dashboard comes near this; deeper than it is a 404.
+const maxServedDepth = 64
+
 func nestedShells(body []byte) [][]byte {
 	out := make([][]byte, maxShellDepth)
 	for d := range out {
@@ -239,7 +246,12 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 			writeUnbuilt(w)
 			return
 		}
-		body := sh.at(depth(r.URL.EscapedPath()))
+		d := depth(r.URL.EscapedPath())
+		if d > maxServedDepth {
+			http.NotFound(w, r)
+			return
+		}
+		body := sh.at(d)
 
 		h := w.Header()
 		h.Set("Content-Type", "text/html; charset=utf-8")

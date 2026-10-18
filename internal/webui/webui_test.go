@@ -352,7 +352,7 @@ func TestShellReferencesLeadBackToTheBundleAtEveryDepth(t *testing.T) {
 	want := []string{"assets/index-abc123.js", "fonts/Face-1.0-subset.woff2", "assets/index-abc123.css"}
 
 	for _, base := range []string{"https://example.com", "https://example.com/subglance"} {
-		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb", "/a/b/c/d/e/f/g/h", "/a/b/c/d/e/f/g/h/i", "/a/b/c/d/e/f/g/h/i/j/k/l"} {
+		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb", "/a/b/c/d/e/f/g/h", "/a/b/c/d/e/f/g/h/i", "/a/b/c/d/e/f/g/h/i/j", "/a/b/c/d/e/f/g/h/i/j/k/l"} {
 			rec := get(t, h, http.MethodGet, route)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET %s: status = %d, want 200", route, rec.Code)
@@ -374,6 +374,33 @@ func TestShellReferencesLeadBackToTheBundleAtEveryDepth(t *testing.T) {
 				if exp := base + "/" + want[i]; got != exp {
 					t.Errorf("at %s%s, %q resolves to %s, want %s", base, route, m[1], got, exp)
 				}
+			}
+		}
+	}
+}
+
+// TestShellIsNotServedPastTheDeepestDepth checks that the deepest address
+// still gets the shell and one level below it gets a 404, so a request made
+// of slashes cannot have a shell built for it at any depth it likes.
+func TestShellIsNotServedPastTheDeepestDepth(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+	deepest := strings.Repeat("/a", maxServedDepth+1)
+	for _, tc := range []struct {
+		route string
+		want  int
+	}{
+		{deepest, http.StatusOK},
+		{deepest + "/", http.StatusNotFound},
+		{deepest + "/a", http.StatusNotFound},
+		{strings.Repeat("/a", 10000), http.StatusNotFound},
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			rec := get(t, h, method, tc.route)
+			if rec.Code != tc.want {
+				t.Errorf("%s at depth %d: status %d, want %d", method, depth(tc.route), rec.Code, tc.want)
+			}
+			if tc.want == http.StatusNotFound && strings.Contains(rec.Body.String(), "../") {
+				t.Errorf("%s at depth %d: a 404 carried a shell", method, depth(tc.route))
 			}
 		}
 	}
