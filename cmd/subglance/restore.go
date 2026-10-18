@@ -71,6 +71,11 @@ func runRestore(args []string, out io.Writer) error {
 		return errors.New("no backup target is configured; set SUBGLANCE_BACKUP_TARGET and the backup credentials " +
 			"the same way the server has them")
 	}
+	// The database is renamed aside rather than written, so the directory
+	// and the lock are what the restore itself needs (see requireDataAccess).
+	if err := requireDataAccess(cfg.DataDir, []dataFile{lockFile(cfg.DataDir)}); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)
 	}

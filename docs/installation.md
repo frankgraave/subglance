@@ -100,6 +100,32 @@ docker run -d -p 127.0.0.1:8080:8080 -v subglance:/data \
 `--cap-add=NET_RAW` works too, by making the raw socket available instead. HTTP,
 TCP and SSL checks are unaffected either way.
 
+### A directory on the host instead of a volume
+
+A named volume needs nothing: the image creates `/data` owned by the user it
+runs as, and a new volume takes that ownership. A bind mount does not. The
+host directory keeps its own owner, usually root, and the container cannot
+write to it, so give it to `65532:65532` before the first start:
+
+```sh
+mkdir -p ./data
+sudo chown -R 65532:65532 ./data
+docker run -d -p 127.0.0.1:8080:8080 -v "$PWD/data:/data" ghcr.io/frankgraave/subglance:edge
+```
+
+In Compose that is `- ./data:/data` under `volumes:`, with the same `chown`
+first. The `-R` matters for a directory that already holds files, such as one
+moved over from another install: every file in it has to be writable too.
+Started on a directory it cannot write, SubGlance refuses with the path, its
+owner and the user it runs as. The path in that message is the one inside the
+container, `/data`; run the `chown` it suggests on the host directory mounted
+there.
+
+Running the container with `--user` (`user:` in Compose) as your own account
+works as well, if that account owns the directory. Use the same user for
+every start and for `docker compose run` subcommands such as `restore`: files
+one user creates are not writable by another.
+
 To build the image yourself, `docker build -t subglance .` — the Dockerfile
 builds the dashboard and the binary from source, so Go and Node are only needed
 inside the build.

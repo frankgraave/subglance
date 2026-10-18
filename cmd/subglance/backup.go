@@ -72,6 +72,9 @@ func runBackup(args []string, out io.Writer) error {
 	if err := requireDatabase(cfg.DBPath()); err != nil {
 		return err
 	}
+	if err := requireDataAccess(cfg.DataDir, databaseFiles(cfg.DBPath())); err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), backupTimeout)
 	defer cancel()
