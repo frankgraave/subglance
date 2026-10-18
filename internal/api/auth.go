@@ -5,6 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +74,17 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+		// Checked after the credential, and answered 403 rather than 401:
+		// the session is valid, and a 401 tells the dashboard it is gone.
+		// Answered 401, a write refused here signed the user out, and they
+		// signed in again only to be signed out by their next save, with
+		// nothing on screen saying why.
+		if cookieAuthenticated(r) && isStateChanging(r.Method) {
+			if msg := s.crossOriginRefusal(r); msg != "" {
+				writeError(w, http.StatusForbidden, msg)
+				return
+			}
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, user)))
 	})
 }
@@ -123,13 +137,16 @@ func (s *Server) authenticate(r *http.Request) (store.User, bool) {
 	if err != nil {
 		return store.User{}, false
 	}
-
-	// Cookie-authenticated state changes need CSRF protection; a bearer token
-	// does not, because a browser will not attach one on a cross-site request.
-	if isStateChanging(r.Method) && !s.checkCSRF(r) {
-		return store.User{}, false
-	}
 	return user, true
+}
+
+// cookieAuthenticated reports whether authenticate resolved the request by
+// its session cookie rather than a bearer token.
+//
+// Only that request needs the cross-origin check: a browser attaches the
+// cookie to a request another site's page makes, and never a bearer token.
+func cookieAuthenticated(r *http.Request) bool {
+	return r.Header.Get("Authorization") == ""
 }
 
 func isStateChanging(method string) bool {
@@ -140,31 +157,49 @@ func isStateChanging(method string) bool {
 	return true
 }
 
-// checkCSRF verifies a cookie-authenticated state-changing request.
+// crossOriginRefusal says why a cookie-authenticated write is refused as
+// coming from another site's page, or "" when it is not.
 //
-// This is the Fetch-metadata check rather than a token: modern browsers send
-// Sec-Fetch-Site on every request and will not let a page forge it, which
-// covers the attack without threading a token through every form. Requests
-// without the header (curl, older clients) must carry an Origin that matches,
-// or be a bearer-token call that never reaches here.
-func (s *Server) checkCSRF(r *http.Request) bool {
+// This is the Fetch-metadata check rather than a token: browsers send
+// Sec-Fetch-Site and will not let a page forge it, which covers the attack
+// without threading a token through every form. They send it only to an
+// origin they consider trustworthy, though: HTTPS, or a loopback address.
+// A dashboard opened over plain HTTP at a LAN address or a host name gets
+// none (measured in Chromium), and neither do older browsers, so those
+// requests are judged by Origin instead, and pass when it names this server.
+// A request with neither header is not from a browser, and a cross-site
+// attack needs a browser to carry the cookie.
+func (s *Server) crossOriginRefusal(r *http.Request) string {
 	switch r.Header.Get("Sec-Fetch-Site") {
 	case "same-origin", "none":
-		return true
+		return ""
 	case "cross-site", "same-site":
-		return false
+		return "cross-origin request refused: a change made with a session cookie " +
+			"must come from SubGlance's own pages"
 	}
 
 	origin := r.Header.Get("Origin")
-	if origin == "" {
-		// No Origin and no Fetch metadata: not a browser. A cross-site attack
-		// needs a browser to carry the cookie, so this is safe to allow.
-		return true
+	if origin == "" || s.sameOrigin(origin, r) {
+		return ""
 	}
-	return sameOrigin(origin, r)
+	return "cross-origin request refused: the page is at a different address " +
+		"than the one this server was reached at. Behind a reverse proxy, set " +
+		"--base-url to the address in the browser, or have the proxy pass the " +
+		"Host header on"
 }
 
-func sameOrigin(origin string, r *http.Request) bool {
+// sameOrigin reports whether a request's Origin names this server.
+//
+// Two addresses count. The Host the request arrived with is the browser's
+// own address whenever nothing rewrites it. A reverse proxy can: nginx sends
+// its upstream address unless told to pass Host on, and Apache does unless
+// ProxyPreserveHost is on. Behind one of those, the address in the browser
+// is the one --base-url declares, so its origin counts as well. Go's
+// http.CrossOriginProtection calls this a trusted origin.
+func (s *Server) sameOrigin(origin string, r *http.Request) bool {
+	if s.baseOrigin != "" && origin == s.baseOrigin {
+		return true
+	}
 	host := r.Host
 	for _, scheme := range []string{"https://", "http://"} {
 		if origin == scheme+host {
@@ -172,6 +207,82 @@ func sameOrigin(origin string, r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// originOf is the origin a browser sends for a page under base, a URL in
+// the form notifier.ParseBaseURL returns: scheme and host, without the
+// path, the host in lower case, an IPv6 address written as a browser
+// writes it and the scheme's own port dropped, which is how the Origin
+// header is serialised.
+func originOf(base string) string {
+	u, err := url.Parse(base)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + browserIPv6(host) + "]"
+	}
+	port := u.Port()
+	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
+		port = ""
+	}
+	if port != "" {
+		host += ":" + port
+	}
+	return u.Scheme + "://" + host
+}
+
+// browserIPv6 writes an IPv6 address the way a browser writes it in an
+// Origin, by the WHATWG URL standard's IPv6 serializer: eight pieces in
+// lower-case hex without leading zeroes, the first longest run of two or
+// more zero pieces cut to "::", and an IPv4-mapped address in hex like the
+// rest. A --base-url of http://[2001:0db8::1] is then compared as the
+// http://[2001:db8::1] the browser sends. netip's String follows RFC 5952
+// instead, which keeps the dotted IPv4 tail, so it is not used. A host that
+// is not an IPv6 address is returned unchanged.
+func browserIPv6(host string) string {
+	addr, err := netip.ParseAddr(host)
+	if err != nil || !addr.Is6() {
+		return host
+	}
+	b := addr.As16()
+	var pieces [8]uint16
+	for i := range pieces {
+		pieces[i] = uint16(b[2*i])<<8 | uint16(b[2*i+1])
+	}
+	compress, longest := -1, 1
+	for i := 0; i < len(pieces); {
+		if pieces[i] != 0 {
+			i++
+			continue
+		}
+		j := i
+		for j < len(pieces) && pieces[j] == 0 {
+			j++
+		}
+		if j-i > longest {
+			compress, longest = i, j-i
+		}
+		i = j
+	}
+	var out strings.Builder
+	for i := 0; i < len(pieces); i++ {
+		if i == compress {
+			if i == 0 {
+				out.WriteString("::")
+			} else {
+				out.WriteString(":")
+			}
+			i += longest - 1
+			continue
+		}
+		out.WriteString(strconv.FormatUint(uint64(pieces[i]), 16))
+		if i < len(pieces)-1 {
+			out.WriteString(":")
+		}
+	}
+	return out.String()
 }
 
 type loginRequest struct {

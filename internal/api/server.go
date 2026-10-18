@@ -148,6 +148,9 @@ type Server struct {
 	// baseURL is the address alerts link to (--base-url), shown on the
 	// settings page and used for push URLs; "" when alerts carry no links.
 	baseURL string
+	// baseOrigin is baseURL's origin, as a browser writes it in the Origin
+	// header; "" without --base-url.
+	baseOrigin string
 
 	// passes starts a retention pass on request, and background bounds the
 	// passes and compactions the settings page starts: they outlive the
@@ -412,8 +415,8 @@ func (s *Server) routes() []route {
 
 		// Logout is authenticated rather than public, which reads oddly for
 		// an endpoint whose whole job is to discard a credential. It is the
-		// CSRF check that makes the difference: that check lives inside
-		// authenticate(), and a public route never calls it. Left public, any
+		// cross-origin check that makes the difference: that check lives in
+		// requireAuth, and a public route never passes through it. Left public, any
 		// page on the internet could end a visitor's session — an operator
 		// thrown out of the dashboard mid-incident by a link they clicked.
 		//

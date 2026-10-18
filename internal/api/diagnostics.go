@@ -102,8 +102,10 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 // the form notifier.ParseBaseURL returns. The settings page shows it, and a
 // new push monitor's URL is built on it (see pushURL). It does not change
 // what the API serves or where: the server answers on whatever address
-// reaches it.
+// reaches it. Its origin is one a signed-in browser may change things from,
+// beside the Host a request arrives with (see sameOrigin).
 func (s *Server) WithBaseURL(baseURL string) *Server {
 	s.baseURL = baseURL
+	s.baseOrigin = originOf(baseURL)
 	return s
 }

@@ -141,8 +141,8 @@ func TestMaintenanceRejectsCrossOriginSessionWrites(t *testing.T) {
 		req.Header.Set("Origin", "https://other.example.invalid")
 		rec := httptest.NewRecorder()
 		s.Handler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("cross-origin %s returned %d", method, rec.Code)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("cross-origin %s returned %d, want 403", method, rec.Code)
 		}
 	}
 }

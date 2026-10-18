@@ -306,7 +306,7 @@ gets built):
 - Rate limiting on login
 - All user-configurable URLs SSRF-filtered (no internal networks without explicit permission). The guard runs when a check or a notification is sent, and also when a notification channel is saved, so a channel pointed at a blocked address is refused on the form rather than at the first alert
 - Notification configuration is masked in every API response. It is stored as plain JSON unless `--secret-key` is set, which encrypts it at rest with AES-256-GCM; see [encrypting channel configuration](operations.md#encrypting-channel-configuration) and [SECURITY.md](../SECURITY.md)
-- CSRF token on cookie-based requests
+- Cross-origin check on cookie-authenticated writes (Fetch metadata, then Origin against the request's Host or `--base-url`), so another site's page cannot act with a visitor's session
 - Secure headers by default, no inline scripts
 
 ## 7. Build and distribution
