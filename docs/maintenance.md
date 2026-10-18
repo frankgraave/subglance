@@ -37,10 +37,13 @@ Weekly example (Sunday is 0, Saturday is 6):
 {"name":"Weekly deploy","tag_key":"env","tag_value":"prod","timezone":"Europe/Amsterdam","weekdays":[0],"local_time":"02:30","duration_minutes":60}
 ```
 
-A window is one shape or the other, and the API answers in the same shape it
-was given: a one-off window has `starts_at` and `ends_at` and no `timezone`, a
-weekly window has `timezone`, `weekdays`, `local_time` and `duration_minutes`
-and no `starts_at` or `ends_at`. Tell them apart by `timezone`.
+A window is one shape or the other, and every answer is in one of the two: a
+one-off window has `starts_at` and `ends_at` and no `timezone`, a weekly window
+has `timezone`, `weekdays`, `local_time` and `duration_minutes` and no
+`starts_at` or `ends_at`. That holds for a weekly request that carries both as
+zero timestamps (`0001-01-01T00:00:00Z`, as an older read echoed back sends
+them): it is accepted, and the answer leaves them out. Tell the shapes apart by
+`timezone`.
 
 The one-off form uses your browser's time zone, and says which below its
 fields: 20:00 typed in Amsterdam in October is sent as `18:00:00Z`. A time that
