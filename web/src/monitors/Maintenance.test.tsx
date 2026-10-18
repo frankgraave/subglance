@@ -138,3 +138,142 @@ it("keeps a refusal with no field, or one naming a field the form does not show,
  expect((await screen.findByRole("alert")).textContent).toBe("recurrence requires timezone");
  expect(oneOff.querySelector('[aria-invalid="true"]')).toBeNull();
 });
+
+/*
+ * The one-off form and the list, on a reader's clock. Pinned to Amsterdam so
+ * the gap from UTC is visible: 20:00 there is 18:00 UTC in October.
+ */
+async function inAmsterdam(run: () => Promise<void>) {
+ const zone=process.env.TZ;
+ process.env.TZ="Europe/Amsterdam";
+ try { await run(); }
+ finally { if(zone===undefined) delete process.env.TZ; else process.env.TZ=zone; }
+}
+
+it("sends a one-off window typed at 20:00 in Amsterdam as 18:00 UTC, and says which zone it read", () => inAmsterdam(async () => {
+ const posted:unknown[]=[];
+ vi.spyOn(globalThis,"fetch").mockImplementation(async(_url,init)=>{
+  if(init?.method==="POST"){posted.push(JSON.parse(String(init.body)));return Response.json({id:9},{status:201});}
+  return Response.json({maintenance:[]});
+ });
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ const form=await screen.findByRole("form",{name:"Schedule maintenance"});
+ const start=screen.getByLabelText("Start");
+ expect(document.getElementById(start.getAttribute("aria-describedby")!)?.textContent).toContain("Times are in your time zone (Europe/Amsterdam).");
+ expect(screen.queryByText(/\(UTC\)/)).toBeNull();
+ fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Deploy"}});
+ fireEvent.change(screen.getByLabelText("Applies to"),{target:{value:"tag"}});
+ fireEvent.change(screen.getByLabelText("Tag key"),{target:{value:"env"}});
+ fireEvent.change(screen.getByLabelText("Tag value"),{target:{value:"prod"}});
+ fireEvent.change(start,{target:{value:"2026-10-20T20:00"}});
+ fireEvent.change(screen.getByLabelText("End"),{target:{value:"2026-10-20T21:00"}});
+ fireEvent.submit(form);
+ await screen.findByText("Maintenance scheduled.");
+ expect(posted).toEqual([{name:"Deploy",tag_key:"env",tag_value:"prod",starts_at:"2026-10-20T18:00:00.000Z",ends_at:"2026-10-20T19:00:00.000Z"}]);
+}));
+
+it("refuses a start the clocks skip under the Start field, without sending it", () => inAmsterdam(async () => {
+ const fetchSpy=vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({maintenance:[]}));
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ const form=await screen.findByRole("form",{name:"Schedule maintenance"});
+ const start=screen.getByLabelText("Start");
+ fireEvent.change(start,{target:{value:"2026-03-29T02:30"}});
+ fireEvent.change(screen.getByLabelText("End"),{target:{value:"2026-03-29T04:00"}});
+ fireEvent.submit(form);
+ const message=(await screen.findByText(/02:30 does not happen on that day/)).closest("p")!;
+ expect(message.closest(".field")).toBe(start.closest(".field"));
+ expect(start.getAttribute("aria-invalid")).toBe("true");
+ await waitFor(()=>expect(document.activeElement).toBe(start));
+ expect(fetchSpy.mock.calls.filter(([,init])=>init?.method==="POST")).toEqual([]);
+}));
+
+it("fills the weekly timezone with the browser's zone", () => inAmsterdam(async () => {
+ vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({maintenance:[]}));
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ fireEvent.change(await screen.findByLabelText("Schedule"),{target:{value:"weekly"}});
+ expect((screen.getByLabelText("Timezone") as HTMLInputElement).value).toBe("Europe/Amsterdam");
+}));
+
+const LISTED=[
+ {id:1,name:"Last week's deploy",monitor_id:1,starts_at:"2026-10-01T18:00:00Z",ends_at:"2026-10-01T19:00:00Z",active:false},
+ {id:2,name:"Patch night",tag_key:"env",tag_value:"prod",timezone:"UTC",weekdays:[0],local_time:"02:00",duration_minutes:60,active:false},
+ {id:3,name:"Old migration",monitor_id:1,starts_at:"2026-09-01T18:00:00Z",ends_at:"2026-09-02T19:00:00Z",active:false},
+ {id:4,name:"Next deploy",monitor_id:1,starts_at:"2099-01-01T18:00:00Z",ends_at:"2099-01-01T19:00:00Z",active:false},
+];
+
+it("writes each window in the reader's zone, says where it stands, and lists the ended ones last", () => inAmsterdam(async () => {
+ vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({maintenance:LISTED}));
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} canWrite={false}/>);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ await screen.findByText("Next deploy");
+ const list=document.querySelector(".maintenance-list")!;
+ const rows=[...list.querySelectorAll("li")].map((li)=>[li.querySelector("strong")!.textContent,li.getAttribute("data-state")]);
+ expect(rows).toEqual([["Patch night","upcoming"],["Next deploy","upcoming"],["Last week's deploy","ended"],["Old migration","ended"]]);
+ const text=list.textContent!;
+ expect(text).toContain("1 Oct 2026, 20:00 → 21:00");
+ expect(text).toContain("1 Sep 2026, 20:00 → 2 Sep 2026, 21:00");
+ expect(text).toContain("Sunday at 02:00 (UTC), for 1 h");
+ expect(text).toContain("— Ended");
+ expect(text).toContain("— Upcoming");
+ expect(text).not.toContain("Not active now");
+ // No ISO timestamp from the API reaches the screen.
+ expect(text).not.toMatch(/\d{4}-\d\d-\d\dT\d\d:\d\d/);
+ // A viewer is told, and is offered nothing to remove.
+ expect(screen.queryByRole("button",{name:"Remove ended windows"})).toBeNull();
+}));
+
+it("removes the ended one-off windows after a question that counts them, and keeps the rest", async () => {
+ let listed=[...LISTED];
+ const deleted:string[]=[];
+ vi.spyOn(globalThis,"fetch").mockImplementation(async(url,init)=>{
+  if(init?.method==="DELETE"){const id=String(url).split("/").pop()!;deleted.push(id);listed=listed.filter((w)=>String(w.id)!==id);return new Response(null,{status:204});}
+  return Response.json({maintenance:listed});
+ });
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ await screen.findByText("Next deploy");
+ expect(screen.getByRole("button",{name:"Remove maintenance Old migration"}).textContent).toBe("Remove");
+ expect(screen.getByRole("button",{name:"Cancel maintenance Next deploy"}).textContent).toBe("Cancel maintenance");
+ fireEvent.click(screen.getByRole("button",{name:"Remove ended windows"}));
+ const question=screen.getByRole("group",{name:/Remove 2 ended windows\?/});
+ // Removing cannot be undone, so the confirming button wears the destructive treatment.
+ expect(screen.getByRole("button",{name:"Remove 2 ended windows"}).className).toBe("button button--danger");
+ expect(question.textContent).toContain("Checks they excluded from uptime stay excluded.");
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByRole("button",{name:"Keep them"})));
+ // Keeping them sends nothing and puts focus back on the button that asked.
+ fireEvent.click(screen.getByRole("button",{name:"Keep them"}));
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByRole("button",{name:"Remove ended windows"})));
+ expect(deleted).toEqual([]);
+ fireEvent.click(screen.getByRole("button",{name:"Remove ended windows"}));
+ fireEvent.click(screen.getByRole("button",{name:"Remove 2 ended windows"}));
+ await screen.findByText("Removed 2 ended windows. Recorded history is unchanged.");
+ expect(deleted).toEqual(["1","3"]);
+ await waitFor(()=>expect(document.querySelectorAll(".maintenance-list li")).toHaveLength(2));
+ expect(screen.queryByRole("button",{name:"Remove ended windows"})).toBeNull();
+ // The button that asked is gone, so focus lands on the line that says what happened.
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByText("Removed 2 ended windows. Recorded history is unchanged.")));
+ expect(document.activeElement!.getAttribute("role")).toBe("status");
+});
+
+it("says how far removing ended windows got when a request fails", async () => {
+ let listed=[...LISTED];
+ vi.spyOn(globalThis,"fetch").mockImplementation(async(url,init)=>{
+  if(init?.method==="DELETE"){
+   const id=String(url).split("/").pop()!;
+   if(id==="3") return Response.json({error:"database unavailable"},{status:500});
+   listed=listed.filter((w)=>String(w.id)!==id);return new Response(null,{status:204});
+  }
+  return Response.json({maintenance:listed});
+ });
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ await screen.findByText("Next deploy");
+ fireEvent.click(screen.getByRole("button",{name:"Remove ended windows"}));
+ fireEvent.click(screen.getByRole("button",{name:"Remove 2 ended windows"}));
+ expect((await screen.findByRole("alert")).textContent).toBe("Removed 1 of 2 ended windows, then stopped: database unavailable");
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByRole("button",{name:"Remove ended windows"})));
+ expect(screen.getByText("Old migration")).toBeTruthy();
+});

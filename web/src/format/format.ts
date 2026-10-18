@@ -33,9 +33,10 @@
  * Day before month, because "1 Oct" cannot be misread in either direction
  * and "10/1" can. The time zone is the reader's own, everywhere, and so is
  * not printed: a zone on four cards and none on the other twenty said the
- * twenty were in some other zone. The one exception is the server-side
- * schedule on the retention card, which says in words that it follows the
- * server's clock.
+ * twenty were in some other zone. The exceptions say their zone in words:
+ * the server-side schedule on the retention card, which follows the server's
+ * clock, and a weekly maintenance window, which runs on the clock of the
+ * zone it names.
  *
  * Built by hand from the Date's parts rather than through `Intl`: with the
  * locale pinned, `Intl.DateTimeFormat` adds nothing but a dependency on the

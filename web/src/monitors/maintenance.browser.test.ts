@@ -50,17 +50,26 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
  try{
   await context.setCookie({name:"subglance_session",value:fixture.session,domain:new URL(fixture.url).hostname,path:"/",httpOnly:true,sameSite:"Strict"});
   await page.setViewport({width,height:1000});
+  // A reader east of UTC: the form reads what is typed on this clock, so a
+  // window typed as UTC would start an hour or two late and miss the check.
+  await page.emulateTimezone("Europe/Amsterdam");
   await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
   await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
   await (await page.waitForSelector('::-p-aria(Maintenance[role="button"])'))!.click();
   await page.waitForFunction(()=>document.querySelector('.maintenance')?.textContent?.includes("No maintenance windows scheduled."));
+  expect(await page.$eval('.maintenance form',el=>el.textContent)).toContain("Times are in your time zone (Europe/Amsterdam).");
   await page.type('.maintenance input[name="name"]',`Deploy ${index}`);
   await page.select('.maintenance select[name="monitor_id"]',String(id));
-  const now=Date.now();
-  await page.$eval('.maintenance input[name="starts_at"]',(el,v)=>(el as HTMLInputElement).value=v,new Date(now-60_000).toISOString().slice(0,16));
-  await page.$eval('.maintenance input[name="ends_at"]',(el,v)=>(el as HTMLInputElement).value=v,new Date(now+3_600_000).toISOString().slice(0,16));
+  // Whole minutes, since the field holds no seconds; the start a minute back.
+  const startAt=Math.floor(Date.now()/60_000)*60_000-60_000;const endAt=startAt+3_660_000;
+  // The local wall clock for an instant, written in the page's emulated zone.
+  const typed=(ms:number)=>page.evaluate((ms)=>{const d=new Date(ms);const p=(n:number)=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;},ms);
+  await page.$eval('.maintenance input[name="starts_at"]',(el,v)=>(el as HTMLInputElement).value=v,await typed(startAt));
+  await page.$eval('.maintenance input[name="ends_at"]',(el,v)=>(el as HTMLInputElement).value=v,await typed(endAt));
   await page.click('.maintenance button[type="submit"]');
   await page.waitForFunction(()=>document.querySelector('.maintenance')?.textContent?.includes("Maintenance scheduled."));
+  const stored=await page.evaluate(async()=>fetch("/api/v1/maintenance").then(r=>r.json()).then(body=>body.maintenance[0]));
+  expect([Date.parse(stored.starts_at),Date.parse(stored.ends_at)]).toEqual([startAt,endAt]);
   expect(await check(false)).toMatchObject({added_alerts:0});
   expect(await check(false)).toMatchObject({added_alerts:0});
   const state=await page.evaluate(async(id)=>({monitor:await fetch(`/api/v1/monitors/${id}`).then(r=>r.json()),uptime:await fetch(`/api/v1/monitors/${id}/uptime`).then(r=>r.json()),beats:await fetch(`/api/v1/monitors/${id}/heartbeats`).then(r=>r.json())}),id);
@@ -71,6 +80,10 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   await page.select('.maintenance select[name="scope"]',"tag");
   await page.type('.maintenance input[name="tag_key"]',"env");await page.type('.maintenance input[name="tag_value"]',"prod");
   await page.select('.maintenance select[name="schedule"]',"weekly");
+  // The weekly zone starts on the reader's; this one is set to UTC so the
+  // occurrence is the current UTC day and minute.
+  expect(await page.$eval('.maintenance input[name="timezone"]',el=>(el as HTMLInputElement).value)).toBe("Europe/Amsterdam");
+  await page.$eval('.maintenance input[name="timezone"]',(el)=>(el as HTMLInputElement).value="UTC");
   const weeklyStart=new Date();
   const day=weeklyStart.getUTCDay();
   const clock=weeklyStart.toISOString().slice(11,16);
@@ -79,7 +92,7 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   await page.$eval('.maintenance input[name="name"]',(el)=>(el as HTMLInputElement).value="Weekly deploy");
   await page.click('.maintenance button[type="submit"]');
   await page.waitForFunction(()=>document.querySelectorAll('.maintenance-list li').length===2);
-  expect(await page.$eval('.maintenance-list',(el)=>el.textContent)).toContain(`at ${clock} (UTC), 60 minutes`);
+  expect(await page.$eval('.maintenance-list',(el)=>el.textContent)).toContain(`at ${clock} (UTC), for 1 h`);
   await page.evaluate(axe.source);
   const audit=await page.evaluate(async()=> (window as unknown as {axe:typeof axe}).axe.run({include:[".maintenance"]},{runOnly:{type:"tag",values:["wcag2a","wcag2aa"]}}));
   expect(audit.violations).toEqual([]);
