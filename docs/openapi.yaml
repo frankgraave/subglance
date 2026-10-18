@@ -6723,10 +6723,16 @@ components:
         starts_at:
           type: string
           format: date-time
+          description: |
+            One-off windows only, with an explicit UTC offset. Absent for a
+            weekly window, which has no absolute start; a weekly window sent
+            with a non-zero value is refused.
         ends_at:
           type: string
           format: date-time
-          description: Later than starts_at, at most 366 days apart.
+          description: |
+            One-off windows only. Later than starts_at, at most 366 days
+            apart. Absent for a weekly window.
         timezone:
           type: string
           description: Explicit IANA timezone; Local is refused. Absent for one-off windows.
