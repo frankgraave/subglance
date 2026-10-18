@@ -94,6 +94,22 @@ func TestHTTPRedirectReportsTheMonitoredHostsCertificate(t *testing.T) {
 		}
 	})
 
+	t.Run("an expired login host still fails the check", func(t *testing.T) {
+		// Its expiry is not reported, but its certificate is verified like
+		// any other hop's: the visitor cannot sign in, so the site is down.
+		pool := x509.NewCertPool()
+		login := startTLSHost(t, "auth.test", -30*time.Minute, pool, loginPage)
+		site := startTLSHost(t, "app.test", healthyFor, pool, redirectTo(login.srv.URL+"/login"))
+
+		m := monitor(site.srv.URL)
+		m.SSLWarnDays = 14
+		res := trustingChecker(pool).Check(context.Background(), m)
+
+		if res.OK || res.Kind != FailTLS || !strings.Contains(res.Error, "expired") {
+			t.Fatalf("ok %v kind %q (%s), want a TLS failure naming the expired certificate", res.OK, res.Kind, res.Error)
+		}
+	})
+
 	t.Run("without a redirect the server's own certificate is reported", func(t *testing.T) {
 		pool := x509.NewCertPool()
 		site := startTLSHost(t, "app.test", expiresSoon, pool, loginPage)

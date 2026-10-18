@@ -272,7 +272,9 @@ monitor with an `https` target, at the same threshold. When that check follows
 a redirect to another host, as a site behind a single sign-on proxy does to its
 login page, the certificate it reports is the one of the first host that
 answered over TLS: the host in the URL field for an `https` target, the host it
-upgrades to for an `http` one. The login host's certificate is not read; give
+upgrades to for an `http` one. The login host's certificate is still verified,
+so an expired or untrusted one fails the check like any other TLS failure, but
+its expiry date is not reported and `ssl_warn_days` does not warn about it; give
 that host a monitor of its own. A failure while a monitor is expiring is judged
 like any other failure: one is a warning, and reaching the retry threshold
 confirms an outage, which is down and is its own incident. An expired
