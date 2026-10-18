@@ -45,7 +45,10 @@ func warnWindow(leaf *x509.Certificate, warnDays int) (window time.Duration, cap
 }
 
 // expiryNotice is the notice for a certificate that is still valid at now but
-// expires inside its warning window, or "" when it does not. The ssl check and
+// expires inside its warning window, or "" when it does not. The window
+// includes its first instant: with exactly 40 hours left, a 160-hour
+// certificate is warned about, as the documentation says the warning starts
+// then. The ssl check and
 // an https check both write it, so a monitor of either type says the same
 // sentence about the same certificate.
 //
@@ -60,7 +63,7 @@ func expiryNotice(leaf *x509.Certificate, warnDays int, now time.Time) string {
 	}
 	remaining := leaf.NotAfter.Sub(now)
 	window, capped := warnWindow(leaf, warnDays)
-	if remaining <= 0 || remaining >= window {
+	if remaining <= 0 || remaining > window {
 		return ""
 	}
 	notice := fmt.Sprintf("certificate expires in %s (on %s)",
