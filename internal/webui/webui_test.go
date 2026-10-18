@@ -352,7 +352,7 @@ func TestShellReferencesLeadBackToTheBundleAtEveryDepth(t *testing.T) {
 	want := []string{"assets/index-abc123.js", "fonts/Face-1.0-subset.woff2", "assets/index-abc123.css"}
 
 	for _, base := range []string{"https://example.com", "https://example.com/subglance"} {
-		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb"} {
+		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb", "/a/b/c/d/e/f/g/h", "/a/b/c/d/e/f/g/h/i", "/a/b/c/d/e/f/g/h/i/j/k/l"} {
 			rec := get(t, h, http.MethodGet, route)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET %s: status = %d, want 200", route, rec.Code)
