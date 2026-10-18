@@ -356,7 +356,9 @@ no links.
 The address has to be an absolute `http://` or `https://` URL. A path prefix
 is kept and a trailing slash does not matter; a user name, a password, a query
 string or a `#fragment` is refused at start-up, because it would be copied
-into every link in every message. Without the setting, every message is
+into every link in every message. The dashboard opens at those links under a
+path as well; [Under a path](operations.md#under-a-path) has the proxy
+configuration. Without the setting, every message is
 exactly what it was before links existed. A new push monitor's URL is built
 on the same address (see [push monitors](using-subglance.md#push-monitors)).
 The settings page shows the address in use under **Instance**, or that none is

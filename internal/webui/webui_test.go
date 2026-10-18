@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -19,7 +21,9 @@ const themeScript = `document.documentElement.setAttribute("data-theme","dark");
 const indexHTML = `<!doctype html>
 <html lang="en"><head>
 <script>` + themeScript + `</script>
-<script type="module" src="/assets/index-abc123.js"></script>
+<script type="module" src="./assets/index-abc123.js"></script>
+<link rel="preload" href="./fonts/Face-1.0-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" crossorigin href="./assets/index-abc123.css">
 </head><body><div id="root"></div></body></html>`
 
 // builtFS is what an embedded frontend looks like after a real build.
@@ -332,5 +336,59 @@ func TestServeFontServesOnlyFontFiles(t *testing.T) {
 		if rec := serve(file); rec.Code != http.StatusNotFound {
 			t.Errorf("file %q: status %d, want 404", file, rec.Code)
 		}
+	}
+}
+
+// TestShellReferencesLeadBackToTheBundleAtEveryDepth serves the shell at
+// client-side routes of every depth and resolves each of its references the
+// way a browser would, against the address the browser shows. Behind a proxy
+// that serves the dashboard under /subglance/ and strips that prefix, every
+// one has to land back under /subglance/, where the bundle is; at the root of
+// a host, under /. A shell that kept ./assets/ at /monitors/42 would ask for
+// /monitors/assets/…, and one that kept /assets/ would leave the prefix.
+func TestShellReferencesLeadBackToTheBundleAtEveryDepth(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+	refs := regexp.MustCompile(`\s(?:src|href)="([^"]+)"`)
+	want := []string{"assets/index-abc123.js", "fonts/Face-1.0-subset.woff2", "assets/index-abc123.css"}
+
+	for _, base := range []string{"https://example.com", "https://example.com/subglance"} {
+		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb"} {
+			rec := get(t, h, http.MethodGet, route)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: status = %d, want 200", route, rec.Code)
+			}
+			shown, err := url.Parse(base + route)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := refs.FindAllStringSubmatch(rec.Body.String(), -1)
+			if len(found) != len(want) {
+				t.Fatalf("GET %s: %d references, want %d", route, len(found), len(want))
+			}
+			for i, m := range found {
+				ref, err := url.Parse(m[1])
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := shown.ResolveReference(ref).String()
+				if exp := base + "/" + want[i]; got != exp {
+					t.Errorf("at %s%s, %q resolves to %s, want %s", base, route, m[1], got, exp)
+				}
+			}
+		}
+	}
+}
+
+// TestShellRewriteKeepsThePolicyValid checks that the per-depth shell still
+// carries the inline script the policy was hashed from, byte for byte.
+func TestShellRewriteKeepsThePolicyValid(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+	rec := get(t, h, http.MethodGet, "/monitors/42/incidents")
+	if !strings.Contains(rec.Body.String(), "<script>"+themeScript+"</script>") {
+		t.Fatalf("the inline script changed; body = %q", rec.Body.String())
+	}
+	sum := sha256.Sum256([]byte(themeScript))
+	if hash := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"; !strings.Contains(rec.Header().Get("Content-Security-Policy"), hash) {
+		t.Errorf("policy %q does not allow the served script", rec.Header().Get("Content-Security-Policy"))
 	}
 }

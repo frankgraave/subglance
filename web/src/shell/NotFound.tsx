@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { Card, Panel } from "../components/Card";
 import { IconGlobe } from "../components/icons";
 import { DASHBOARD_PATH } from "./route";
@@ -38,7 +39,7 @@ export function NotFound({
                 plain left click. */}
             <a
               className="button button--primary"
-              href={DASHBOARD_PATH}
+              href={appPath(DASHBOARD_PATH)}
               onClick={(event) => {
                 if (
                   onGoToDashboard === undefined ||

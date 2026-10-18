@@ -12,7 +12,7 @@
  */
 import { createServer, type Server as HttpServer } from "node:http";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
@@ -269,9 +269,40 @@ const INCIDENTS: ApiIncident[] = [
   },
 ];
 
-export async function serveBuild(): Promise<Server> {
+/**
+ * The shell as the document at `pathname` must read it: one `../` per
+ * directory level for every reference the build wrote relative (`./assets/…`,
+ * `./fonts/…`). The same rule as `shellAt` in internal/webui, which this server
+ * stands in for; without it every check that opens a nested address such as
+ * `/monitors/1` would load the shell's scripts from `/monitors/assets/`.
+ */
+export function shellAt(html: string, pathname: string): string {
+  const depth = pathname.split("/").length - 2;
+  return depth <= 0 ? html : html.replace(/(\s(?:src|href)=")\.\//g, `$1${"../".repeat(depth)}`);
+}
+
+export type ServeOptions = {
+  /**
+   * Serve the dashboard under this path, as a reverse proxy that strips it
+   * would: `/sg/monitors` reaches the stubs as `/monitors`, and anything
+   * outside the prefix is a 404, so a request the dashboard makes from the
+   * root fails instead of quietly being answered.
+   */
+  prefix?: string;
+};
+
+export async function serveBuild(options: ServeOptions = {}): Promise<Server> {
+  const { prefix = "" } = options;
   const http: HttpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    if (prefix !== "") {
+      if (!url.pathname.startsWith(`${prefix}/`)) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end(`outside ${prefix}/`);
+        return;
+      }
+      url.pathname = url.pathname.slice(prefix.length);
+    }
 
     /*
      * The session, answered as a signed-in administrator.
@@ -592,6 +623,11 @@ export async function serveBuild(): Promise<Server> {
       if (s.isDirectory()) throw new Error("dir");
     } catch {
       file = join(DIST, "index.html");
+    }
+    if (file === join(DIST, "index.html")) {
+      res.writeHead(200, { "content-type": TYPES[".html"] });
+      res.end(shellAt(await readFile(file, "utf8"), url.pathname));
+      return;
     }
     res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
     const stream = createReadStream(file);

@@ -6,6 +6,7 @@
  * password may be — is written down once on this side of the wire.
  */
 
+import { appPath } from "../api/base";
 import { readError, reportUnauthorized } from "../api/http";
 import { ApiError, apiJSON, apiPost } from "../api/http";
 
@@ -74,7 +75,7 @@ export async function login(email: string, password: string): Promise<User> {
  * binary as the server, so no untagged legacy answer needs matching by text.
  */
 export async function changePassword(current: string, next: string, signal?: AbortSignal): Promise<void> {
-  const res = await fetch("/api/v1/auth/password", {
+  const res = await fetch(appPath("/api/v1/auth/password"), {
     method: "POST",
     credentials: "same-origin",
     headers: { Accept: "application/json", "Content-Type": "application/json" },

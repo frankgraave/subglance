@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { flushSync } from "react-dom";
 import { monitorPath } from "./route";
 import { PAGE_TITLE_ID } from "./pages";
@@ -112,7 +113,7 @@ export function morphNavigation(
 export function monitorTitleLink(root: Element | null, id: string): Element | null {
   if (root === null) return null;
   const view = root.ownerDocument.defaultView;
-  const href = monitorPath(id);
+  const href = appPath(monitorPath(id));
   for (const link of root.querySelectorAll("a[href]")) {
     if (link.getAttribute("href") !== href) continue;
     if (view === null || onScreen(link, view)) return link;

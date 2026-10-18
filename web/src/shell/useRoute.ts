@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmLeave } from "./leaveGuard";
 import { originFrom, readOrigin } from "./listOrigin";
 import type { ListOrigin } from "./listOrigin";
+import { appPath, routePathname } from "../api/base";
 import { parseRoute, routePath } from "./route";
 import type { Route } from "./route";
 
@@ -43,7 +44,7 @@ function entryOrigin(history: History, index: number): ListOrigin | null {
  * the destination with a duplicate of the page we refused to leave.
  */
 export function useRoute(history: History = window.history): UseRoute {
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
+  const [route, setRoute] = useState<Route>(() => parseRoute(routePathname(window.location.pathname)));
   const [origin, setOrigin] = useState<ListOrigin | null>(() =>
     entryOrigin(history, entryIndex(history) ?? 0),
   );
@@ -62,7 +63,7 @@ export function useRoute(history: History = window.history): UseRoute {
     current.current = { index, url: window.location.href };
     // Re-read the external URL in case browser restoration moved it after render.
     const syncLocation = () => {
-      setRoute(parseRoute(window.location.pathname));
+      setRoute(parseRoute(routePathname(window.location.pathname)));
       setOrigin(entryOrigin(history, index));
     };
     syncLocation();
@@ -78,8 +79,8 @@ export function useRoute(history: History = window.history): UseRoute {
         }
         return;
       }
-      const nextRoute = parseRoute(window.location.pathname);
-      const previousRoute = parseRoute(new URL(current.current.url).pathname);
+      const nextRoute = parseRoute(routePathname(window.location.pathname));
+      const previousRoute = parseRoute(routePathname(new URL(current.current.url).pathname));
       if (nextIndex === undefined && routePath(nextRoute) === routePath(previousRoute)) {
         // Native fragment navigation (including the skip link) creates a real
         // entry with null state. Count it too, or a later multi-entry Back is
@@ -103,7 +104,7 @@ export function useRoute(history: History = window.history): UseRoute {
         return;
       }
       current.current = { index: nextIndex ?? current.current.index, url: window.location.href };
-      setRoute(parseRoute(window.location.pathname));
+      setRoute(parseRoute(routePathname(window.location.pathname)));
       setOrigin(entryOrigin(history, current.current.index));
     };
     window.addEventListener("popstate", onPop);
@@ -116,7 +117,7 @@ export function useRoute(history: History = window.history): UseRoute {
     // location changes before popstate is handled; it is not necessarily the
     // screen whose draft we are about to unmount.
     if (path !== routePath(route) && !confirmLeave()) return;
-    if (path !== window.location.pathname) {
+    if (path !== routePathname(window.location.pathname)) {
       const index = current.current.index + 1;
       // Only a monitor's page records where it was opened from; every other
       // entry is written exactly as it was before origins existed.
@@ -127,7 +128,7 @@ export function useRoute(history: History = window.history): UseRoute {
       history.pushState(
         from === null ? { [INDEX]: index } : { [INDEX]: index, [ORIGIN]: from },
         "",
-        path,
+        appPath(path),
       );
       current.current = { index, url: window.location.href };
       setOrigin(from);

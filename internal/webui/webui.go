@@ -210,6 +210,7 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 			writeUnbuilt(w)
 			return
 		}
+		body := shellAt(sh.body, r.URL.EscapedPath())
 
 		h := w.Header()
 		h.Set("Content-Type", "text/html; charset=utf-8")
@@ -222,7 +223,7 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 		if r.Method == http.MethodHead {
 			return
 		}
-		_, _ = w.Write(sh.body)
+		_, _ = w.Write(body)
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,6 +293,33 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 		}
 		http.ServeContent(w, r, info.Name(), info.ModTime(), rs)
 	})
+}
+
+// relativeRef matches a reference in the shell that the build wrote relative
+// to the directory the dashboard is served from (web/vite.config.ts `base`).
+var relativeRef = regexp.MustCompile(`(\s(?:src|href)=")\./`)
+
+// shellAt is the shell as the document at urlPath must read it.
+//
+// The build writes the shell's scripts, stylesheet and font preloads as
+// ./assets/… and ./fonts/…, relative, so the dashboard works under a path
+// prefix (https://example.com/subglance/) as well as at the root of a host:
+// SubGlance cannot know the prefix, because the proxy in front strips it.
+// The same shell is served at every client-side route, though, and a browser
+// resolves ./ against the directory of the address it shows. At /monitors/12
+// that is /monitors/, where no assets live. So each extra directory level of
+// the path the request arrived at becomes one ../, which leads back to where
+// the dashboard is served from with or without a prefix in front.
+//
+// urlPath is the escaped path: the browser resolves against the address as
+// it shows it, so an encoded slash is not a level. The inline theme script
+// carries no such reference, so the policy's hash of it still holds.
+func shellAt(body []byte, urlPath string) []byte {
+	depth := strings.Count(urlPath, "/") - 1
+	if depth <= 0 {
+		return body
+	}
+	return relativeRef.ReplaceAll(body, []byte("${1}"+strings.Repeat("../", depth)))
 }
 
 // writeUnbuilt explains an empty embed instead of returning a blank 200.

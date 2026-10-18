@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import {
   DASHBOARD_PATH,
   INCIDENTS_PATH,
@@ -147,7 +148,7 @@ function Built({
     <li>
       <a
         className="shell-nav-item"
-        href={item.href}
+        href={appPath(item.href)}
         data-state={current ? "current" : "available"}
         /*
          * aria-current="page" rather than a styled class alone: which screen

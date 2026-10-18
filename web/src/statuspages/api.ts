@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
 
 /**
@@ -146,7 +147,7 @@ export async function removeStatusPageLogo(slug: string): Promise<StatusPage> {
  * changes with every upload, so the preview never shows a replaced image.
  */
 export const logoPreviewURL = (slug: string, logo: StatusPageLogo) =>
-  `${path(slug)}/logo?v=${encodeURIComponent(logo.path.slice(logo.path.lastIndexOf("/") + 1))}`;
+  `${appPath(path(slug))}/logo?v=${encodeURIComponent(logo.path.slice(logo.path.lastIndexOf("/") + 1))}`;
 
 export async function deleteStatusPage(slug: string): Promise<void> {
   await apiRequest(path(slug), { method: "DELETE" });

@@ -320,6 +320,47 @@ Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
 
+### Under a path
+
+SubGlance can share a host with other applications, at a path such as
+`https://example.com/subglance/`. The proxy in front strips the path before
+passing the request on, so SubGlance itself is still served from `/` and is
+never told the path: the dashboard works it out from the address its own
+scripts were loaded from, and every request, link and the live stream stay
+under it. Set [`--base-url`](#configuration) to the same address, path
+included, so alerts and push URLs point there too.
+
+Caddy:
+
+```
+example.com {
+	redir /subglance /subglance/
+	handle_path /subglance/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+}
+```
+
+nginx (the trailing slashes on both lines are what strip the path):
+
+```
+location /subglance/ {
+    proxy_pass http://127.0.0.1:8080/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+Open the address with its trailing slash. Both examples redirect
+`/subglance` to `/subglance/`; a proxy that serves the dashboard at the bare
+path instead makes the browser look for its files one level up, outside the
+path. [Public status pages](#public-status-pages) work under the path as
+well, at `/subglance/status/<slug>`.
+
+The sign-in cookie applies to the whole host, and every application on that
+host shares an origin with the dashboard. Put SubGlance under a path only beside applications you trust;
+otherwise give it a subdomain of its own.
+
 ### When this host loses its own connection
 
 If the machine SubGlance runs on loses its uplink, router or DNS resolver,

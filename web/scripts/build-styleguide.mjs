@@ -49,7 +49,7 @@ const builtCss = (() => {
     );
     process.exit(1);
   }
-  const link = indexHtml.match(/href="\/?(assets\/[^"]+\.css)"/);
+  const link = indexHtml.match(/href="(?:\.?\/)?(assets\/[^"]+\.css)"/);
   if (!link) {
     console.error("build-styleguide: built index.html links no stylesheet.");
     process.exit(1);

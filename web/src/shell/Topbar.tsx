@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
@@ -149,7 +150,7 @@ export function Topbar({
             <>
               <a
                 className="shell-crumb"
-                href={parent.href}
+                href={appPath(parent.href)}
                 onClick={(event) => {
                   if (
                     event.defaultPrevented ||
