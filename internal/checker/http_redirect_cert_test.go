@@ -18,13 +18,16 @@ type tlsHost struct {
 	leaf *x509.Certificate
 }
 
-// startTLSHost serves h over TLS with a certificate that expires in validFor.
-// The certificate is added to pool, so one checker can trust every host in a
-// chain.
+// startTLSHost serves h over TLS with a 90-day certificate that expires in
+// validFor. The certificate is added to pool, so one checker can trust every
+// host in a chain.
+//
+// 90 days, the lifetime most certificates still have, so the warning window
+// is the monitor's ssl_warn_days and not a quarter of a short lifetime.
 func startTLSHost(t *testing.T, name string, validFor time.Duration, pool *x509.CertPool, h http.Handler) tlsHost {
 	t.Helper()
 	cert, _ := newTestCert(t, certOpts{
-		notBefore: time.Now().Add(-time.Hour),
+		notBefore: time.Now().Add(validFor - 90*24*time.Hour),
 		notAfter:  time.Now().Add(validFor),
 		hosts:     []string{name, "127.0.0.1"},
 	})
