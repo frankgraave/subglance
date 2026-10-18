@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiJSON, apiPost, apiRequest } from "../api/http";
 import { Checkbox } from "../components/Choice";
+import { DangerButton } from "../components/DangerButton";
 import { windowCovers, type MaintenanceMonitor } from "./maintenanceScope";
 import { DurationField } from "./DurationField";
 import { MINUTES_TO_HOURS } from "./duration";
@@ -84,9 +85,12 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
   const keepButton = useRef<HTMLButtonElement>(null);
   const clearButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  // Where focus goes when the button that asked is gone, because every
+  // ended window was removed: the line that says what happened.
+  const statusLine = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (clearing !== null) keepButton.current?.focus();
-    else if (returnFocus.current) { returnFocus.current = false; clearButton.current?.focus(); }
+    else if (returnFocus.current) { returnFocus.current = false; (clearButton.current ?? statusLine.current)?.focus(); }
   }, [clearing]);
   const zone = browserTimezone();
   const zones = weekly ? knownTimezones() : [];
@@ -208,7 +212,7 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
     {canWrite && clearing !== null ? <div role="group" className="maintenance-clear" aria-labelledby={`${id}-clear-question`}>
       <p id={`${id}-clear-question`}>Remove {windowsWord(clearing.length)}? They no longer apply. Checks they excluded from uptime stay excluded.</p>
       <div className="button-row">
-        <button className="button button--primary" type="button" disabled={busy} onClick={() => void removeEnded(clearing)}>{busy ? "Removing…" : `Remove ${windowsWord(clearing.length)}`}</button>
+        <DangerButton disabled={busy} onClick={() => void removeEnded(clearing)}>{busy ? "Removing…" : `Remove ${windowsWord(clearing.length)}`}</DangerButton>
         <button ref={keepButton} className="button" type="button" disabled={busy} onClick={keep}>Keep them</button>
       </div>
     </div> : null}
@@ -245,7 +249,7 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
       </fieldset>
       <button className="button button--primary" type="submit" disabled={busy}>Schedule maintenance</button>
     </form> : null}
-    <p role="status">{busy ? "Saving maintenance…" : message}</p>
+    <p ref={statusLine} tabIndex={-1} role="status">{busy ? "Saving maintenance…" : message}</p>
     {error ? <p role="alert">{error}</p> : null}
   </div>;
 }

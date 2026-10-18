@@ -18,7 +18,8 @@ settings, such as neither or both of a monitor and a tag, has no `field`.
 Tag membership is evaluated when a check or notification is processed. Adding a
 monitor to the tag group includes it in the next decision; removing it ends its
 participation. Overlapping windows form a union: cancelling one does not cancel
-another. Up to 200 schedules can be stored. The list marks each window **Active now**,
+another. Up to 200 schedules can be stored, ended one-off windows included
+until they are removed. The list marks each window **Active now**,
 **Upcoming** or **Ended**, with ended one-off windows last; **Remove ended
 windows** removes those in one go, after a question that counts them. Weekly
 windows never end. To change a schedule, create its replacement and cancel the

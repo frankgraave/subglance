@@ -33,7 +33,9 @@ function sources(dir = webSrc): [string, string][] {
  * The last one formats nothing, which is how it got past the others: the
  * maintenance list printed `2026-10-01T20:00:00Z → 2026-10-01T21:00:00Z`,
  * in UTC and in ISO, with no call for a scan to see. A field named `*_at`
- * inside `${…}` or as a JSX child is that shape; one handed to a prop
+ * inside `${…}` or as a JSX child is that shape, and so is one with a
+ * fallback after it (`{x.ended_at ?? "—"}`), which still prints the raw
+ * value whenever the field is set; one handed to a prop
  * (`value={x.started_at}`, `dateTime={…}`) is not, since the component it
  * goes to does the writing.
  */
@@ -42,7 +44,7 @@ const SHAPES = [
   /\bIntl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\b/g,
   /\.get(?:UTC)?Hours\(\)/g,
   /\.toFixed\([^)]*\)\}?%/g,
-  /(?<![=\w])\$?\{[\w.?]+_at\}/g,
+  /(?<![=\w])\$?\{[\w.?]+_at(?:\s*(?:\?\?|\|\|)[^}]*)?\}/g,
 ];
 
 function formatters(source: string): string[] {
@@ -89,7 +91,11 @@ describe("dates, times, counts and percentages are written by format/format.ts",
     expect(formatters("`${share.toFixed(1)}%`")).toEqual([".toFixed(1)}%"]);
     expect(formatters("`${window.starts_at} → ${window.ends_at}`")).toEqual(["${window.starts_at}", "${window.ends_at}"]);
     expect(formatters("<dd>{data.last_success_at}</dd>")).toEqual(["{data.last_success_at}"]);
+    expect(formatters('<dd>{data.last_success_at ?? "—"}</dd>')).toEqual(['{data.last_success_at ?? "—"}']);
+    expect(formatters('`${d.ended_at || "never"}`')).toEqual(['${d.ended_at || "never"}']);
     expect(formatters("<When value={data.last_success_at} />")).toEqual([]);
+    expect(formatters("<When value={data.last_success_at ?? undefined} />")).toEqual([]);
+    expect(formatters('{d.started_at ? formatDateTime(d.started_at) : "—"}')).toEqual([]);
     expect(formatters("<time dateTime={d.started_at}>")).toEqual([]);
     expect(formatters("`${d.started}`")).toEqual([]);
     expect(formatters('new Intl.Collator("en")')).toEqual([]);

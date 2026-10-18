@@ -239,6 +239,8 @@ it("removes the ended one-off windows after a question that counts them, and kee
  expect(screen.getByRole("button",{name:"Cancel maintenance Next deploy"}).textContent).toBe("Cancel maintenance");
  fireEvent.click(screen.getByRole("button",{name:"Remove ended windows"}));
  const question=screen.getByRole("group",{name:/Remove 2 ended windows\?/});
+ // Removing cannot be undone, so the confirming button wears the destructive treatment.
+ expect(screen.getByRole("button",{name:"Remove 2 ended windows"}).className).toBe("button button--danger");
  expect(question.textContent).toContain("Checks they excluded from uptime stay excluded.");
  await waitFor(()=>expect(document.activeElement).toBe(screen.getByRole("button",{name:"Keep them"})));
  // Keeping them sends nothing and puts focus back on the button that asked.
@@ -251,6 +253,9 @@ it("removes the ended one-off windows after a question that counts them, and kee
  expect(deleted).toEqual(["1","3"]);
  await waitFor(()=>expect(document.querySelectorAll(".maintenance-list li")).toHaveLength(2));
  expect(screen.queryByRole("button",{name:"Remove ended windows"})).toBeNull();
+ // The button that asked is gone, so focus lands on the line that says what happened.
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByText("Removed 2 ended windows. Recorded history is unchanged.")));
+ expect(document.activeElement!.getAttribute("role")).toBe("status");
 });
 
 it("says how far removing ended windows got when a request fails", async () => {
