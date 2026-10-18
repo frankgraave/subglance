@@ -8,6 +8,9 @@ import { MINUTES_TO_HOURS } from "./duration";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 import { refusalInput } from "./maintenanceFields";
+import { browserTimezone, knownTimezones } from "../notifications/quietHours";
+import { formatCount } from "../format/format";
+import { localInstant, oneOffSpan, STATE_WORDS, weeklySpan, windowState, type WindowState } from "./maintenanceTimes";
 
 type Window = {
   id: number; name: string; monitor_id?: number; tag_key?: string; tag_value?: string;
@@ -16,6 +19,9 @@ type Window = {
 };
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const KEY = ["maintenance"];
+/** Ended windows go to the bottom of the list, the rest keep the order they were made in. */
+const RANK: Record<WindowState, number> = { active: 0, upcoming: 0, ended: 1 };
+const windowsWord = (n: number) => `${formatCount(n)} ended ${n === 1 ? "window" : "windows"}`;
 
 /**
  * The maintenance schedule and the form that adds to it.
@@ -63,7 +69,27 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
     if (!Array.isArray(data.maintenance)) throw new Error("The server did not return maintenance windows.");
     return data.maintenance;
   }, refetchInterval: 15_000 });
-  const shown = focus === undefined ? windows.data : windows.data?.filter((window) => windowCovers(window, focus));
+  // Where each window stands is judged at the moment the list was read, the
+  // same moment the server judged `active` at, so the two cannot disagree.
+  const readAt = windows.dataUpdatedAt;
+  const covered = focus === undefined ? windows.data : windows.data?.filter((window) => windowCovers(window, focus));
+  const shown = covered?.map((window) => ({ window, state: windowState(window, readAt) }))
+    .sort((a, b) => RANK[a.state] - RANK[b.state]);
+  // Only one-off windows end; a weekly one always has another occurrence.
+  const ended = shown?.filter((entry) => entry.state === "ended").map((entry) => entry.window) ?? [];
+  // The question before removing ended windows, and the counts it was asked
+  // about: the list can poll while it is open, and the answer is to the
+  // question on screen.
+  const [clearing, setClearing] = useState<readonly Window[] | null>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
+  const clearButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (clearing !== null) keepButton.current?.focus();
+    else if (returnFocus.current) { returnFocus.current = false; clearButton.current?.focus(); }
+  }, [clearing]);
+  const zone = browserTimezone();
+  const zones = weekly ? knownTimezones() : [];
   const refresh = async () => { await Promise.all([
     queryClient.invalidateQueries({ queryKey: KEY }),
     queryClient.invalidateQueries({ queryKey: ["monitors"] }),
@@ -83,10 +109,22 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
       setMessage(""); setError(""); setRefusal(null); setDurationError("The duration must be between 1 min and 24 h, in whole minutes."); return;
     }
     setDurationError("");
+    // A one-off window is typed on the reader's clock and sent as the instant
+    // it names. A time the clocks skip has no instant, and is refused here,
+    // under its field, rather than moved an hour without a word.
+    const refuse = (field: string, text: string) => { setMessage(""); setError(""); focusRefusal.current = true; setRefusal({ field, message: text }); };
+    let span: { starts_at: string; ends_at: string } | null = null;
+    if (!weekly) {
+      const start = localInstant(value("starts_at"));
+      if (!start.ok) { refuse("starts_at", start.message); return; }
+      const end = localInstant(value("ends_at"));
+      if (!end.ok) { refuse("ends_at", end.message); return; }
+      span = { starts_at: start.iso, ends_at: end.iso };
+    }
     const body = { name: value("name"),
       ...(scope === "monitor" ? { monitor_id: Number(value("monitor_id")) } : { tag_key: value("tag_key"), tag_value: value("tag_value") }),
-      ...(weekly ? { timezone: value("timezone"), local_time: value("local_time"), weekdays: data.getAll("weekdays").map(Number), duration_minutes: Number(value("duration_minutes")) }
-        : { starts_at: `${value("starts_at")}:00Z`, ends_at: `${value("ends_at")}:00Z` }),
+      ...(span === null ? { timezone: value("timezone"), local_time: value("local_time"), weekdays: data.getAll("weekdays").map(Number), duration_minutes: Number(value("duration_minutes")) }
+        : span),
     };
     setBusy(true); setError(""); setRefusal(null); setMessage("");
     try { await apiPost("/api/v1/maintenance", body); await refresh(); setMessage("Maintenance scheduled."); }
@@ -100,13 +138,41 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
     }
     finally { setBusy(false); }
   }
-  async function cancel(window: Window) {
+  async function cancel(window: Window, state: WindowState) {
     if (busy) return;
     setBusy(true); setError(""); setMessage("");
-    try { await apiRequest(`/api/v1/maintenance/${window.id}`, { method: "DELETE" }); await refresh(); setMessage(`Cancelled ${window.name}. Recorded history is unchanged.`); }
+    try { await apiRequest(`/api/v1/maintenance/${window.id}`, { method: "DELETE" }); await refresh(); setMessage(`${state === "ended" ? "Removed" : "Cancelled"} ${window.name}. Recorded history is unchanged.`); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not cancel maintenance."); }
     finally { setBusy(false); }
   }
+  /**
+   * Removes the ended one-off windows the question named, one request each,
+   * since the API cancels one window at a time. It stops at the first
+   * failure and says how far it got: the rest are still listed, still ended,
+   * and the button is there to try again.
+   */
+  async function removeEnded(targets: readonly Window[]) {
+    if (busy) return;
+    setBusy(true); setError(""); setMessage("");
+    let removed = 0;
+    try {
+      for (const window of targets) {
+        await apiRequest(`/api/v1/maintenance/${window.id}`, { method: "DELETE" });
+        removed++;
+      }
+      setMessage(`Removed ${windowsWord(removed)}. Recorded history is unchanged.`);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : "the server did not answer";
+      setError(`Removed ${formatCount(removed)} of ${windowsWord(targets.length)}, then stopped: ${reason}`);
+    } finally {
+      await refresh().catch(() => undefined);
+      // Together, so the list is unlocked when focus goes back to the
+      // button; it is there again only if some ended windows are left.
+      returnFocus.current = true;
+      setBusy(false); setClearing(null);
+    }
+  }
+  const keep = () => { returnFocus.current = true; setClearing(null); };
   const blamed = (field: string) => refusal?.field === field ? refusal.message : undefined;
   const errorId = (field: string) => `${id}-${field}-error`;
   // What an input wears when a refusal names it: the red border, and the
@@ -129,13 +195,23 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
       ? `Could not load maintenance: ${windows.error.message}`
       : `Could not refresh maintenance: ${windows.error.message}. Showing the last loaded schedules, which may be out of date.`}</p> : null}
     {shown?.length === 0 ? <p>{focus ? `No maintenance windows cover ${focus.name}.` : "No maintenance windows scheduled."}</p> : null}
-    <ul className="maintenance-list">{shown?.map((window) => <li key={window.id}>
-      <strong>{window.name}</strong> — {window.active ? "Active now" : "Not active now"}
+    <ul className="maintenance-list">{shown?.map(({ window, state }) => <li key={window.id} data-state={state}>
+      <strong>{window.name}</strong> — {STATE_WORDS[state]}
       <p>{window.monitor_id ? monitors.find((m) => m.id === String(window.monitor_id))?.name ?? `Monitor ${window.monitor_id}` : `${window.tag_key}:${window.tag_value}`}</p>
-      <p>{window.timezone ? `${window.weekdays?.map((day) => DAYS[day]).join(", ")} at ${window.local_time} (${window.timezone}), ${window.duration_minutes} minutes`
-        : `${window.starts_at} → ${window.ends_at}`}</p>
-      {canWrite ? <button className="button" type="button" disabled={busy} aria-label={`Cancel maintenance ${window.name}`} onClick={() => void cancel(window)}>Cancel maintenance</button> : null}
+      <p>{window.timezone ? weeklySpan(window.weekdays, window.local_time, window.timezone, window.duration_minutes)
+        : oneOffSpan(window.starts_at ?? "", window.ends_at ?? "")}</p>
+      {canWrite ? <button className="button" type="button" disabled={busy} aria-label={`${state === "ended" ? "Remove" : "Cancel"} maintenance ${window.name}`} onClick={() => void cancel(window, state)}>{state === "ended" ? "Remove" : "Cancel maintenance"}</button> : null}
     </li>)}</ul>
+    {canWrite && clearing === null && ended.length > 0 ? <div className="button-row">
+      <button ref={clearButton} className="button" type="button" disabled={busy} onClick={() => setClearing(ended)}>Remove ended windows</button>
+    </div> : null}
+    {canWrite && clearing !== null ? <div role="group" aria-labelledby={`${id}-clear-question`}>
+      <p id={`${id}-clear-question`}>Remove {windowsWord(clearing.length)}? They no longer apply. Checks they excluded from uptime stay excluded.</p>
+      <div className="button-row">
+        <button className="button button--primary" type="button" disabled={busy} onClick={() => void removeEnded(clearing)}>{busy ? "Removing…" : `Remove ${windowsWord(clearing.length)}`}</button>
+        <button ref={keepButton} className="button" type="button" disabled={busy} onClick={keep}>Keep them</button>
+      </div>
+    </div> : null}
     {canWrite ? <form ref={form} className="form-column" onSubmit={(event) => void submit(event)} onChange={() => setRefusal(null)} aria-label="Schedule maintenance">
       <fieldset disabled={busy} className="maintenance-fields">
         <div className="field"><label htmlFor={`${id}-name`}>Name</label><input id={`${id}-name`} className="input" name="name" required maxLength={120} {...invalid("name")}/>{refusalFor("name")}</div>
@@ -147,7 +223,10 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
           </div>}
         <label className="field">Schedule<Select className="input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></Select></label>
         {weekly ? <>
-          <div className="field"><label htmlFor={`${id}-timezone`}>Timezone</label><input id={`${id}-timezone`} className="input" name="timezone" required defaultValue="UTC" placeholder="Europe/Amsterdam" {...invalid("timezone", `${id}-dst`)}/>{refusalFor("timezone")}</div>
+          {/* The browser's zone, as quiet hours start from: a window planned
+              for "Sunday night" is meant on the planner's clock. */}
+          <div className="field"><label htmlFor={`${id}-timezone`}>Timezone</label><input id={`${id}-timezone`} className="input" name="timezone" required defaultValue={zone} placeholder="Europe/Amsterdam" autoComplete="off" spellCheck={false} list={zones.length > 0 ? `${id}-zones` : undefined} {...invalid("timezone", `${id}-dst`)}/>{refusalFor("timezone")}
+            {zones.length > 0 ? <datalist id={`${id}-zones`}>{zones.map((name) => <option key={name} value={name}>{name}</option>)}</datalist> : null}</div>
           {/* The group is what a weekdays refusal is about, not any one box in it. */}
           <fieldset className="maintenance-days" {...invalid("weekdays")}><legend>Weekdays</legend>{DAYS.map((day, index) => <Checkbox key={day} name="weekdays" value={index} defaultChecked={index === 0}>{day}</Checkbox>)}</fieldset>
           {refusalFor("weekdays")}
@@ -156,10 +235,13 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
             <input type="hidden" name="duration_minutes" value={minutes}/>
             {durationMessage ? <FieldError id={`${id}-duration-error`}>{durationMessage}</FieldError> : null}</div></div>
           <p id={`${id}-dst`}>Use an IANA timezone. A missing daylight-saving time is skipped; a repeated time starts once, at the earlier occurrence. Duration is elapsed minutes.</p>
-        </> : <div className="field-grid">
-          <div className="field"><label htmlFor={`${id}-starts-at`}>Start (UTC)</label><input id={`${id}-starts-at`} className="input" type="datetime-local" name="starts_at" required {...invalid("starts_at")}/>{refusalFor("starts_at")}</div>
-          <div className="field"><label htmlFor={`${id}-ends-at`}>End (UTC)</label><input id={`${id}-ends-at`} className="input" type="datetime-local" name="ends_at" required {...invalid("ends_at")}/>{refusalFor("ends_at")}</div>
-        </div>}
+        </> : <>
+          <div className="field-grid">
+            <div className="field"><label htmlFor={`${id}-starts-at`}>Start</label><input id={`${id}-starts-at`} className="input" type="datetime-local" name="starts_at" required {...invalid("starts_at", `${id}-zone`)}/>{refusalFor("starts_at")}</div>
+            <div className="field"><label htmlFor={`${id}-ends-at`}>End</label><input id={`${id}-ends-at`} className="input" type="datetime-local" name="ends_at" required {...invalid("ends_at", `${id}-zone`)}/>{refusalFor("ends_at")}</div>
+          </div>
+          <p id={`${id}-zone`}>Times are in your time zone ({zone}). A time that happens twice when the clocks go back means the first of the two; a time the clocks skip cannot be chosen.</p>
+        </>}
       </fieldset>
       <button className="button button--primary" type="submit" disabled={busy}>Schedule maintenance</button>
     </form> : null}

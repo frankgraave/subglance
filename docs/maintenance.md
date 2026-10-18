@@ -18,8 +18,11 @@ settings, such as neither or both of a monitor and a tag, has no `field`.
 Tag membership is evaluated when a check or notification is processed. Adding a
 monitor to the tag group includes it in the next decision; removing it ends its
 participation. Overlapping windows form a union: cancelling one does not cancel
-another. Up to 200 schedules can be stored; cancel expired one-off schedules to
-make room. To change a schedule, create its replacement and cancel the old one.
+another. Up to 200 schedules can be stored. The list marks each window **Active now**,
+**Upcoming** or **Ended**, with ended one-off windows last; **Remove ended
+windows** removes those in one go, after a question that counts them. Weekly
+windows never end. To change a schedule, create its replacement and cancel the
+old one.
 
 One-off example (timestamps require an explicit UTC offset):
 
@@ -33,8 +36,14 @@ Weekly example (Sunday is 0, Saturday is 6):
 {"name":"Weekly deploy","tag_key":"env","tag_value":"prod","timezone":"Europe/Amsterdam","weekdays":[0],"local_time":"02:30","duration_minutes":60}
 ```
 
-The one-off form uses **UTC**, irrespective of the browser's timezone. Weekly
-windows use the named IANA timezone. Timezone data is embedded in the binary,
+The one-off form uses your browser's time zone, and says which below its
+fields: 20:00 typed in Amsterdam in October is sent as `18:00:00Z`. A time that
+happens twice when the clocks go back means the earlier of the two; a time the
+clocks skip is refused under its field. To schedule on another zone's clock,
+send the timestamp through the API. The list shows one-off windows in the
+reader's zone as well. Weekly windows use the named IANA timezone, which the
+form fills with the browser's own; the list writes their start on that zone's
+clock and names it. Timezone data is embedded in the binary,
 so minimal containers do not need an external timezone package. There is no
 external scheduler. Intent is stored in SQLite and evaluated against timestamps,
 so a restart neither loses schedules nor moves their boundaries.

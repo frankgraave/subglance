@@ -26,14 +26,23 @@ function sources(dir = webSrc): [string, string][] {
 
 /**
  * The shapes of a formatter written in place: a locale call, an `Intl`
- * date or number formatter, a clock face assembled from a Date's hours, and
- * a percentage built from `toFixed`.
+ * date or number formatter, a clock face assembled from a Date's hours, a
+ * percentage built from `toFixed`, and an API timestamp put into text as it
+ * came off the wire.
+ *
+ * The last one formats nothing, which is how it got past the others: the
+ * maintenance list printed `2026-10-01T20:00:00Z → 2026-10-01T21:00:00Z`,
+ * in UTC and in ISO, with no call for a scan to see. A field named `*_at`
+ * inside `${…}` or as a JSX child is that shape; one handed to a prop
+ * (`value={x.started_at}`, `dateTime={…}`) is not, since the component it
+ * goes to does the writing.
  */
 const SHAPES = [
   /\.toLocale(?:Date|Time)?String\(/g,
   /\bIntl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\b/g,
   /\.get(?:UTC)?Hours\(\)/g,
   /\.toFixed\([^)]*\)\}?%/g,
+  /(?<![=\w])\$?\{[\w.?]+_at\}/g,
 ];
 
 function formatters(source: string): string[] {
@@ -49,6 +58,10 @@ const EXCEPTIONS: Record<string, string> = {
   // Asks the engine whether a typed zone name exists; nothing is written.
   "notifications/quietHours.ts: Intl.DateTimeFormat":
     "validates a quiet-hours time zone and reads the browser's own zone; neither formats a date",
+  // The clipboard text for a bug report, read by whoever triages it in
+  // another zone: the ISO instant is the unambiguous shape there.
+  "diagnostics/format.ts: ${d.started_at}":
+    "the copied diagnostics are for a bug report, where an ISO instant with its offset is the point",
 };
 
 describe("dates, times, counts and percentages are written by format/format.ts", () => {
@@ -74,6 +87,11 @@ describe("dates, times, counts and percentages are written by format/format.ts",
     expect(formatters("new Intl.DateTimeFormat(undefined, {})")).toEqual(["Intl.DateTimeFormat"]);
     expect(formatters("`${pad(d.getHours())}:${pad(d.getMinutes())}`")).toEqual([".getHours()"]);
     expect(formatters("`${share.toFixed(1)}%`")).toEqual([".toFixed(1)}%"]);
+    expect(formatters("`${window.starts_at} → ${window.ends_at}`")).toEqual(["${window.starts_at}", "${window.ends_at}"]);
+    expect(formatters("<dd>{data.last_success_at}</dd>")).toEqual(["{data.last_success_at}"]);
+    expect(formatters("<When value={data.last_success_at} />")).toEqual([]);
+    expect(formatters("<time dateTime={d.started_at}>")).toEqual([]);
+    expect(formatters("`${d.started}`")).toEqual([]);
     expect(formatters('new Intl.Collator("en")')).toEqual([]);
     expect(formatters("`${top}%`")).toEqual([]);
     expect(formatters(readFileSync(join(webSrc, HOME), "utf8")).length).toBeGreaterThan(0);
