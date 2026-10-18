@@ -57,6 +57,9 @@ func requireDirAccess(dir string) error {
 		if err == nil {
 			break
 		}
+		if errors.Is(err, os.ErrPermission) {
+			return unreachableRefusal(dir, existing)
+		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil // left to the MkdirAll that follows
 		}
@@ -80,6 +83,37 @@ func requireDirAccess(dir string) error {
 		"create it and give it to that user (mkdir -p %s && chown %s %s, as root), "+
 		"or point --data-dir somewhere it can write",
 		dir, existing, ownerOf(existing), processUser(), dir, processOwner(), dir)
+}
+
+// unreachableRefusal names the directory above the data directory that
+// this process may not pass through. A stat of path fails with a permission
+// error only when a directory on the way to it lacks search permission, and
+// the nearest one above path that can still be looked at is that directory:
+// everything up to it is searchable, and it is not. A chown of the data
+// directory does not fix that, so the refusal does not suggest one.
+func unreachableRefusal(dir, path string) error {
+	blocked := path
+	var info os.FileInfo
+	for {
+		parent := filepath.Dir(blocked)
+		if parent == blocked {
+			break
+		}
+		blocked = parent
+		var err error
+		if info, err = os.Stat(blocked); err == nil {
+			break
+		}
+	}
+	fix := fmt.Sprintf("let that user search it (chmod o+x %s, as root)", blocked)
+	if info != nil {
+		if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) == os.Getuid() {
+			fix = fmt.Sprintf("let its owner search it (chmod u+x %s)", blocked)
+		}
+	}
+	return fmt.Errorf("cannot reach the data directory %s: %s %s, and SubGlance runs as %s, "+
+		"which may not pass through it; %s, or point --data-dir somewhere it can reach",
+		dir, blocked, ownerOf(blocked), processUser(), fix)
 }
 
 // remedy is the one command that fixes a refusal of path. A file the

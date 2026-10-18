@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/datalock"
 	"github.com/frankgraave/subglance/internal/mutelink"
 )
@@ -133,7 +134,7 @@ func TestServerReadsTheMuteLinkKeyOnly(t *testing.T) {
 	if err := os.WriteFile(key, []byte("00\n"), 0o400); err != nil {
 		t.Fatal(err)
 	}
-	files := serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"))
+	files := serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"), true)
 	if err := requireDataAccess(dataDir, files); err != nil {
 		t.Fatalf("a read-only mute-link key was refused: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestServerReadsTheMuteLinkKeyOnly(t *testing.T) {
 func TestServerRefusesADataDirItCannotCreate(t *testing.T) {
 	skipAsRoot(t)
 	dataDir := filepath.Join("/", "subglance-data-access-test", "data")
-	err := requireDataAccess(dataDir, serverFiles(dataDir, filepath.Join(dataDir, "subglance.db")))
+	err := requireDataAccess(dataDir, serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"), true))
 	if err == nil {
 		t.Fatal("no refusal for a data directory under / ")
 	}
@@ -162,6 +163,88 @@ func TestServerRefusesADataDirItCannotCreate(t *testing.T) {
 		if !strings.Contains(msg, want) {
 			t.Errorf("refusal does not say %q:\n%s", want, msg)
 		}
+	}
+}
+
+// A data directory under a directory this process may not pass through
+// cannot even be looked at. The refusal names that directory, not the lock
+// file inside the data directory, whose chown would not help.
+func TestServerRefusesADataDirItCannotReach(t *testing.T) {
+	skipAsRoot(t)
+	for _, tc := range []struct {
+		name   string
+		exists bool
+	}{
+		{"the data directory exists", true},
+		{"the data directory is still to be created", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			blocked := filepath.Join(t.TempDir(), "blocked")
+			dataDir := filepath.Join(blocked, "inner", "data")
+			mkdir := blocked
+			if tc.exists {
+				mkdir = dataDir
+			}
+			if err := os.MkdirAll(mkdir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			chmod(t, blocked, 0o600)
+
+			err := requireDataAccess(dataDir, serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"), true))
+			if err == nil {
+				t.Fatal("no refusal for a data directory under a directory it may not search")
+			}
+			msg := err.Error()
+			for _, want := range []string{
+				"cannot reach the data directory " + dataDir,
+				": " + blocked + " belongs to",
+				"SubGlance runs as user",
+				"chmod u+x " + blocked,
+			} {
+				if !strings.Contains(msg, want) {
+					t.Errorf("refusal does not say %q:\n%s", want, msg)
+				}
+			}
+			if strings.Contains(msg, datalock.Path(dataDir)) {
+				t.Errorf("refusal names the lock file, not the directory in the way:\n%s", msg)
+			}
+		})
+	}
+}
+
+// The mute-link key is checked only when the server will read it: with
+// --base-url and without a secret key. Otherwise a key file left over from
+// another configuration, unreadable or not, does not stop the start.
+func TestServerChecksTheMuteLinkKeyOnlyWhenItReadsIt(t *testing.T) {
+	skipAsRoot(t)
+	dataDir := t.TempDir()
+	key := filepath.Join(dataDir, mutelink.KeyFile)
+	if err := os.WriteFile(key, []byte("00\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(key, 0o600) })
+	for _, tc := range []struct {
+		name      string
+		baseURL   string
+		secretKey string
+		refused   bool
+	}{
+		{"no base URL", "", "", false},
+		{"base URL and a secret key", "https://status.example.com", "a-secret-key-of-thirty-two-bytes", false},
+		{"base URL and a blank secret key", "https://status.example.com", "  ", true},
+		{"base URL without a secret key", "https://status.example.com", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Config{DataDir: dataDir, BaseURL: tc.baseURL, SecretKey: tc.secretKey}
+			files := serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"), readsMuteLinkKey(cfg))
+			err := requireDataAccess(dataDir, files)
+			if !tc.refused && err != nil {
+				t.Errorf("refused a key file the server does not read: %v", err)
+			}
+			if tc.refused {
+				wantRefusal(t, err, "cannot read "+key, "chmod u+rw "+key)
+			}
+		})
 	}
 }
 
@@ -180,11 +263,11 @@ func TestRefusalOfAnotherUsersFileSaysChown(t *testing.T) {
 // whose database does not exist yet.
 func TestDataAccessAllowsAUsableDataDir(t *testing.T) {
 	dataDir := seededDataDir(t)
-	if err := requireDataAccess(dataDir, serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"))); err != nil {
+	if err := requireDataAccess(dataDir, serverFiles(dataDir, filepath.Join(dataDir, "subglance.db"), true)); err != nil {
 		t.Errorf("a usable data directory was refused: %v", err)
 	}
 	fresh := filepath.Join(t.TempDir(), "not", "yet")
-	if err := requireDataAccess(fresh, serverFiles(fresh, filepath.Join(fresh, "subglance.db"))); err != nil {
+	if err := requireDataAccess(fresh, serverFiles(fresh, filepath.Join(fresh, "subglance.db"), true)); err != nil {
 		t.Errorf("a data directory still to be created was refused: %v", err)
 	}
 }

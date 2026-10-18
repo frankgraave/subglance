@@ -2,7 +2,9 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 
+	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/datalock"
 	"github.com/frankgraave/subglance/internal/mutelink"
 )
@@ -31,9 +33,21 @@ func lockFile(dataDir string) dataFile {
 }
 
 // serverFiles are the files the server opens in its data directory: the
-// lock, the database, and the mute-link key, which it only reads once it
-// exists.
-func serverFiles(dataDir, dbPath string) []dataFile {
+// lock, the database, and, when readsKey is set, the mute-link key, which it
+// only reads once it exists.
+func serverFiles(dataDir, dbPath string, readsKey bool) []dataFile {
 	files := append([]dataFile{lockFile(dataDir)}, databaseFiles(dbPath)...)
+	if !readsKey {
+		return files
+	}
 	return append(files, dataFile{path: filepath.Join(dataDir, mutelink.KeyFile)})
+}
+
+// readsMuteLinkKey says whether the server will read the mute-link key file
+// in the data directory. It signs mute links only with --base-url, and with
+// a secret key it derives the signing key from that instead of the file
+// (mutelink.Load). A key file left over from another configuration is not
+// opened, so it is not checked either.
+func readsMuteLinkKey(cfg config.Config) bool {
+	return cfg.BaseURL != "" && strings.TrimSpace(cfg.SecretKey) == ""
 }

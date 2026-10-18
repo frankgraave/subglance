@@ -109,15 +109,17 @@ write to it, so give it to `65532:65532` before the first start:
 
 ```sh
 mkdir -p ./data
-sudo chown 65532:65532 ./data
+sudo chown -R 65532:65532 ./data
 docker run -d -p 127.0.0.1:8080:8080 -v "$PWD/data:/data" ghcr.io/frankgraave/subglance:edge
 ```
 
 In Compose that is `- ./data:/data` under `volumes:`, with the same `chown`
-first. Started on a directory it cannot write, SubGlance refuses with the
-path, its owner and the user it runs as. The path in that message is the one
-inside the container, `/data`; run the `chown` it suggests on the host
-directory mounted there.
+first. The `-R` matters for a directory that already holds files, such as one
+moved over from another install: every file in it has to be writable too.
+Started on a directory it cannot write, SubGlance refuses with the path, its
+owner and the user it runs as. The path in that message is the one inside the
+container, `/data`; run the `chown` it suggests on the host directory mounted
+there.
 
 Running the container with `--user` (`user:` in Compose) as your own account
 works as well, if that account owns the directory. Use the same user for

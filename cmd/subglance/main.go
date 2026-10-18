@@ -132,7 +132,7 @@ func run(args []string, logOut io.Writer) error {
 	// Before the directory is created or anything in it opened: a data
 	// directory owned by another user otherwise fails below with an error
 	// that names neither the owner nor the fix (see requireDataAccess).
-	if err := requireDataAccess(cfg.DataDir, serverFiles(cfg.DataDir, cfg.DBPath())); err != nil {
+	if err := requireDataAccess(cfg.DataDir, serverFiles(cfg.DataDir, cfg.DBPath(), readsMuteLinkKey(cfg))); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
