@@ -56,9 +56,17 @@ func runHealthcheck(args []string, out io.Writer) error {
 	// A dedicated client with no keep-alives: this process makes one request
 	// per address and exits, so a pooled connection would only be a socket
 	// left half-closed on the server.
+	//
+	// It does not follow redirects. The readiness endpoint never sends one, so
+	// a redirect is itself the answer, and a non-200 one. Following it would
+	// also let a dial failure on the redirect target pass for "nothing here"
+	// and send the probe on to the next loopback after a server had answered.
 	client := &http.Client{
 		Timeout:   healthcheckTimeout,
 		Transport: &http.Transport{DisableKeepAlives: true},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	// Only an address that cannot be connected to passes the question on to

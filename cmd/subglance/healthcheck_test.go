@@ -174,6 +174,45 @@ func TestRunHealthcheckAnswerOnFirstAddressIsFinal(t *testing.T) {
 	}
 }
 
+// A redirect is an answer too. Followed, a redirect from [::1] to an address
+// that refuses connections failed with a dial error, which sent the probe on
+// to 127.0.0.1 and reported healthy after [::1] had answered.
+func TestRunHealthcheckRedirectOnFirstAddressIsFinal(t *testing.T) {
+	t.Parallel()
+
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	refused := "http://" + closed.Addr().String() + "/api/v1/ready"
+	_ = closed.Close()
+
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback here: %v", err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, refused, http.StatusFound)
+	}))
+	_ = srv.Listener.Close()
+	srv.Listener = ln
+	srv.Start()
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	if !readyOn(t, "127.0.0.1", port, http.StatusOK) {
+		t.Skipf("could not bind port %s on 127.0.0.1", port)
+	}
+
+	var out bytes.Buffer
+	err = runHealthcheck([]string{"--addr", net.JoinHostPort("::", port)}, &out)
+	if err == nil {
+		t.Fatalf("runHealthcheck returned nil after [::1] answered with a redirect; output %q", out.String())
+	}
+	if !strings.Contains(err.Error(), "302") {
+		t.Errorf("error = %v, want the 302 from [::1]", err)
+	}
+}
+
 func TestRunHealthcheckNamesEveryAddressTried(t *testing.T) {
 	t.Parallel()
 
