@@ -77,6 +77,33 @@ func TestGetChannelReportsNotFound(t *testing.T) {
 	}
 }
 
+// The API builds the Channel it hands to UpdateChannel from a request, which
+// has no creation time, and answers the replace with what comes back. So the
+// stored created_at has to come back too, not the caller's zero time.
+func TestUpdateChannelReturnsTheStoredCreationTime(t *testing.T) {
+	db := openTestDB(t)
+	created := seedChannel(t, db, "a")
+
+	saved, err := db.UpdateChannel(t.Context(), Channel{
+		ID: created.ID, Name: "renamed", Type: ChannelWebhook,
+		Config: created.Config, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("UpdateChannel: %v", err)
+	}
+	if !saved.CreatedAt.Equal(created.CreatedAt) {
+		t.Fatalf("CreatedAt = %v, want the stored %v", saved.CreatedAt, created.CreatedAt)
+	}
+	stored, err := db.GetChannel(t.Context(), created.ID)
+	if err != nil {
+		t.Fatalf("GetChannel: %v", err)
+	}
+	if !saved.CreatedAt.Equal(stored.CreatedAt) || !saved.UpdatedAt.Equal(stored.UpdatedAt) {
+		t.Fatalf("returned %v / %v, stored %v / %v; want the same row",
+			saved.CreatedAt, saved.UpdatedAt, stored.CreatedAt, stored.UpdatedAt)
+	}
+}
+
 // Repeating an id in the request is the client being sloppy, not an error:
 // the resulting set is identical either way, and rejecting it would make a
 // UI that submits a checkbox list twice fail for no reason.

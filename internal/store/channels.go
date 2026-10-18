@@ -125,14 +125,17 @@ func (db *DB) UpdateChannel(ctx context.Context, c Channel) (Channel, error) {
 	}
 
 	now := time.Now().Unix()
-	// is_default is read back rather than taken from c: Update never writes
-	// the flag, so the caller's copy says nothing about the stored row.
+	// is_default and created_at are read back rather than taken from c:
+	// Update never writes either, so the caller's copy says nothing about
+	// the stored row. The API answers a replace with what this returns, and
+	// a caller building c from a request has no creation time to put in it.
+	var created int64
 	err = db.Writer.QueryRowContext(ctx, `
 		UPDATE notif_channels
 		   SET name = ?, type = ?, config_json = ?, enabled = ?, updated_at = ?
 		 WHERE id = ?
-		RETURNING is_default`,
-		c.Name, c.Type, cfg, c.Enabled, now, c.ID).Scan(&c.IsDefault)
+		RETURNING is_default, created_at`,
+		c.Name, c.Type, cfg, c.Enabled, now, c.ID).Scan(&c.IsDefault, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Channel{}, fmt.Errorf("%w: channel %d", ErrNotFound, c.ID)
 	}
@@ -140,6 +143,7 @@ func (db *DB) UpdateChannel(ctx context.Context, c Channel) (Channel, error) {
 		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
 	}
 
+	c.CreatedAt = time.Unix(created, 0).UTC()
 	c.UpdatedAt = time.Unix(now, 0).UTC()
 	return c, nil
 }
