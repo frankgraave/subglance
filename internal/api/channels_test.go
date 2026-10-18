@@ -119,6 +119,39 @@ func TestUpdateChannelKeepsSecretWhenMaskedValueIsSentBack(t *testing.T) {
 	}
 }
 
+// The answer to a replace is the channel as stored. created_at was the zero
+// time in it, so a client keeping that answer held a channel from year 1.
+func TestUpdateChannelAnswersItsCreationTime(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+
+	created := createSlackChannel(t, srv, "ops",
+		"https://hooks.slack.com/services/T000/B000/verysecret")
+	path := "/api/v1/channels/" + strconv.FormatInt(created.ID, 10)
+
+	rec := doJSON(t, srv, http.MethodPut, path,
+		`{"name":"ops-oncall","type":"slack","config":{"url":"`+created.Config["url"]+`"}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var replaced channelResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &replaced); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !replaced.CreatedAt.Equal(created.CreatedAt) {
+		t.Fatalf("created_at = %v, want %v from the create", replaced.CreatedAt, created.CreatedAt)
+	}
+
+	rec = doJSON(t, srv, http.MethodGet, path, "")
+	var read channelResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !replaced.CreatedAt.Equal(read.CreatedAt) || !replaced.UpdatedAt.Equal(read.UpdatedAt) {
+		t.Fatalf("PUT answered %v / %v, GET reads %v / %v; want the same channel",
+			replaced.CreatedAt, replaced.UpdatedAt, read.CreatedAt, read.UpdatedAt)
+	}
+}
+
 func TestUpdateChannelStoresANewSecret(t *testing.T) {
 	srv, db := testServerWithDB(t)
 
