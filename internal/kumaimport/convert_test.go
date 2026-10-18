@@ -227,6 +227,12 @@ func TestChannels(t *testing.T) {
 		{"smtp secure on another port", `{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"kuma@example.com","smtpPort":"2465","smtpSecure":true}`,
 			func(c configfile.Channel) bool { return c.Config["port"] == "2465" },
 			"TLS from the start on port 2465; SubGlance does that only on port 465"},
+		{"smtp plain on 465", `{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"kuma@example.com","smtpPort":465,"smtpSecure":false}`,
+			func(c configfile.Channel) bool { return c.Config["port"] == "465" },
+			"Kuma spoke plain SMTP on port 465"},
+		{"smtp ignoring certificate errors", `{"type":"smtp","smtpTo":"a@example.com","smtpHost":"mail","smtpFrom":"kuma@example.com","smtpPort":587,"smtpIgnoreTLSError":true}`,
+			func(c configfile.Channel) bool { return c.Config["port"] == "587" },
+			"Kuma ignored certificate errors; SubGlance checks the server's certificate"},
 		{"ntfy with a token", `{"type":"ntfy","ntfyserverurl":"https://ntfy.sh/","ntfytopic":"t","ntfyAuthenticationMethod":"accessToken","ntfyaccesstoken":"x"}`,
 			func(c configfile.Channel) bool {
 				return c.Config["url"] == "https://ntfy.sh" && c.Config["token"] == configfile.Placeholder && c.Config["username"] == ""

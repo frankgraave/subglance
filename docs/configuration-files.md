@@ -564,6 +564,9 @@ so the converted file still imports. Names without controls are not flattened.
   on keeps working on port 465, which SubGlance speaks TLS to from the first
   byte as Kuma did, and gets 465 when Kuma had no port. On any other port it
   is listed: SubGlance starts there in plain SMTP and upgrades with STARTTLS.
+  One with *Secure* off on port 465 is listed too, because Kuma spoke plain
+  SMTP there and SubGlance does not, and so is one with *Ignore TLS Error*
+  on, because SubGlance always checks the server's certificate.
 - Every channel is held to the rules SubGlance holds a saved channel to. Kuma
   accepted server addresses that no request can reach: a port of 0 or above
   65535, a hostname the resolver refuses, an ntfy server with a path. Such an

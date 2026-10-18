@@ -130,6 +130,17 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 			note("Kuma connected with TLS from the start on port " + port +
 				"; SubGlance does that only on port 465 and uses STARTTLS on every other port, so set the port to 465 or to the server's STARTTLS port, usually 587")
 		}
+		// Without Secure, Kuma's mailer speaks plain SMTP even on 465 and
+		// upgrades with STARTTLS, so the relay there answered in plain
+		// text, which SubGlance no longer speaks on that port.
+		if !secure && port == "465" {
+			note("Kuma spoke plain SMTP on port 465; SubGlance speaks TLS from the first byte there, so set the port to the server's STARTTLS port, usually 587, unless the server expects TLS on 465")
+		}
+		// SubGlance verifies the relay's certificate whenever the session
+		// is in TLS and has no switch to stop that.
+		if get("smtpIgnoreTLSError") == "true" {
+			note("Kuma ignored certificate errors; SubGlance checks the server's certificate, so delivery fails unless it is trusted and valid for the host")
+		}
 	case "ntfy":
 		out.Type = "ntfy"
 		// The server and the user name say where messages go. The topic

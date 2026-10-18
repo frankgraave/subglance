@@ -61,10 +61,12 @@ ignored.
 An email channel on port 465 is spoken to in TLS from the first byte, which
 is what a relay listening there expects (implicit TLS, RFC 8314). Every other
 port, 587 when none is set, starts in plain SMTP and upgrades with STARTTLS
-when the relay offers it. Either way the relay's certificate has to be valid
-for `host`. A relay that wants TLS from the start but is reached on another
-port says nothing at all, so that delivery fails after the 10-second deadline
-with an error that names port 465.
+when the relay offers it. A session in TLS, from the first byte or after
+STARTTLS, needs a certificate that is valid for `host`; a relay on another
+port that offers no STARTTLS is sent the message unencrypted, and there is
+no certificate to check. A relay that wants TLS from the start but is
+reached on another port says nothing at all, so that delivery fails after
+the 10-second deadline with an error that names port 465.
 
 An email channel's `from` is one address, and `to` is one or more separated
 by commas. Either may carry a name, as in `SubGlance <sg@example.com>` or
