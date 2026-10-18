@@ -62,6 +62,7 @@ func newResolverCanary(t *testing.T, fn *fakeNet, fr *fakeResolver, clk *fakeClo
 	if err != nil {
 		t.Fatal(err)
 	}
+	prove(t, c, fn, clk)
 	return c
 }
 

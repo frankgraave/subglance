@@ -5,7 +5,7 @@ import { chromium, type Browser } from "../layout/harness/browser";
 import { serveBuild, type Server } from "../layout/harness/server";
 import { THEME_STORAGE_KEY } from "../theme/theme";
 import { LAYOUT_STORAGE_KEY } from "../shell/preferences";
-import { offlineConnectivity } from "./fixtures";
+import { contradictedConnectivity, offlineConnectivity, unansweredConnectivity } from "./fixtures";
 
 /*
  * The host-offline line in real Chromium (SUB-151): legible in both themes,
@@ -66,6 +66,58 @@ it.each([
     });
     expect(layout).toEqual({ scrolls: false, inside: true, above: true, role: "status", dotAnimation: "none" });
 
+    await page.evaluate(axe.source);
+    const audit = await page.evaluate(async () => {
+      const engine = (window as unknown as { axe: typeof axe }).axe;
+      return await engine.run({ include: ['[data-state="host-offline"]'] }, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
+    });
+    expect(audit.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.html) }))).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
+/*
+ * The same line for targets that cannot see out (SUB-333): it says the
+ * opposite of the offline line, that nothing is held back, and is measured
+ * the same way at a phone and a desktop width, in both themes.
+ */
+it.each([
+  ["unanswered", unansweredConnectivity, "Connectivity targets have not answered since", "dark", 390],
+  ["unanswered", unansweredConnectivity, "Connectivity targets have not answered since", "light", 1440],
+  ["contradicted", contradictedConnectivity, "Connectivity targets look blocked since", "light", 390],
+  ["contradicted", contradictedConnectivity, "Connectivity targets look blocked since", "dark", 1440],
+] as const)("reads as one line for %s targets (%s, %s at %ipx)", async (kind, body, sentence, theme, width) => {
+  const page = await browser.newPage();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  try {
+    await page.setViewport({ width, height: 900 });
+    await page.evaluateOnNewDocument((key, value) => localStorage.setItem(key, value), THEME_STORAGE_KEY, theme);
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      if (new URL(req.url()).pathname === "/api/v1/connectivity") {
+        void req.respond({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      } else {
+        void req.continue();
+      }
+    });
+    await page.goto(harness.url + "/", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction((text) => document.querySelector('[data-state="host-offline"]')?.textContent?.includes(text), {}, sentence);
+    await page.evaluate(() => document.fonts.ready);
+    const layout = await page.evaluate(() => {
+      const line = document.querySelector<HTMLElement>('[data-state="host-offline"]')!;
+      const first = document.querySelector<HTMLElement>(".mon-dashboard .mon-row, .mon-dashboard .mon-card, .mon-dashboard .mon-line");
+      const box = line.getBoundingClientRect();
+      return {
+        kind: line.dataset.kind,
+        scrolls: document.documentElement.scrollWidth > innerWidth,
+        inside: box.left >= 0 && box.right <= innerWidth,
+        above: first !== null && box.bottom <= first.getBoundingClientRect().top,
+      };
+    });
+    expect(layout).toEqual({ kind, scrolls: false, inside: true, above: true });
     await page.evaluate(axe.source);
     const audit = await page.evaluate(async () => {
       const engine = (window as unknown as { axe: typeof axe }).axe;

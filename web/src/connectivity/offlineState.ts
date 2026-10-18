@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNow } from "../live/useNow";
 import { formatClock, formatDayTime, sameDay } from "../format/format";
-import { connectivityKey, fetchConnectivity } from "./api";
+import { connectivityKey, fetchConnectivity, type TargetsUnusable } from "./api";
 
 /*
  * The hook and the wording behind HostOfflineNotice. Their own module because
@@ -26,8 +26,13 @@ const TRUST_MS = 45_000;
 
 /** What the server has lost, and since when (epoch milliseconds). */
 export interface HostProblem {
-  /** `offline`: no outbound connection. `resolver`: no answer from its DNS resolver. */
-  kind: "offline" | "resolver";
+  /**
+   * `offline`: no outbound connection. `resolver`: no answer from its DNS
+   * resolver. `unanswered` and `contradicted`: the connectivity targets
+   * cannot speak for the server (see `TargetsUnusable`), so nothing is held
+   * back.
+   */
+  kind: "offline" | "resolver" | TargetsUnusable;
   since: number;
 }
 
@@ -53,6 +58,11 @@ export function useHostProblem(): HostProblem | null {
   if (data.resolverDown && data.resolverDownSince !== null) {
     return { kind: "resolver", since: data.resolverDownSince };
   }
+  // Last: the two above explain warnings that are held back, and this says
+  // nothing is, which matters less while either of them holds.
+  if (data.targetsUnusable !== null && data.targetsUnusableSince !== null) {
+    return { kind: data.targetsUnusable, since: data.targetsUnusableSince };
+  }
   return null;
 }
 
@@ -76,14 +86,24 @@ export function formatSince(since: number, now: number): string {
  */
 export function hostProblemText(problem: HostProblem, now: number): string {
   const since = formatSince(problem.since, now);
-  return problem.kind === "offline"
-    ? `No outbound connection since ${since}`
-    : `SubGlance's DNS resolver has not answered since ${since}`;
+  switch (problem.kind) {
+    case "offline": return `No outbound connection since ${since}`;
+    case "resolver": return `SubGlance's DNS resolver has not answered since ${since}`;
+    case "unanswered": return `Connectivity targets have not answered since ${since}`;
+    case "contradicted": return `Connectivity targets look blocked since ${since}`;
+  }
 }
 
-/** What the held warnings are, worded for the kind of problem. */
+/**
+ * What happens to failures meanwhile, worded for the kind of problem. For the
+ * targets it is the opposite of the other two, and says so: their line is
+ * there because nothing is being explained away.
+ */
 export function hostProblemHeld(problem: HostProblem): string {
-  return problem.kind === "offline"
-    ? "failed network checks are held as warnings, not outages"
-    : "failed lookups are held as warnings, not outages";
+  switch (problem.kind) {
+    case "offline": return "failed network checks are held as warnings, not outages";
+    case "resolver": return "failed lookups are held as warnings, not outages";
+    case "unanswered": return "failures are reported, not held back";
+    case "contradicted": return "other checks reach the internet, so failures are reported";
+  }
 }

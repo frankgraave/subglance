@@ -16,7 +16,7 @@ import axe from "axe-core";
 import { chromium, type Browser, type Page } from "../layout/harness/browser";
 import { serveBuild, type Server } from "../layout/harness/server";
 import { THEME_STORAGE_KEY } from "../theme/theme";
-import { defaultConnectivitySettings, pinnedConnectivitySettings } from "./fixtures";
+import { defaultConnectivitySettings, pinnedConnectivitySettings, unansweredConnectivity } from "./fixtures";
 
 let server: Server;
 let browser: Browser;
@@ -31,7 +31,7 @@ afterAll(async () => {
   await server?.close();
 });
 
-type Step = "editable" | "pinned" | "refused";
+type Step = "editable" | "pinned" | "refused" | "unusable";
 
 const settle = (page: Page) => page.evaluate(async () => {
   await document.fonts.ready;
@@ -47,6 +47,11 @@ async function open(width: number, theme: string, step: Step): Promise<Page> {
     await page.evaluateOnNewDocument((key, value) => localStorage.setItem(key, value), THEME_STORAGE_KEY, theme);
     await page.setRequestInterception(true);
     page.on("request", (req) => {
+      // The targets have never answered: the card says so above the form.
+      if (step === "unusable" && new URL(req.url()).pathname === "/api/v1/connectivity") {
+        void req.respond({ status: 200, contentType: "application/json", body: JSON.stringify(unansweredConnectivity) });
+        return;
+      }
       if (new URL(req.url()).pathname !== "/api/v1/settings/connectivity") { void req.continue(); return; }
       if (req.method() === "PUT") {
         void req.respond({ status: 400, contentType: "application/json",
@@ -69,6 +74,7 @@ async function open(width: number, theme: string, step: Step): Promise<Page> {
       await page.click("#connectivity button[type='submit']");
       await page.waitForSelector("#connectivity .field-error", { timeout: 10_000 });
     }
+    if (step === "unusable") await page.waitForSelector("#connectivity .warn-note", { timeout: 10_000 });
     await settle(page);
   } catch (err) {
     await page.close();
@@ -87,7 +93,7 @@ async function audit(page: Page) {
   });
 }
 
-const steps: Step[] = ["editable", "pinned", "refused"];
+const steps: Step[] = ["editable", "pinned", "refused", "unusable"];
 
 describe.each(["light", "dark"])("%s theme", (theme) => {
   it.each(steps)("passes axe at step: %s", async (step) => {

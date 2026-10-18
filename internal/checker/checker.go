@@ -11,6 +11,7 @@ package checker
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -235,6 +236,13 @@ type Result struct {
 	// it. The runner asks the connectivity check whether the resolver is
 	// down for every name only for these failures.
 	ResolverFailed bool
+
+	// Peer is the address the check last opened a TCP connection to, when
+	// it opened one: set by the http, tcp and ssl checks, whether the check
+	// then passed or not, and zero for every other check and for a check
+	// that never connected. A connection made is proof this host reached
+	// that address, which the runner hands to the connectivity check.
+	Peer netip.Addr
 
 	// Certificate is the certificate a failed check was presented, when the
 	// failure is that it is not trusted and trusting it — pinning it on the

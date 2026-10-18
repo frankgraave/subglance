@@ -7,7 +7,9 @@ import type { EventSourceLike } from "../live/connection";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { parseConnectivity } from "./api";
 import { formatSince } from "./offlineState";
-import { offlineConnectivity, onlineConnectivity, resolverDownConnectivity } from "./fixtures";
+import {
+  contradictedConnectivity, offlineConnectivity, onlineConnectivity, resolverDownConnectivity, unansweredConnectivity,
+} from "./fixtures";
 
 const clients: QueryClient[] = [];
 
@@ -182,8 +184,46 @@ describe("the resolver line", () => {
   });
 });
 
+const UNANSWERED = /Connectivity targets have not answered since/;
+const CONTRADICTED = /Connectivity targets look blocked since/;
+
+describe("the unusable-targets line", () => {
+  it.each([
+    ["never answered", unansweredConnectivity, UNANSWERED, "failures are reported, not held back"],
+    ["contradicted", contradictedConnectivity, CONTRADICTED, "other checks reach the internet, so failures are reported"],
+  ])("says the targets %s, and that nothing is held back", async (_name, body, words, held) => {
+    dashboard(body);
+    const line = await screen.findByText(words);
+    expect(screen.getAllByText(words)).toHaveLength(1);
+    const region = line.closest("[role]");
+    expect(region?.getAttribute("role")).toBe("status");
+    expect(region?.textContent).toContain(held);
+    expect(region?.textContent).not.toContain("held as warnings");
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+  });
+
+  it.each([
+    ["switched off", { ...unansweredConnectivity, enabled: false }],
+    ["claimed beside an offline host", { ...offlineConnectivity, targets_unusable: "unanswered", targets_unusable_since: "2026-10-18T03:34:43Z" }],
+    ["without a time", { ...unansweredConnectivity, targets_unusable_since: null }],
+    ["an unknown reason", { ...unansweredConnectivity, targets_unusable: "tired" }],
+  ])("says nothing when the targets answer is %s", async (_name, body) => {
+    const { client } = dashboard(body);
+    await waitFor(() => expect(client.getQueryState(["connectivity"])?.fetchStatus).toBe("idle"));
+    await screen.findAllByText("api");
+    expect(screen.queryByText(UNANSWERED)).toBeNull();
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+  });
+
+  it("gives way to a silent resolver, which explains warnings it holds back", async () => {
+    dashboard({ ...resolverDownConnectivity, targets_unusable: "contradicted", targets_unusable_since: "2026-10-18T03:34:43Z" });
+    await screen.findByText(RESOLVER);
+    expect(screen.queryByText(CONTRADICTED)).toBeNull();
+  });
+});
+
 describe("parseConnectivity", () => {
-  const answering = { resolverDown: false, resolverDownSince: null };
+  const answering = { resolverDown: false, resolverDownSince: null, targetsUnusable: null, targetsUnusableSince: null };
 
   it("accepts the three documented states", () => {
     expect(parseConnectivity(onlineConnectivity)).toEqual({
@@ -204,7 +244,24 @@ describe("parseConnectivity", () => {
       offlineSince: null,
       resolverDown: true,
       resolverDownSince: Date.parse("2026-09-29T01:12:04Z"),
+      targetsUnusable: null,
+      targetsUnusableSince: null,
     });
+    expect(parseConnectivity(contradictedConnectivity)).toEqual({
+      enabled: true,
+      offline: false,
+      offlineSince: null,
+      resolverDown: false,
+      resolverDownSince: null,
+      targetsUnusable: "contradicted",
+      targetsUnusableSince: Date.parse("2026-10-18T03:34:43Z"),
+    });
+  });
+
+  it("refuses a targets answer it cannot vouch for", () => {
+    expect(parseConnectivity({ ...onlineConnectivity, targets_unusable_since: "2026-10-18T03:34:43Z" })).toBeNull();
+    expect(parseConnectivity({ ...unansweredConnectivity, targets_unusable_since: "soon" })).toBeNull();
+    expect(parseConnectivity({ ...unansweredConnectivity, enabled: false })).toBeNull();
   });
 
   it("reads a server from before the resolver fields as one whose resolver answers", () => {

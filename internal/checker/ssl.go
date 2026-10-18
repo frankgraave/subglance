@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -64,6 +65,15 @@ func NewSSLCheckerWithRoots(guard *Guard, roots *x509.CertPool) *SSLChecker {
 
 // Check performs a TLS handshake and inspects the presented certificate.
 func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
+	var peer netip.Addr
+	res := c.check(ctx, m, &peer)
+	res.Peer = peer
+	return res
+}
+
+// check runs one TLS probe, and sets peer once the TCP connection is open:
+// a handshake or certificate that fails afterwards still reached the host.
+func (c *SSLChecker) check(ctx context.Context, m Monitor, peer *netip.Addr) Result {
 	start := time.Now()
 
 	// TLS without a port almost always means 443.
@@ -89,6 +99,7 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 		return classifyRequestError(start, ctx, err)
 	}
 	defer func() { _ = conn.Close() }()
+	*peer = connPeer(conn)
 
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
 		_ = conn.SetDeadline(deadline)

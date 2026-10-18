@@ -60,12 +60,15 @@ func (c *TCPChecker) Check(ctx context.Context, m Monitor) Result {
 	if err != nil {
 		return classifyRequestError(start, ctx, err)
 	}
+	peer := connPeer(conn)
 	// Close before measuring: the handshake is what we timed, and leaving the
 	// socket open would hold a file descriptor for every monitor on the
 	// interval boundary.
 	_ = conn.Close()
 
-	return ok(start, 0)
+	res := ok(start, 0)
+	res.Peer = peer
+	return res
 }
 
 // ParseHostPort splits a check target into host and port.

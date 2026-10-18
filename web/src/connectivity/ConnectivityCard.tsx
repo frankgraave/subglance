@@ -9,7 +9,7 @@ import {
   connectivitySettingsKey, fetchConnectivitySettings, parseTargets, saveConnectivitySettings,
   type ConnectivityChange, type ConnectivitySettings,
 } from "./settings";
-import { connectivityKey } from "./api";
+import { connectivityKey, fetchConnectivity, type TargetsUnusable } from "./api";
 
 type Outcome = "saved" | "stale" | null;
 
@@ -128,6 +128,24 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
 }
 
 /**
+ * What the card says when the targets cannot speak for this host (SUB-333).
+ * Two sentences each: what was found, and what to do about it, because the
+ * fix is on this card and the reader is already here.
+ */
+const UNUSABLE: Record<TargetsUnusable, string> = {
+  unanswered: "The addresses below have not answered since SubGlance started or they were changed, so failures are "
+    + "not being held back. Set addresses this host can reach, such as your gateway.",
+  contradicted: "The addresses below failed while other checks reached the internet, so they may be blocked from this "
+    + "host, and failures are not being held back. Set addresses this host can reach, such as your gateway.",
+};
+
+/** The targets' standing, read from the same state the dashboard reads. */
+function useTargetsUnusable(): TargetsUnusable | null {
+  const query = useQuery({ queryKey: connectivityKey, queryFn: ({ signal }) => fetchConnectivity(signal) });
+  return query.isError ? null : query.data?.targetsUnusable ?? null;
+}
+
+/**
  * The connectivity check (SUB-168): whether SubGlance tests this host's own
  * connection before confirming an outage, and which addresses it dials.
  * Administrators only, like the endpoint: an address can name a host on the
@@ -138,6 +156,7 @@ export function ConnectivityCard() {
   // Held here rather than in the form: a save, or a reload after a refused
   // one, remounts the form (see its key), and the message has to outlive it.
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const unusable = useTargetsUnusable();
   const data = query.data;
   return (
     <Card title="Connectivity check" icon={<IconNetwork />}>
@@ -148,8 +167,10 @@ export function ConnectivityCard() {
         <p className="panel-note">
           Before a failure on a network error confirms an outage, SubGlance dials these addresses over TCP to tell a
           down monitor from a down uplink. This is outbound traffic: it is sent only when an outage is about to be
-          confirmed, never on a timer while everything is healthy, and it only completes a handshake.
+          confirmed and once when SubGlance starts or the addresses change, never on a timer while everything is
+          healthy, and it only completes a handshake.
         </p>
+        {unusable && <p className="warn-note">{UNUSABLE[unusable]}</p>}
         {!data ? <p>{query.isError ? "Connectivity settings unavailable." : "Loading connectivity settings…"}</p>
           : <ConnectivityForm key={[data.enabled.value, ...data.targets.value].join("\n")}
             data={data} outcome={outcome} setOutcome={setOutcome} />}

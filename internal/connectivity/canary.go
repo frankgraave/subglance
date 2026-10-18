@@ -35,10 +35,11 @@
 //
 // # When it runs
 //
-// Only when an incident is about to be confirmed on a network error. A host
-// with nothing failing sends no traffic to the canary targets at all, which is
-// the difference between a check an operator can accept and a process that
-// phones out on a timer. One round is shared by every monitor that asks within
+// Once when it starts and once after the targets change, to learn whether they
+// answer (see below), and otherwise only when an incident is about to be
+// confirmed on a network error. A host with nothing failing sends no other
+// traffic to the canary targets, which is the difference between a check an
+// operator can accept and a process that phones out on a timer. One round is shared by every monitor that asks within
 // CacheFor, so twenty monitors failing together cost one round, not twenty.
 //
 // While the host is offline, or its resolver is not answering, Run re-probes
@@ -54,6 +55,35 @@
 // caller only consults the canary for failures that a dead uplink or resolver
 // could explain: DNS, connection and timeout. A status code or a missing
 // keyword proves the target answered, and is never suppressed.
+//
+// # Targets that cannot speak for this host
+//
+// "Every target failed" only means "this host is offline" for targets this
+// host can reach when it is online. Two firewalls break that: a network that
+// may only see the LAN (an internal Docker network, a VLAN without internet),
+// and a Pi-hole or AdGuard setup that drops outbound port 53 for everything
+// but the resolver. In both, every round fails while the host is fine, and a
+// canary that believed them would hold back every network-error outage on
+// every monitor, for good, with nothing but a dashboard line to show for it.
+//
+// So two rules, both towards reporting:
+//
+//   - Targets that have not answered once since the canary started, or since
+//     Configure changed them, prove nothing. A round that fails then holds
+//     nothing back and reports the targets unusable instead (Unanswered).
+//     One round runs when the canary starts and after every change, so that
+//     targets which do answer are known to before the first outage: without
+//     it, the first outage after every restart would find them unproven.
+//   - A check that connects to a public address while the host is believed
+//     offline is evidence against that (PublicReached). The targets are
+//     dialled once more: if they answer, the episode ends as usual; if not,
+//     it ends without a notice, and the targets count as unproven again
+//     (Contradicted) until a round reaches one of them.
+//
+// A host that starts without a connection, after a power cut, has unproven
+// targets until it is back, so its first outages report. That is the
+// direction this package is allowed to err in; a monitor that stays silent
+// for good is not.
 //
 // # Changing it while it runs
 //
@@ -148,6 +178,11 @@ type Options struct {
 	// it answers one again. Optional.
 	OnResolverRestored func(from, to time.Time)
 
+	// OnUnusable is called when the targets are found unable to speak for
+	// this host, with the reason: once when that starts, and again only if
+	// the reason changes. Optional.
+	OnUnusable func(reason Unusable)
+
 	// Dial, Lookup and Now are for tests. Zero means a plain net.Dialer,
 	// the host's resolver and time.Now.
 	Dial   DialFunc
@@ -172,6 +207,27 @@ type episode struct {
 	since     time.Time
 }
 
+// Unusable says why the targets cannot speak for this host, so that a round in
+// which they all fail holds nothing back.
+type Unusable string
+
+const (
+	// Unanswered: no target has answered since the canary started or its
+	// targets were changed.
+	Unanswered Unusable = "unanswered"
+	// Contradicted: the targets failed while another check connected to a
+	// public address, so the host was online and they may be blocked from
+	// it.
+	Contradicted Unusable = "contradicted"
+)
+
+// unusable is the targets' standing: why they cannot speak for this host, or
+// empty when they can or have not been tried.
+type unusable struct {
+	reason Unusable
+	since  time.Time
+}
+
 // Canary probes the configured targets and remembers the answer briefly.
 // It is safe for concurrent use.
 type Canary struct {
@@ -179,6 +235,7 @@ type Canary struct {
 	timeout            time.Duration
 	onRestored         func(from, to time.Time)
 	onResolverRestored func(from, to time.Time)
+	onUnusable         func(reason Unusable)
 	dial               DialFunc
 	lookup             LookupFunc
 	now                func() time.Time
@@ -198,6 +255,13 @@ type Canary struct {
 	generation uint64
 	address    episode
 	resolver   episode
+	// proven is set by an address round of this generation that reached a
+	// target. Until then a failing round says nothing about the host.
+	proven bool
+	// tried is set once an address round of this generation has finished,
+	// so the round that proves the targets runs once per generation.
+	tried    bool
+	unusable unusable
 }
 
 // New builds a Canary. It returns an error for an empty target list, an
@@ -219,6 +283,7 @@ func New(opts Options) (*Canary, error) {
 		timeout:            opts.Timeout,
 		onRestored:         opts.OnRestored,
 		onResolverRestored: opts.OnResolverRestored,
+		onUnusable:         opts.OnUnusable,
 		dial:               opts.Dial,
 		lookup:             opts.Lookup,
 		now:                opts.Now,
@@ -377,7 +442,9 @@ func (c *Canary) Settings() Settings {
 // Any change forgets the current answers, of both rounds, and ends an
 // episode without the restored callback: nothing was reached, so there is
 // nothing to report, and a round against the old targets must not stand for
-// the new ones. A round in flight is discarded when it finishes. Configuring
+// the new ones. New targets are unproven until a round reaches one, and the
+// next Sweep tries; switching the check off and on keeps what the same
+// targets proved. A round in flight is discarded when it finishes. Configuring
 // the same settings again changes nothing, so an unrelated save cannot cut an
 // episode short.
 func (c *Canary) Configure(s Settings) error {
@@ -389,6 +456,9 @@ func (c *Canary) Configure(s Settings) error {
 	if s.Enabled == c.enabled && slices.Equal(s.Targets, c.targets) {
 		return nil
 	}
+	if !slices.Equal(s.Targets, c.targets) {
+		c.proven, c.tried, c.unusable = false, false, unusable{}
+	}
 	c.enabled = s.Enabled
 	c.targets = append([]string(nil), s.Targets...)
 	c.generation++
@@ -399,7 +469,9 @@ func (c *Canary) Configure(s Settings) error {
 
 // Offline reports whether every target failed in the most recent round,
 // running a round first if the last one is older than CacheFor. A disabled
-// canary answers false without dialling.
+// canary answers false without dialling, and so does one whose targets have
+// not answered once since they were set (see TargetsUnusable): their failing
+// says nothing about this host.
 func (c *Canary) Offline(ctx context.Context) bool {
 	return c.ask(ctx, &c.address, c.round)
 }
@@ -450,19 +522,33 @@ func (c *Canary) ResolverDownSince() (time.Time, bool) {
 	return c.downSince(&c.resolver)
 }
 
+// TargetsUnusable reports why the targets cannot speak for this host, and
+// since when, or false when they can, have not been tried, or the check is
+// off. While it holds, Offline answers false.
+func (c *Canary) TargetsUnusable() (Unusable, time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.enabled || c.unusable.reason == "" {
+		return "", time.Time{}, false
+	}
+	return c.unusable.reason, c.unusable.since, true
+}
+
 func (c *Canary) downSince(e *episode) (time.Time, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return e.since, e.down
 }
 
-// Run re-probes every CacheFor while the host is offline or its resolver is
-// not answering, so the end of an episode is noticed and reported even when
-// no check asks. It does nothing while both are fine. It returns when ctx is
+// Run proves the targets at once, then re-probes every CacheFor while the
+// host is offline or its resolver is not answering, so the end of an episode
+// is noticed and reported even when no check asks. It also proves targets
+// that Configure changed. Otherwise it does nothing. It returns when ctx is
 // cancelled.
 func (c *Canary) Run(ctx context.Context) {
 	t := time.NewTicker(c.cacheFor)
 	defer t.Stop()
+	c.Sweep(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -473,17 +559,25 @@ func (c *Canary) Run(ctx context.Context) {
 	}
 }
 
-// Sweep runs one round of each kind that is currently believed down. It is
-// what Run calls on each tick, exported so tests need not wait on a ticker.
+// Sweep runs one round of each kind that is currently believed down, and an
+// address round when none has run since the targets were set. It is what Run
+// calls on each tick, exported so tests need not wait on a ticker.
 func (c *Canary) Sweep(ctx context.Context) {
-	_, offline := c.OfflineSince()
-	_, resolverDown := c.ResolverDownSince()
-	if !offline && !resolverDown {
+	c.mu.Lock()
+	enabled, untried := c.enabled, !c.tried
+	offline, resolverDown := c.address.down, c.resolver.down
+	c.mu.Unlock()
+	if !enabled || (!untried && !offline && !resolverDown) {
 		return
 	}
 	c.probeMu.Lock()
 	defer c.probeMu.Unlock()
-	if offline {
+	// A round asked by a check may have tried the targets while this one
+	// waited for the lock.
+	c.mu.Lock()
+	untried = !c.tried
+	c.mu.Unlock()
+	if offline || untried {
 		c.round(ctx)
 	}
 	if resolverDown {
@@ -511,6 +605,72 @@ func (c *Canary) round(ctx context.Context) bool {
 	}
 	reached := c.anyReachable(ctx, targets)
 	return c.settle(ctx, generation, &c.address, reached, c.onRestored)
+}
+
+// PublicReached tells the canary that a check which started at `at` connected
+// to a public address. While the host is believed offline, or its targets
+// have not answered since they were set, that is evidence the host is online,
+// so the targets are dialled once more. If one answers, things go on as after
+// any passing round: an offline episode ends with its notice. If none does,
+// the targets are what failed: an offline episode ends without a notice, and
+// they count as unproven (Contradicted) until a round reaches one of them.
+//
+// A check that started before the episode or the unanswered round is not
+// evidence: it may have connected before the connection went. Once the
+// targets stand contradicted, further checks change nothing and dial
+// nothing, so a host whose targets are blocked does not dial them on every
+// passing check. Otherwise it is one comparison under a lock, cheap enough
+// for every check.
+func (c *Canary) PublicReached(ctx context.Context, at time.Time) {
+	if !c.evidenceWanted(at) {
+		return
+	}
+	c.probeMu.Lock()
+	defer c.probeMu.Unlock()
+	// A round may have settled the question while this caller waited.
+	if !c.evidenceWanted(at) {
+		return
+	}
+	c.mu.Lock()
+	targets, generation := c.targets, c.generation
+	c.mu.Unlock()
+	if c.anyReachable(ctx, targets) {
+		c.settle(ctx, generation, &c.address, true, c.onRestored)
+		return
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	now := c.now()
+	c.mu.Lock()
+	if c.generation != generation {
+		c.mu.Unlock()
+		return
+	}
+	// The answer is fresh: an Offline asked within CacheFor reads "online"
+	// from it rather than dialling targets just found unable to answer.
+	c.address = episode{checkedAt: now}
+	c.proven = false
+	changed := c.unusable.reason != Contradicted
+	c.unusable = unusable{reason: Contradicted, since: now}
+	c.mu.Unlock()
+	if changed && c.onUnusable != nil {
+		c.onUnusable(Contradicted)
+	}
+}
+
+// evidenceWanted reports whether a public connection made by a check that
+// started at `at` would tell the canary anything.
+func (c *Canary) evidenceWanted(at time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.enabled {
+		return false
+	}
+	if c.address.down {
+		return at.After(c.address.since)
+	}
+	return c.unusable.reason == Unanswered && at.After(c.unusable.since)
 }
 
 // resolverRound looks up every reference name concurrently and records the
@@ -542,6 +702,27 @@ func (c *Canary) settle(ctx context.Context, generation uint64, e *episode, reac
 		// settings that are no longer the ones configured.
 		c.mu.Unlock()
 		return false
+	}
+	if e == &c.address {
+		c.tried = true
+		if reached {
+			c.proven = true
+			c.unusable = unusable{}
+		} else if !c.proven {
+			// Targets that never answered cannot say the host went
+			// offline. The round is recorded, so its answer is reused
+			// for CacheFor like any other, but as "online".
+			e.checkedAt, e.down, e.since = at, false, time.Time{}
+			entered := c.unusable.reason == ""
+			if entered {
+				c.unusable = unusable{reason: Unanswered, since: at}
+			}
+			c.mu.Unlock()
+			if entered && c.onUnusable != nil {
+				c.onUnusable(Unanswered)
+			}
+			return false
+		}
 	}
 	wasDown, since := e.down, e.since
 	e.checkedAt = at

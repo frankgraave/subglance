@@ -5,6 +5,8 @@ export const onlineConnectivity = {
   offline_since: null,
   resolver_down: false,
   resolver_down_since: null,
+  targets_unusable: null,
+  targets_unusable_since: null,
 };
 
 export const offlineConnectivity = {
@@ -17,6 +19,21 @@ export const resolverDownConnectivity = {
   ...onlineConnectivity,
   resolver_down: true,
   resolver_down_since: "2026-09-29T01:12:04Z",
+};
+
+// The targets have never answered: an internal network, or a firewall that
+// drops outbound port 53. Nothing is held back.
+export const unansweredConnectivity = {
+  ...onlineConnectivity,
+  targets_unusable: "unanswered",
+  targets_unusable_since: "2026-10-18T03:34:43Z",
+};
+
+// The targets failed while another check reached a public address.
+export const contradictedConnectivity = {
+  ...onlineConnectivity,
+  targets_unusable: "contradicted",
+  targets_unusable_since: "2026-10-18T03:34:43Z",
 };
 
 // Wire bodies for GET /api/v1/settings/connectivity (SUB-168): the defaults,

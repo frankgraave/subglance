@@ -48,6 +48,16 @@ type connectivityResponse struct {
 	// ResolverDownSince is when the resolver was first found not
 	// answering in the current episode; null otherwise.
 	ResolverDownSince *time.Time `json:"resolver_down_since"`
+	// TargetsUnusable says why the targets cannot speak for this host, so
+	// that their failing holds nothing back: "unanswered" when none has
+	// answered since SubGlance started or they were changed,
+	// "contradicted" when they failed while another check reached a
+	// public address. Null when they can, and while the check is off.
+	// Offline is false while it is set.
+	TargetsUnusable *connectivity.Unusable `json:"targets_unusable"`
+	// TargetsUnusableSince is when the targets were found unusable for
+	// the current reason; null otherwise.
+	TargetsUnusableSince *time.Time `json:"targets_unusable_since"`
 }
 
 // handleConnectivity reports whether this host can currently reach its
@@ -77,6 +87,13 @@ func (s *Server) handleConnectivity(w http.ResponseWriter, _ *http.Request) {
 			at := since.UTC()
 			resp.ResolverDown = true
 			resp.ResolverDownSince = &at
+		}
+		// Independent of the resolver: blocked targets and a silent
+		// resolver can be true at once, and say different things.
+		if reason, since, unusable := s.connectivity.TargetsUnusable(); unusable {
+			at := since.UTC()
+			resp.TargetsUnusable = &reason
+			resp.TargetsUnusableSince = &at
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

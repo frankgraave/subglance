@@ -5,7 +5,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ConnectivityCard } from "./ConnectivityCard";
 import { parseTargets } from "./settings";
 import { connectivityKey } from "./api";
-import { defaultConnectivitySettings, pinnedConnectivitySettings } from "./fixtures";
+import {
+  contradictedConnectivity, defaultConnectivitySettings, onlineConnectivity, pinnedConnectivitySettings,
+  unansweredConnectivity,
+} from "./fixtures";
 
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.unstubAllGlobals(); });
@@ -18,8 +21,9 @@ function json(body: unknown, status = 200, etag?: string) {
 
 type Handler = (init?: RequestInit) => Response | Promise<Response>;
 
-function mount(read: unknown, onPut?: Handler) {
+function mount(read: unknown, onPut?: Handler, state: unknown = onlineConnectivity) {
   const fetcher = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/v1/connectivity") return json(state);
     if (url !== URL) throw new Error(`Unexpected request: ${url}`);
     if (init?.method === "PUT") return onPut ? onPut(init) : json(read, 200, 'W/"2"');
     return json(read, 200, 'W/"1"');
@@ -32,6 +36,31 @@ function mount(read: unknown, onPut?: Handler) {
 }
 
 const puts = (fetcher: ReturnType<typeof vi.fn>) => fetcher.mock.calls.filter(([, init]) => init?.method === "PUT");
+
+const UNANSWERED = /have not answered since SubGlance started/;
+const CONTRADICTED = /failed while other checks reached the internet/;
+
+it.each([
+  ["never answered", unansweredConnectivity, UNANSWERED],
+  ["contradicted", contradictedConnectivity, CONTRADICTED],
+])("says when the addresses cannot speak for this host: %s, and what to do", async (_name, state, words) => {
+  mount(defaultConnectivitySettings, undefined, state);
+  const note = await screen.findByText(words);
+  expect(note.className).toBe("warn-note");
+  expect(note.textContent).toContain("failures are not being held back");
+  expect(note.textContent).toContain("Set addresses this host can reach");
+});
+
+it("says nothing about the addresses while they answer, or when the state is unavailable", async () => {
+  mount(defaultConnectivitySettings);
+  await targetsBox();
+  await waitFor(() => expect(screen.queryByText(UNANSWERED)).toBeNull());
+  expect(screen.queryByText(CONTRADICTED)).toBeNull();
+  cleanup();
+  mount(defaultConnectivitySettings, undefined, { nonsense: true });
+  await targetsBox();
+  await waitFor(() => expect(screen.queryByText(UNANSWERED)).toBeNull());
+});
 const targetsBox = () => screen.findByLabelText("Addresses to dial") as Promise<HTMLTextAreaElement>;
 const toggle = () => screen.getByRole("checkbox", { name: /Check this host's own connection/ }) as HTMLInputElement;
 const save = () => screen.getByRole("button", { name: "Save connectivity check" }) as HTMLButtonElement;
@@ -111,7 +140,8 @@ it("puts the server's refusal under the field it names", async () => {
 it("reloads instead of overwriting when someone else saved first", async () => {
   let reads = 0;
   const newer = { ...defaultConnectivitySettings, targets: { value: ["router:80"], source: "database", pinned_by: null } };
-  const fetcher = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+  const fetcher = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/v1/connectivity") return json(onlineConnectivity);
     if (init?.method === "PUT") return json({ error: "changed by someone else" }, 412);
     reads += 1;
     return json(reads === 1 ? defaultConnectivitySettings : newer, 200, `W/"${reads}"`);

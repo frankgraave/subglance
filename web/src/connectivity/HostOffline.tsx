@@ -27,6 +27,12 @@ import { hostProblemHeld, hostProblemText, type HostProblem } from "./offlineSta
  * 5. **One look for both losses.** A silent resolver is the same kind of
  *    statement as a dead uplink — the server, not the monitors — so it wears
  *    the same line; only the words change.
+ * 6. **And for targets that cannot see out.** When the connectivity targets
+ *    have never answered, or fail while other checks reach the internet,
+ *    nothing is held back, and that is a statement about the server's own
+ *    settings: the same line, saying that failures are reported. The fix is
+ *    on the Settings card, which says what to change; the dashboard only
+ *    says that the check is not doing its job.
  */
 export function HostOfflineNotice({ problem }: { problem: HostProblem | null }) {
   const now = useNow();
@@ -34,7 +40,7 @@ export function HostOfflineNotice({ problem }: { problem: HostProblem | null }) 
     return <div role="status" aria-live="polite" className="sr-only" />;
   }
   return (
-    <div role="status" aria-live="polite" className="conn-badge" data-state="host-offline">
+    <div role="status" aria-live="polite" className="conn-badge" data-state="host-offline" data-kind={problem.kind}>
       <span className="conn-badge-dot" aria-hidden="true" />
       <span>
         {hostProblemText(problem, now)}

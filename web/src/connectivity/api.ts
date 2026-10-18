@@ -24,7 +24,19 @@ export interface ConnectivityState {
   resolverDown: boolean;
   /** Epoch milliseconds; null while the resolver is answering. */
   resolverDownSince: number | null;
+  /**
+   * Why the connectivity targets cannot speak for the server, so that their
+   * failing holds nothing back: `unanswered` when none has answered since it
+   * started or they were changed, `contradicted` when they failed while
+   * another check reached a public address. Never set together with
+   * `offline`.
+   */
+  targetsUnusable: TargetsUnusable | null;
+  /** Epoch milliseconds; null while the targets are usable. */
+  targetsUnusableSince: number | null;
 }
+
+export type TargetsUnusable = "unanswered" | "contradicted";
 
 export const connectivityKey = ["connectivity"] as const;
 
@@ -54,16 +66,40 @@ export function parseConnectivity(value: unknown): ConnectivityState | null {
   const d = value as Record<string, unknown>;
   if (typeof d.enabled !== "boolean" || typeof d.offline !== "boolean") return null;
   const resolver = parseResolver(d);
-  if (resolver === null) return null;
+  const targets = parseTargets(d);
+  if (resolver === null || targets === null) return null;
+  // Unusable targets hold nothing back, so they cannot have found the server
+  // offline, and a check that is off judges no targets.
+  if (targets.targetsUnusable !== null && (d.offline || !d.enabled)) return null;
   if (!d.offline) {
     if (d.offline_since !== null) return null;
     if (resolver.resolverDown && !d.enabled) return null;
-    return { enabled: d.enabled, offline: false, offlineSince: null, ...resolver };
+    return { enabled: d.enabled, offline: false, offlineSince: null, ...resolver, ...targets };
   }
   if (!d.enabled || typeof d.offline_since !== "string" || resolver.resolverDown) return null;
   const since = Date.parse(d.offline_since);
   if (!Number.isFinite(since)) return null;
-  return { enabled: true, offline: true, offlineSince: since, ...resolver };
+  return { enabled: true, offline: true, offlineSince: since, ...resolver, ...targets };
+}
+
+/**
+ * The targets' standing. A body without the fields is a server from before
+ * they existed: read as usable, which is what that server assumed.
+ */
+function parseTargets(
+  d: Record<string, unknown>,
+): Pick<ConnectivityState, "targetsUnusable" | "targetsUnusableSince"> | null {
+  if (d.targets_unusable === undefined && d.targets_unusable_since === undefined) {
+    return { targetsUnusable: null, targetsUnusableSince: null };
+  }
+  if (d.targets_unusable === null) {
+    return d.targets_unusable_since === null ? { targetsUnusable: null, targetsUnusableSince: null } : null;
+  }
+  if (d.targets_unusable !== "unanswered" && d.targets_unusable !== "contradicted") return null;
+  if (typeof d.targets_unusable_since !== "string") return null;
+  const since = Date.parse(d.targets_unusable_since);
+  if (!Number.isFinite(since)) return null;
+  return { targetsUnusable: d.targets_unusable, targetsUnusableSince: since };
 }
 
 function parseResolver(

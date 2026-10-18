@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,6 +35,43 @@ func (n *switchableNet) dial(context.Context, string, string) (net.Conn, error) 
 	return client, nil
 }
 
+// canaryClock is the canary's clock in these tests. It stands still unless a
+// test moves it, so every failure a test records falls in one cache window.
+// It starts two windows behind the wall clock, so a check stamped now is
+// newer than any episode the canary starts.
+type canaryClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *canaryClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *canaryClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
+}
+
+// proveTargets runs the sweep a starting canary runs on a host that is online,
+// so its targets have answered once, then puts the uplink back, moves the
+// clock past that round's cache window and forgets its dials.
+func proveTargets(t *testing.T, canary *connectivity.Canary, uplink *switchableNet, clk *canaryClock) {
+	t.Helper()
+	was := uplink.up.Load()
+	uplink.up.Store(true)
+	canary.Sweep(context.Background())
+	uplink.up.Store(was)
+	if _, _, unusable := canary.TargetsUnusable(); unusable {
+		t.Fatal("reachable targets were found unusable")
+	}
+	clk.advance(connectivity.DefaultCacheFor)
+	uplink.dials.Store(0)
+}
+
 type restoredLog struct {
 	mu    sync.Mutex
 	spans [][2]time.Time
@@ -53,14 +91,17 @@ func (l *restoredLog) count() int {
 
 func newCanaryRunner(t *testing.T, db *store.DB, uplink *switchableNet, alerts *alertRecorder, restored *restoredLog) *Runner {
 	t.Helper()
+	clk := &canaryClock{t: time.Now().Add(-2 * connectivity.DefaultCacheFor)}
 	canary, err := connectivity.New(connectivity.Options{
 		Targets:    []string{"canary-a:53", "canary-b:53"},
 		Dial:       uplink.dial,
+		Now:        clk.now,
 		OnRestored: restored.record,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	proveTargets(t, canary, uplink, clk)
 	return New(Options{DB: db, Log: quietLogger(), Notify: alerts.record, Connectivity: canary})
 }
 
@@ -257,5 +298,157 @@ func TestRestartDoesNotCountLocalNetworkFailures(t *testing.T) {
 	}
 	if !r.Engine().WouldConfirm(m.ID, 3) {
 		t.Fatal("restored streak lost the real failures")
+	}
+}
+
+// newUnprovenCanaryRunner is newCanaryRunner on a host whose targets have
+// never answered: what Run's first sweep finds in an internal Docker network
+// or behind a firewall that drops outbound port 53.
+func newUnprovenCanaryRunner(t *testing.T, db *store.DB, uplink *switchableNet, alerts *alertRecorder,
+	restored *restoredLog) (*Runner, *canaryClock) {
+	t.Helper()
+	clk := &canaryClock{t: time.Now().Add(-2 * connectivity.DefaultCacheFor)}
+	canary, err := connectivity.New(connectivity.Options{
+		Targets:    []string{"canary-a:53", "canary-b:53"},
+		Dial:       uplink.dial,
+		Now:        clk.now,
+		OnRestored: restored.record,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canary.Sweep(context.Background())
+	return New(Options{DB: db, Log: quietLogger(), Notify: alerts.record, Connectivity: canary}), clk
+}
+
+// Setup A of SUB-333: the targets have never answered. A monitor on a closed
+// port confirms after its retries and alerts, exactly as with the check off.
+func TestTargetsThatNeverAnsweredDoNotSilenceAnOutage(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	uplink := &switchableNet{}
+	alerts := &alertRecorder{}
+	r, _ := newUnprovenCanaryRunner(t, db, uplink, alerts, &restoredLog{})
+
+	m, err := db.CreateMonitor(ctx, store.Monitor{Name: "closed port", Type: "tcp",
+		Target: "10.0.0.5:8080", Enabled: true, Retries: 2, IntervalS: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.record(failWith(m, checker.FailConnection))
+	r.record(failWith(m, checker.FailConnection))
+
+	if got := alerts.events(); len(got) != 1 || got[0] != state.EventIncidentConfirmed {
+		t.Fatalf("alerts = %v, want one confirmation", got)
+	}
+	if s := r.Engine().Status(m.ID); s != state.StatusDown {
+		t.Fatalf("status = %s, want down", s)
+	}
+	hbs, err := db.ListHeartbeats(ctx, m.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, hb := range hbs {
+		if hb.FailureKind == state.CauseLocalNetwork {
+			t.Fatalf("a heartbeat was filed under %s by targets that never answered: %+v", state.CauseLocalNetwork, hb)
+		}
+	}
+}
+
+// publicPass is a passing check that connected to a public address.
+func publicPass(m store.Monitor, at time.Time) scheduler.Outcome {
+	o := outcomeFor(m, m.Target, true)
+	o.Result.CheckedAt = at
+	o.Result.Peer = netip.MustParseAddr("93.184.215.14")
+	return o
+}
+
+// Setup B of SUB-333: the targets answered once, then a firewall started
+// dropping them. A check that reaches a public address ends the episode
+// without a "connectivity restored" notice, and the next network failure of
+// another monitor confirms as it would have without the canary.
+func TestAPublicCheckEndsAnEpisodeTheTargetsCannotSee(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	uplink := &switchableNet{}
+	alerts := &alertRecorder{}
+	restored := &restoredLog{}
+	r := newCanaryRunner(t, db, uplink, alerts, restored)
+
+	internal, err := db.CreateMonitor(ctx, store.Monitor{Name: "closed port", Type: "tcp",
+		Target: "10.0.0.5:8080", Enabled: true, Retries: 1, IntervalS: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	site, err := db.CreateMonitor(ctx, store.Monitor{Name: "Internal app", Type: "http",
+		Target: "https://example.com/", Enabled: true, Retries: 1, IntervalS: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := db.CreateMonitor(ctx, store.Monitor{Name: "other port", Type: "tcp",
+		Target: "10.0.0.6:8080", Enabled: true, Retries: 1, IntervalS: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The targets are dropped: the first failure is held back, as today.
+	r.record(failWith(internal, checker.FailConnection))
+	if got := alerts.events(); len(got) != 0 {
+		t.Fatalf("alerts = %v, want the first failure held back", got)
+	}
+	if _, offline := r.canary.OfflineSince(); !offline {
+		t.Fatal("the canary did not find the host offline")
+	}
+
+	// A check reaches the internet.
+	r.record(publicPass(site, time.Now().Add(time.Second)))
+	if _, offline := r.canary.OfflineSince(); offline {
+		t.Fatal("the episode survived a check that reached a public address")
+	}
+	if got := restored.count(); got != 0 {
+		t.Fatalf("restored notices = %d; the host was never offline", got)
+	}
+
+	r.record(failWith(other, checker.FailConnection))
+	if got := alerts.events(); len(got) != 1 || got[0] != state.EventIncidentConfirmed {
+		t.Fatalf("alerts = %v, want the next failure confirmed", got)
+	}
+}
+
+// A check that connected to a private address is no evidence: when the
+// uplink fails, the LAN keeps working.
+func TestAPrivateCheckDoesNotEndAnEpisode(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	uplink := &switchableNet{}
+	alerts := &alertRecorder{}
+	r := newCanaryRunner(t, db, uplink, alerts, &restoredLog{})
+
+	m, err := db.CreateMonitor(ctx, store.Monitor{Name: "site", Type: "http",
+		Target: "https://example.invalid", Enabled: true, Retries: 1, IntervalS: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nas, err := db.CreateMonitor(ctx, store.Monitor{Name: "nas", Type: "http",
+		Target: "http://192.168.1.10", Enabled: true, Retries: 1, IntervalS: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.record(failWith(m, checker.FailConnection))
+	dials := uplink.dials.Load()
+	for _, addr := range []string{"192.168.1.10", "10.0.0.1", "100.64.0.1", "127.0.0.1", "fd00::1"} {
+		o := outcomeFor(nas, nas.Target, true)
+		o.Result.CheckedAt = time.Now().Add(time.Second)
+		o.Result.Peer = netip.MustParseAddr(addr)
+		r.record(o)
+	}
+	if _, offline := r.canary.OfflineSince(); !offline {
+		t.Fatal("a check on a private address ended the offline episode")
+	}
+	if got := uplink.dials.Load(); got != dials {
+		t.Fatalf("checks on private addresses dialled the targets %d times", got-dials)
+	}
+	if got := alerts.events(); len(got) != 0 {
+		t.Fatalf("alerts = %v, want none while the host is offline", got)
 	}
 }
