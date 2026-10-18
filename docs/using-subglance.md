@@ -268,10 +268,15 @@ note "Certificate expires soon" and no date. It still alerts, once, as
 "api: certificate expires soon", repeats on the monitor's reminder schedule until
 someone acknowledges it, and sends "certificate no longer expires soon" on the
 first check that sees a renewed certificate. The same applies to an `http`
-monitor with an `https` target, at the same threshold. A failure while a
-monitor is expiring is judged like any other failure: one is a warning, and
-reaching the retry threshold confirms an outage, which is down and is its own
-incident. An expired certificate fails the check and is down.
+monitor with an `https` target, at the same threshold. When that check follows
+a redirect to another host, as a site behind a single sign-on proxy does to its
+login page, the certificate it reports is the one of the first host that
+answered over TLS: the host in the URL field for an `https` target, the host it
+upgrades to for an `http` one. The login host's certificate is not read; give
+that host a monitor of its own. A failure while a monitor is expiring is judged
+like any other failure: one is a warning, and reaching the retry threshold
+confirms an outage, which is down and is its own incident. An expired
+certificate fails the check and is down.
 
 SSL monitors also check the **leaf certificate's OCSP revocation status** after
 validating its chain. A fresh, authenticated stapled response takes precedence;
