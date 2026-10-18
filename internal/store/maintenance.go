@@ -16,14 +16,20 @@ var ErrMaintenanceLimit = errors.New("at most 200 maintenance windows")
 
 // MaintenanceWindow targets one monitor or an exact tag pair. Weekly windows
 // start at a local wall-clock time and last DurationMinutes elapsed minutes.
+//
+// StartsAt and EndsAt belong to one-off windows only, so a weekly window
+// leaves them out of its JSON. That takes omitzero: omitempty never omits a
+// struct, and a weekly window was answered with both set to
+// 0001-01-01T00:00:00Z, a valid date that a client comparing ends_at with
+// now reads as a window that ended in the year 1.
 type MaintenanceWindow struct {
 	ID              int64     `json:"id"`
 	Name            string    `json:"name"`
 	MonitorID       int64     `json:"monitor_id,omitempty"`
 	TagKey          string    `json:"tag_key,omitempty"`
 	TagValue        string    `json:"tag_value,omitempty"`
-	StartsAt        time.Time `json:"starts_at,omitempty"`
-	EndsAt          time.Time `json:"ends_at,omitempty"`
+	StartsAt        time.Time `json:"starts_at,omitzero"`
+	EndsAt          time.Time `json:"ends_at,omitzero"`
 	Timezone        string    `json:"timezone,omitempty"`
 	Weekdays        []int     `json:"weekdays,omitempty"` // Sunday = 0.
 	LocalTime       string    `json:"local_time,omitempty"`

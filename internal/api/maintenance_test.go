@@ -157,3 +157,74 @@ func TestMaintenanceInvalidDeleteID(t *testing.T) {
 		}
 	}
 }
+
+// TestMaintenanceWeeklyAnswerHasNoAbsoluteTimes: a weekly window has no
+// absolute start or end, and its answer says so by leaving both fields out.
+// Year-1 timestamps in their place are a valid date that a client comparing
+// ends_at with now reads as a window that ended long ago. A one-off window
+// keeps both, and a client that echoes a weekly read back, year-1 values
+// included, is still accepted.
+func TestMaintenanceWeeklyAnswerHasNoAbsoluteTimes(t *testing.T) {
+	s, db := testServerWithDB(t)
+	id := seedUptimeMonitor(t, db)
+	weekly := `{"name":"Weekly deploy","tag_key":"env","tag_value":"prod","timezone":"Europe/Amsterdam","weekdays":[0],"local_time":"02:30","duration_minutes":60}`
+	echoed := `{"name":"Echoed","tag_key":"env","tag_value":"prod","starts_at":"0001-01-01T00:00:00Z","ends_at":"0001-01-01T00:00:00Z","timezone":"Europe/Amsterdam","weekdays":[0],"local_time":"02:30","duration_minutes":60}`
+	start := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+	oneOff := fmt.Sprintf(`{"name":"Deploy","monitor_id":%d,"starts_at":%q,"ends_at":%q}`, id,
+		start.Format(time.RFC3339), start.Add(time.Hour).Format(time.RFC3339))
+
+	fields := func(t *testing.T, raw []byte) map[string]json.RawMessage {
+		t.Helper()
+		var out map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode %s: %v", raw, err)
+		}
+		return out
+	}
+	for name, body := range map[string]string{"weekly": weekly, "echoed": echoed, "one-off": oneOff} {
+		rec := httptest.NewRecorder()
+		authedHandler(s).ServeHTTP(rec, jsonRequest("POST", "/api/v1/maintenance", body))
+		if rec.Code != 201 {
+			t.Fatalf("create %s = %d: %s", name, rec.Code, rec.Body)
+		}
+		got := fields(t, rec.Body.Bytes())
+		_, hasStart := got["starts_at"]
+		_, hasEnd := got["ends_at"]
+		if wantTimes := name == "one-off"; hasStart != wantTimes || hasEnd != wantTimes {
+			t.Errorf("create %s answered starts_at %v, ends_at %v, want both %v: %s",
+				name, hasStart, hasEnd, wantTimes, rec.Body)
+		}
+	}
+
+	// A weekly window stored by an earlier version keeps the year-1 values in
+	// its spec; reading it back must not bring them into the answer.
+	if _, err := db.Writer.ExecContext(t.Context(), `INSERT INTO maintenance_windows(monitor_id,spec) VALUES (NULL,?)`,
+		`{"id":0,"name":"Stored earlier","tag_key":"env","tag_value":"prod","starts_at":"0001-01-01T00:00:00Z","ends_at":"0001-01-01T00:00:00Z","timezone":"UTC","weekdays":[1],"local_time":"03:00","duration_minutes":30,"created_at":"2026-10-01T00:00:00Z"}`); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	authedHandler(s).ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/maintenance", nil))
+	if rec.Code != 200 {
+		t.Fatalf("list = %d: %s", rec.Code, rec.Body)
+	}
+	var list struct {
+		Maintenance []json.RawMessage `json:"maintenance"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || len(list.Maintenance) != 4 {
+		t.Fatalf("list: %v %s", err, rec.Body)
+	}
+	for _, raw := range list.Maintenance {
+		got := fields(t, raw)
+		_, weeklyWindow := got["timezone"]
+		_, hasStart := got["starts_at"]
+		_, hasEnd := got["ends_at"]
+		if hasStart == weeklyWindow || hasEnd == weeklyWindow {
+			t.Errorf("listed window (weekly %v) has starts_at %v, ends_at %v: %s",
+				weeklyWindow, hasStart, hasEnd, raw)
+		}
+		if !weeklyWindow && string(got["starts_at"]) != fmt.Sprintf("%q", start.Format(time.RFC3339)) {
+			t.Errorf("one-off starts_at = %s, want %s", got["starts_at"], start.Format(time.RFC3339))
+		}
+	}
+}
