@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -49,22 +50,49 @@ func runHealthcheck(args []string, out io.Writer) error {
 		return err
 	}
 
-	url := healthcheckURL(cfg.Addr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), healthcheckTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("build request for %s: %w", url, err)
-	}
-
-	// A dedicated client with no keep-alives: this process makes exactly one
-	// request and exits, so a pooled connection would only be a socket left
-	// half-closed on the server.
+	// A dedicated client with no keep-alives: this process makes one request
+	// per address and exits, so a pooled connection would only be a socket
+	// left half-closed on the server.
+	//
+	// It does not follow redirects. The readiness endpoint never sends one, so
+	// a redirect is itself the answer, and a non-200 one. Following it would
+	// also let a dial failure on the redirect target pass for "nothing here"
+	// and send the probe on to the next loopback after a server had answered.
 	client := &http.Client{
 		Timeout:   healthcheckTimeout,
 		Transport: &http.Transport{DisableKeepAlives: true},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// Only an address that cannot be connected to passes the question on to
+	// the next one. Once a server has answered, its answer is the result: a
+	// 503 on [::1] is the server saying it is not ready, and asking again on
+	// 127.0.0.1 would only reach the same server.
+	var unreachable []error
+	for _, url := range healthcheckURLs(cfg.Addr) {
+		err := probeReady(ctx, client, url)
+		if err == nil {
+			_, _ = fmt.Fprintf(out, "ok %s\n", url)
+			return nil
+		}
+		if !dialFailed(err) {
+			return err
+		}
+		unreachable = append(unreachable, err)
+	}
+	return errors.Join(unreachable...)
+}
+
+// probeReady asks one URL for readiness and returns nil only for a 200.
+func probeReady(ctx context.Context, client *http.Client, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request for %s: %w", url, err)
 	}
 
 	resp, err := client.Do(req)
@@ -80,31 +108,60 @@ func runHealthcheck(args []string, out io.Writer) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("probe %s: %s: %s", url, resp.Status, strings.TrimSpace(string(body)))
 	}
-
-	_, _ = fmt.Fprintf(out, "ok %s\n", url)
 	return nil
 }
 
-// healthcheckURL turns a listen address into one this process can dial.
+// dialFailed reports whether err happened before any server was reached:
+// nothing accepts on the address, or the address does not exist here.
+func dialFailed(err error) bool {
+	var op *net.OpError
+	return errors.As(err, &op) && op.Op == "dial"
+}
+
+// healthcheckURLs turns a listen address into the URLs this process can dial,
+// in the order to try them.
 //
 // A server listening on ":8080" or "0.0.0.0:8080" is listening on every
 // interface, but "http://:8080/" is not a URL and "http://0.0.0.0:8080/" is
 // not reliably dialable. Both mean loopback to a probe running beside the
 // server, so both are rewritten to it.
-func healthcheckURL(addr string) string {
+func healthcheckURLs(addr string) []string {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		// Not host:port at all — hand it to the URL as-is and let the
 		// request fail with a message naming what was tried.
-		return "http://" + addr + "/api/v1/ready"
+		return []string{"http://" + addr + "/api/v1/ready"}
 	}
 
-	switch host {
-	case "", "0.0.0.0":
-		host = "127.0.0.1"
-	case "::", "[::]":
-		host = "::1"
+	hosts := loopbackHosts(host)
+	urls := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		urls = append(urls, "http://"+net.JoinHostPort(h, port)+"/api/v1/ready")
 	}
+	return urls
+}
 
-	return "http://" + net.JoinHostPort(host, port) + "/api/v1/ready"
+// loopbackHosts names the hosts a process beside the server can reach a
+// listener on host through, in the order to try them. The healthcheck and the
+// "is a server still running" check of restore and reset-password both use
+// it, so they agree about where the server is.
+//
+// "[::]" gets two. [::1] comes first because a listener that is IPv6 only
+// (net.ipv6.bindv6only=1) answers nowhere else. 127.0.0.1 follows because
+// [::1] does not exist where IPv6 is switched off (ipv6.disable=1, or
+// disable_ipv6 in a container), while Go still opens "[::]" there and accepts
+// on IPv4: probing [::1] alone reported such a server unhealthy forever.
+func loopbackHosts(host string) []string {
+	if host == "" {
+		return []string{"127.0.0.1"}
+	}
+	ip := net.ParseIP(host)
+	switch {
+	case ip == nil || !ip.IsUnspecified():
+		return []string{host}
+	case ip.To4() != nil:
+		return []string{"127.0.0.1"}
+	default:
+		return []string{"::1", "127.0.0.1"}
+	}
 }
