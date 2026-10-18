@@ -340,6 +340,23 @@ instead of saving. Either fix works:
   $http_host;` in nginx, which keeps a port that `$host` drops,
   `ProxyPreserveHost On` in Apache; Caddy and Traefik do by default).
 
+### The sign-in cookie over HTTPS
+
+When the dashboard is opened over HTTPS, the sign-in cookie is `Secure` and
+named `__Host-subglance_session`, so the browser never sends it over plain
+HTTP. A proxy that terminates TLS passes the request on as plain HTTP, so
+SubGlance takes the page's scheme from any one of: a TLS connection,
+`X-Forwarded-Proto: https`, or the `Origin` the browser sends with the
+sign-in, which names the `https://` page. The last one is what covers nginx,
+whose `proxy_pass` sends no `X-Forwarded-Proto` unless it is configured to.
+The same rule picks the scheme of a push monitor's URL when `--base-url` is
+not set.
+
+Over plain HTTP the cookie is `subglance_session`, without `Secure`, because a
+browser refuses a `Secure` cookie there. A browser that still holds that one
+from before its HTTPS page was recognised has it replaced at the next sign-in,
+and signing out removes both.
+
 ### Under a path
 
 SubGlance can share a host with other applications, at a path such as

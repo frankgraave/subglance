@@ -569,15 +569,34 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, user store
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(store.SessionTTL.Seconds()),
 	})
+	// A browser on HTTPS may still hold the plain cookie, issued before the
+	// page's scheme was recognised (see isHTTPS). Left in place it outlives
+	// this sign-in, is sent on any plain-HTTP request to the host, and is
+	// what the next request would fall back to; the new cookie replaces it.
+	if secure {
+		expireCookie(w, insecureSessionCookieName, false)
+	}
 	return nil
 }
 
+// clearSessionCookie expires both session cookie names.
+//
+// Both, rather than the one this request's scheme picks, because a browser
+// can hold either: the plain one from a sign-in made before its HTTPS page
+// was recognised, the __Host- one from a sign-in made after. Signing out
+// must leave neither behind. Over plain HTTP a browser ignores the Secure
+// one, which it could not have been given there in the first place.
 func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
-	secure := isHTTPS(r)
-	name := sessionCookieName
-	if !secure {
-		name = insecureSessionCookieName
+	if isHTTPS(r) {
+		expireCookie(w, sessionCookieName, true)
 	}
+	expireCookie(w, insecureSessionCookieName, false)
+}
+
+// expireCookie tells the browser to drop a session cookie. secure must match
+// the cookie's name: a __Host- cookie is only accepted, and so only
+// replaced, with Secure set.
+func expireCookie(w http.ResponseWriter, name string, secure bool) {
 	//nolint:gosec // G124: mirrors issueSession; Secure is conditional on TLS by design
 	http.SetCookie(w, &http.Cookie{
 		Name: name, Value: "", Path: "/",
@@ -585,15 +604,40 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isHTTPS reports whether the original request used TLS.
+// isHTTPS reports whether the browser's page was served over HTTPS, which
+// decides whether its session cookie is Secure.
 //
-// X-Forwarded-Proto is honoured because self-hosted instances almost always
-// sit behind a reverse proxy that terminates TLS.
+// Three things say so, and one is enough:
+//
+//   - the connection is TLS;
+//   - X-Forwarded-Proto is https, set by a reverse proxy that terminates TLS,
+//     which self-hosted instances almost always sit behind;
+//   - the Origin names an https page.
+//
+// The third is there because the second is not sent by default: nginx's
+// proxy_pass adds no X-Forwarded-Proto unless it is written into the
+// config, and behind such a proxy an HTTPS dashboard was handed a cookie
+// without Secure and without the __Host- prefix, which the browser then
+// also sends on any plain-HTTP request to the host. A browser sends Origin
+// on every request that issues a cookie (sign-in, setup and a password
+// change are all writes), and a browser does not let a page forge it.
+//
+// Origin names the page that sent the request, not the address the cookie
+// is stored for, and a sign-in is not refused as cross-origin. A page on
+// another https site that signs a visitor in to a plain-HTTP instance
+// therefore sets a Secure cookie, which the browser drops because the
+// response came over plain HTTP: the sign-in that page forced does not
+// take. A client can claim https in either header too; that only makes its
+// own cookie Secure. Neither can cost anyone but the claimant a session.
 func isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	scheme, _, ok := strings.Cut(r.Header.Get("Origin"), "://")
+	return ok && strings.EqualFold(scheme, "https")
 }
 
 // clientIP extracts the caller's address for rate limiting and audit logs.
