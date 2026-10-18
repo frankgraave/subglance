@@ -946,15 +946,21 @@ docker compose down
 # (`docker volume ls` shows the real name; Compose prefixes it with the project)
 docker run --rm -v subglance-data:/data -v "$PWD:/restore" alpine sh -c \
   'rm -f /data/subglance.db-wal /data/subglance.db-shm && \
-   cp /restore/subglance-backup.db /data/subglance.db'
+   cp /restore/subglance-backup.db /data/subglance.db && \
+   chown -R 65532:65532 /data'
 docker compose up -d
 ```
 
-Two things to check while restoring:
+Three things to check while restoring:
 
 - Remove any leftover `subglance.db-wal` and `subglance.db-shm` next to it, as
   the command above does. They belong to the old database, and SQLite would
   try to replay them over the restored one.
+- Give the data directory back to the user SubGlance runs as, `65532:65532`
+  in the image, as the `chown` above does. A file copied in by a borrowed root
+  shell belongs to root, and the next start refuses it, naming the file, its
+  owner and the `chown` that fixes it. The same applies to a fresh volume,
+  which the borrowed container creates owned by root.
 - Restore into a version of SubGlance that is the same as, or newer than, the
   one that took the backup. An older binary refuses to start against a newer
   schema rather than writing rows against a table shape it does not

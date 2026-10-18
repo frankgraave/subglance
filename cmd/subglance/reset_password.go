@@ -94,6 +94,9 @@ func resetPassword(args []string, out io.Writer, secrets secretSource) error {
 	if err := requireDatabase(dbPath); err != nil {
 		return err
 	}
+	if err := requireDataAccess(cfg.DataDir, append(databaseFiles(dbPath), lockFile(cfg.DataDir))); err != nil {
+		return err
+	}
 
 	lock, err := datalock.Acquire(cfg.DataDir)
 	if errors.Is(err, datalock.ErrLocked) {

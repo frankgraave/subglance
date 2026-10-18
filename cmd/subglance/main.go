@@ -129,6 +129,12 @@ func run(args []string, logOut io.Writer) error {
 			"fix", "make web-install && make web-build && make build")
 	}
 
+	// Before the directory is created or anything in it opened: a data
+	// directory owned by another user otherwise fails below with an error
+	// that names neither the owner nor the fix (see requireDataAccess).
+	if err := requireDataAccess(cfg.DataDir, serverFiles(cfg.DataDir, cfg.DBPath())); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)
 	}
