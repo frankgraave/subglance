@@ -52,11 +52,13 @@ func (c *steppingClock) advance(d time.Duration) {
 }
 
 type connectivityBody struct {
-	Enabled           bool       `json:"enabled"`
-	Offline           bool       `json:"offline"`
-	OfflineSince      *time.Time `json:"offline_since"`
-	ResolverDown      bool       `json:"resolver_down"`
-	ResolverDownSince *time.Time `json:"resolver_down_since"`
+	Enabled              bool       `json:"enabled"`
+	Offline              bool       `json:"offline"`
+	OfflineSince         *time.Time `json:"offline_since"`
+	ResolverDown         bool       `json:"resolver_down"`
+	ResolverDownSince    *time.Time `json:"resolver_down_since"`
+	TargetsUnusable      *string    `json:"targets_unusable"`
+	TargetsUnusableSince *time.Time `json:"targets_unusable_since"`
 }
 
 func getConnectivity(t *testing.T, h http.Handler) (connectivityBody, *httptest.ResponseRecorder) {
@@ -75,8 +77,9 @@ func getConnectivity(t *testing.T, h http.Handler) (connectivityBody, *httptest.
 	}
 	// The documented shape exactly: a new field is a decision about what a
 	// viewer may read, and must be made in the spec, not slipped in here.
-	if len(raw) != 5 {
-		t.Fatalf("want exactly enabled, offline, offline_since, resolver_down, resolver_down_since; got %s", rec.Body.String())
+	if len(raw) != 7 {
+		t.Fatalf("want exactly enabled, offline, offline_since, resolver_down, resolver_down_since, "+
+			"targets_unusable, targets_unusable_since; got %s", rec.Body.String())
 	}
 	var body connectivityBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -98,6 +101,15 @@ func TestConnectivityReportsAnOfflineEpisodeAndItsEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The targets answer when the canary starts, as on a host that is
+	// online then; the cache window of that round is over.
+	start = start.Add(-connectivity.DefaultCacheFor)
+	clock.t = start
+	network.up.Store(true)
+	canary.Sweep(context.Background())
+	network.up.Store(false)
+	clock.advance(connectivity.DefaultCacheFor)
+	start = clock.now()
 	srv.WithConnectivity(canary)
 	h := authedHandler(srv)
 
@@ -231,5 +243,52 @@ func TestConnectivityReportsASilentResolver(t *testing.T) {
 	canary.Sweep(context.Background())
 	if body, _ = getConnectivity(t, h); body.ResolverDown || body.ResolverDownSince != nil {
 		t.Fatalf("after the resolver answered: %+v", body)
+	}
+}
+
+// Targets that have never answered cannot say the host is offline: the
+// endpoint reports them unusable instead, and offline stays false, so the
+// dashboard does not claim an outage of this host that nothing measured.
+func TestConnectivityReportsTargetsThatNeverAnswered(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	network := &switchableNet{}
+	start := time.Date(2026, 10, 18, 3, 34, 43, 0, time.UTC)
+	clock := &steppingClock{t: start}
+	canary, err := connectivity.New(connectivity.Options{
+		Targets: []string{"gateway.internal:443"},
+		Dial:    network.dial,
+		Now:     clock.now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.WithConnectivity(canary)
+	h := authedHandler(srv)
+
+	// Run's first sweep, on a host whose targets are blocked.
+	canary.Sweep(context.Background())
+	if canary.Offline(context.Background()) {
+		t.Fatal("targets that never answered called the host offline")
+	}
+	body, rec := getConnectivity(t, h)
+	if body.Offline || body.OfflineSince != nil {
+		t.Fatalf("unusable targets reported offline: %s", rec.Body.String())
+	}
+	if body.TargetsUnusable == nil || *body.TargetsUnusable != "unanswered" ||
+		body.TargetsUnusableSince == nil || !body.TargetsUnusableSince.Equal(start) {
+		t.Fatalf("want targets_unusable unanswered since %s; got %s", start, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "internal") {
+		t.Fatalf("response names a connectivity target: %s", rec.Body.String())
+	}
+
+	// A target answers: they speak for the host from now on.
+	network.up.Store(true)
+	clock.advance(connectivity.DefaultCacheFor)
+	if canary.Offline(context.Background()) {
+		t.Fatal("offline with the target reachable")
+	}
+	if body, rec = getConnectivity(t, h); body.TargetsUnusable != nil || body.TargetsUnusableSince != nil {
+		t.Fatalf("a target that answered is still reported unusable: %s", rec.Body.String())
 	}
 }

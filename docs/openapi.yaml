@@ -335,12 +335,20 @@ paths:
         names does, the failure is kept as a warning with the cause
         `local_dns`, and `resolver_down` reports it here.
 
+        Targets that cannot speak for this host hold nothing back, and
+        `targets_unusable` says why: `unanswered` when none of them has
+        answered since SubGlance started or they were changed (a network
+        that only sees the LAN), `contradicted` when they failed while
+        another check connected to a public address (a firewall that drops
+        them). `offline` is false while it is set.
+
         Requires any authenticated role. Reading it never dials anything: it
-        reports what the most recent round found. Rounds run only when a
-        check is about to confirm on a network error, and every 30 seconds
-        while the host is offline, so during an episode the answer is at most
-        that old. The targets themselves are not included; they may name
-        hosts on the operator's own network, and administrators read them from
+        reports what the most recent round found. Rounds run once when
+        SubGlance starts or the targets change, when a check is about to
+        confirm on a network error, and every 30 seconds while the host is
+        offline, so during an episode the answer is at most that old. The
+        targets themselves are not included; they may name hosts on the
+        operator's own network, and administrators read them from
         GET /api/v1/settings/connectivity.
       x-subglance-access: read
       responses:
@@ -354,7 +362,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [enabled, offline, offline_since, resolver_down, resolver_down_since]
+                required: [enabled, offline, offline_since, resolver_down, resolver_down_since, targets_unusable, targets_unusable_since]
                 properties:
                   enabled:
                     type: boolean
@@ -373,12 +381,23 @@ paths:
                     type: [string, 'null']
                     format: date-time
                     description: When the resolver was first found not answering in the current episode, in UTC; null otherwise.
+                  targets_unusable:
+                    type: [string, 'null']
+                    enum: [unanswered, contradicted, null]
+                    description: |
+                      Why the targets cannot speak for this host, so that their failing holds nothing back. Null when they can, when they have not been tried yet, and while the check is off. Never set while `offline` is true.
+                  targets_unusable_since:
+                    type: [string, 'null']
+                    format: date-time
+                    description: When the targets were found unusable for the current reason, in UTC; null otherwise.
               example:
                 enabled: true
                 offline: true
                 offline_since: '2026-09-29T01:12:04Z'
                 resolver_down: false
                 resolver_down_since: null
+                targets_unusable: null
+                targets_unusable_since: null
         '401':
           $ref: '#/components/responses/Unauthorized'
         '503':

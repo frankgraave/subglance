@@ -410,9 +410,12 @@ confirms an incident, SubGlance dials the connectivity targets over TCP:
 by default `1.1.1.1:53` and `9.9.9.9:53`, two public resolvers run by
 independent operators, reached by address so a broken local resolver cannot
 decide the answer. **This is outbound traffic you should know about.** It is
-sent only at that moment — never on a timer while everything is healthy — and
-one round is shared by every monitor that asks within 30 seconds. Only a TCP
-handshake is made; nothing is sent over the connection.
+sent at that moment, and once when SubGlance starts or the targets are
+changed, to learn whether they answer at all (see
+[When the targets cannot see out](#when-the-targets-cannot-see-out)) — never
+on a timer while everything is healthy. One round is shared by every monitor
+that asks within 30 seconds. Only a TCP handshake is made; nothing is sent
+over the connection.
 
 When **every** target fails too, the failure is the host's, not the monitor's:
 
@@ -438,6 +441,48 @@ The check errs towards reporting. A status code, a missing keyword, a failed
 JSON assertion or a certificate problem proves the target answered, and is
 never suppressed. If even one target answers, nothing is suppressed. An
 incident that was already confirmed stays confirmed.
+
+#### When the targets cannot see out
+
+"Every target failed" only means "this host is offline" for targets this
+host can reach while it is online. Two common setups break that, and in both
+the host is fine:
+
+- a network that may only see the LAN — an `internal: true` Docker network,
+  a VLAN without internet — where the targets never answer;
+- a Pi-hole or AdGuard setup whose firewall drops outbound port 53 for
+  everything but the resolver, a standard way of making every device use it,
+  where `1.1.1.1:53` and `9.9.9.9:53` stop answering.
+
+A check that believed those targets would hold back every network-error
+outage on every monitor, for good. So two rules, both towards reporting:
+
+- **Targets that have never answered prove nothing.** Until one of them
+  answers once — since SubGlance started, or since the targets were changed —
+  nothing is held back: a monitor on a closed port confirms after its retries
+  and alerts, as it would with the check off. The dashboard says "Connectivity
+  targets have not answered since 03:34", the *Connectivity check* card under
+  Settings says what to do about it, and the log has one warning.
+- **A check that reaches the internet ends an offline spell.** While the host
+  is believed offline, a check that connects to a public address — whatever
+  it then finds, a 200, a 503 or a bad certificate — proves it is not. The
+  targets are dialled once more: if one answers, the spell ends as usual,
+  with its notice; if none does, it ends without one, and the targets count
+  as never answered again until one does. The dashboard and the card then say
+  the targets failed while other checks reached the internet, so they may be
+  blocked from this host. A check on a private address is not evidence: when
+  the uplink fails, the LAN keeps working.
+
+Neither state sends anything to a channel: the outages they would have held
+back are reported again, which is what matters. `GET /api/v1/connectivity`
+reports them as `targets_unusable` (`unanswered` or `contradicted`). The fix
+is the same for both: set targets this host can always reach, such as your
+gateway, below.
+
+A host that starts without a connection — after a power cut, before the
+router is up — has targets that have not answered yet, so its first failures
+are reported rather than held back. That is the direction this check is
+allowed to err in.
 
 To pick your own targets — your gateway, an address you run elsewhere, or
 anything else this host should always be able to reach — set

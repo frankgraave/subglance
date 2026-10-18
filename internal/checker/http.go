@@ -166,7 +166,9 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 // Check runs one HTTP probe.
 func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 	scope := &headerScope{headers: m.Headers, ua: c.ua}
-	res := c.check(ctx, m, scope)
+	peer := &peerWatch{}
+	res := c.check(httptrace.WithClientTrace(ctx, peer.trace()), m, scope)
+	res.Peer = peer.peer()
 	if !res.OK && scope.withheldFrom != "" && (res.Kind == FailStatus || res.Kind == FailKeyword || res.Kind == FailAssertion) {
 		// A 401 on its own sends the reader to their credentials, which are
 		// fine. Say which server went without them, and what to change.

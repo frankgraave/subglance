@@ -1,14 +1,22 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConnectivityCard } from "./ConnectivityCard";
 import { parseTargets } from "./settings";
 import { connectivityKey } from "./api";
-import { defaultConnectivitySettings, pinnedConnectivitySettings } from "./fixtures";
+import {
+  contradictedConnectivity, defaultConnectivitySettings, onlineConnectivity, pinnedConnectivitySettings,
+  unansweredConnectivity,
+} from "./fixtures";
 
 const clients: QueryClient[] = [];
-afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  for (const client of clients.splice(0)) client.clear();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const URL = "/api/v1/settings/connectivity";
 
@@ -18,8 +26,9 @@ function json(body: unknown, status = 200, etag?: string) {
 
 type Handler = (init?: RequestInit) => Response | Promise<Response>;
 
-function mount(read: unknown, onPut?: Handler) {
+function mount(read: unknown, onPut?: Handler, state: unknown = onlineConnectivity) {
   const fetcher = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/v1/connectivity") return json(state);
     if (url !== URL) throw new Error(`Unexpected request: ${url}`);
     if (init?.method === "PUT") return onPut ? onPut(init) : json(read, 200, 'W/"2"');
     return json(read, 200, 'W/"1"');
@@ -32,6 +41,60 @@ function mount(read: unknown, onPut?: Handler) {
 }
 
 const puts = (fetcher: ReturnType<typeof vi.fn>) => fetcher.mock.calls.filter(([, init]) => init?.method === "PUT");
+
+const UNANSWERED = /have not answered since SubGlance started/;
+const CONTRADICTED = /failed while other checks reached the internet/;
+
+it.each([
+  ["never answered", unansweredConnectivity, UNANSWERED],
+  ["contradicted", contradictedConnectivity, CONTRADICTED],
+])("says when the addresses cannot speak for this host: %s, and what to do", async (_name, state, words) => {
+  mount(defaultConnectivitySettings, undefined, state);
+  const note = await screen.findByText(words);
+  expect(note.className).toBe("warn-note");
+  expect(note.textContent).toContain("failures are not being held back");
+  expect(note.textContent).toContain("Set addresses this host can reach");
+});
+
+it("says nothing about the addresses while they answer, or when the state is unavailable", async () => {
+  mount(defaultConnectivitySettings);
+  await targetsBox();
+  await waitFor(() => expect(screen.queryByText(UNANSWERED)).toBeNull());
+  expect(screen.queryByText(CONTRADICTED)).toBeNull();
+  cleanup();
+  mount(defaultConnectivitySettings, undefined, { nonsense: true });
+  await targetsBox();
+  await waitFor(() => expect(screen.queryByText(UNANSWERED)).toBeNull());
+});
+
+// The Settings route unmounts the dashboard and the query client never
+// refetches on focus, so without its own poll the card would keep the first
+// answer for as long as the page is open: an old warning, or a missing new one.
+it("follows the addresses' standing while the card stays open, and drops an answer nobody vouches for", async () => {
+  vi.useFakeTimers();
+  const live: { body: unknown; hang: boolean } = { body: unansweredConnectivity, hang: false };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/api/v1/connectivity") return live.hang ? new Promise<Response>(() => {}) : json(live.body);
+    return json(defaultConnectivitySettings, 200, 'W/"1"');
+  }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  render(<QueryClientProvider client={client}><ConnectivityCard /></QueryClientProvider>);
+  const settle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  await settle(1);
+  expect(screen.queryByText(UNANSWERED)).not.toBeNull();
+  // The next poll clears it, and the one after brings a new kind in.
+  live.body = onlineConnectivity;
+  await settle(15_100);
+  expect(screen.queryByText(UNANSWERED)).toBeNull();
+  live.body = contradictedConnectivity;
+  await settle(15_100);
+  expect(screen.queryByText(CONTRADICTED)).not.toBeNull();
+  // The server stops answering: the last answer stands until it is too old to trust.
+  live.hang = true;
+  await settle(61_000);
+  expect(screen.queryByText(CONTRADICTED)).toBeNull();
+});
 const targetsBox = () => screen.findByLabelText("Addresses to dial") as Promise<HTMLTextAreaElement>;
 const toggle = () => screen.getByRole("checkbox", { name: /Check this host's own connection/ }) as HTMLInputElement;
 const save = () => screen.getByRole("button", { name: "Save connectivity check" }) as HTMLButtonElement;
@@ -111,7 +174,8 @@ it("puts the server's refusal under the field it names", async () => {
 it("reloads instead of overwriting when someone else saved first", async () => {
   let reads = 0;
   const newer = { ...defaultConnectivitySettings, targets: { value: ["router:80"], source: "database", pinned_by: null } };
-  const fetcher = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+  const fetcher = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/v1/connectivity") return json(onlineConnectivity);
     if (init?.method === "PUT") return json({ error: "changed by someone else" }, 412);
     reads += 1;
     return json(reads === 1 ? defaultConnectivitySettings : newer, 200, `W/"${reads}"`);

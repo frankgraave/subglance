@@ -33,16 +33,19 @@ func (r *switchableResolver) lookup(_ context.Context, name string) error {
 func newResolverRunner(t *testing.T, db *store.DB, uplink *switchableNet, resolver *switchableResolver,
 	alerts *alertRecorder, restored *restoredLog) *Runner {
 	t.Helper()
+	clk := &canaryClock{t: time.Now().Add(-2 * connectivity.DefaultCacheFor)}
 	canary, err := connectivity.New(connectivity.Options{
 		Targets:            []string{"canary-a:53", "canary-b:53"},
 		Names:              []string{"ref-a.example", "ref-b.example"},
 		Dial:               uplink.dial,
 		Lookup:             resolver.lookup,
+		Now:                clk.now,
 		OnResolverRestored: restored.record,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	proveTargets(t, canary, uplink, clk)
 	return New(Options{DB: db, Log: quietLogger(), Notify: alerts.record, Connectivity: canary})
 }
 

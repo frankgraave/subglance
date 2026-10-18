@@ -772,6 +772,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// streak it reports decides whether this result's response snapshot is
 	// worth storing. Observe only touches in-memory state, so moving it ahead
 	// of the heartbeat write changes nothing about what either one decides.
+	//
+	// A connection this check made is told to the canary first: it is
+	// evidence about the host that this very failure may be judged by.
+	r.reportPublicPeer(ctx, o)
 	localNetwork, localDNS := r.localNetworkFailure(ctx, o)
 	obs := state.Observation{
 		MonitorID:        o.Monitor.ID,
@@ -991,6 +995,26 @@ func (r *Runner) localNetworkFailure(ctx context.Context, o scheduler.Outcome) (
 		return true, true
 	}
 	return false, false
+}
+
+// publicGuard is the definition of a public address: one a check may reach
+// without --allow-private-targets.
+var publicGuard = checker.NewGuard(false)
+
+// reportPublicPeer tells the canary when a check connected to a public
+// address, whatever the check then concluded: a status code, a certificate or
+// a keyword says nothing about whether this host could reach the internet,
+// and a connection made says it could. The canary uses it to tell a host that
+// is offline from connectivity targets that are blocked from it.
+//
+// A private address is not evidence. When the uplink fails, the LAN keeps
+// working, so a check on the NAS still connects while the host cannot see
+// out.
+func (r *Runner) reportPublicPeer(ctx context.Context, o scheduler.Outcome) {
+	if r.canary == nil || !o.Result.Peer.IsValid() || publicGuard.CheckAddr(o.Result.Peer) != nil {
+		return
+	}
+	r.canary.PublicReached(ctx, o.Result.CheckedAt)
 }
 
 // snapshotToStore decides whether this result's captured response is worth a

@@ -59,7 +59,28 @@ func newCanary(ctx context.Context, cfg config.Config, db *store.DB, notify *not
 		Disabled:           !resolved.Enabled.Value,
 		OnRestored:         localNetworkNotice(notify, log, notifier.LocalNetworkNotice),
 		OnResolverRestored: localNetworkNotice(notify, log, notifier.LocalDNSNotice),
+		OnUnusable:         unusableTargetsWarning(log),
 	})
+}
+
+// unusableTargetsWarning returns the callback the canary calls when its
+// targets turn out unable to speak for this host. It only logs: the outages
+// it would have held back are reported again, which is what matters, and a
+// message about the instance's own settings belongs on its Settings page and
+// dashboard rather than in a channel meant for outages.
+func unusableTargetsWarning(log *slog.Logger) func(connectivity.Unusable) {
+	return func(reason connectivity.Unusable) {
+		switch reason {
+		case connectivity.Contradicted:
+			log.Warn("the connectivity targets failed while another check reached the internet; "+
+				"they may be blocked from this host, so failures are not held back. Set targets this host can reach under Settings",
+				"reason", reason)
+		default:
+			log.Warn("the connectivity targets have not answered since they were set, "+
+				"so failures are not held back. Set targets this host can reach under Settings",
+				"reason", reason)
+		}
+	}
 }
 
 // localNetworkNotice returns the callback the canary calls once the host can

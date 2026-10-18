@@ -28,6 +28,24 @@ func (f *fakeNet) set(target string, ok bool) {
 	f.reachable[target] = ok
 }
 
+// snapshot and restore let a test reach every target for one round and then
+// put back what it had set.
+func (f *fakeNet) snapshot() map[string]bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]bool{}
+	for k, v := range f.reachable {
+		out[k] = v
+	}
+	return out
+}
+
+func (f *fakeNet) restore(m map[string]bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reachable = m
+}
+
 func (f *fakeNet) dial(_ context.Context, _, address string) (net.Conn, error) {
 	f.dials.Add(1)
 	f.mu.Lock()
@@ -60,18 +78,47 @@ func (c *fakeClock) advance(d time.Duration) {
 
 const targetA, targetB = "canary-a:53", "canary-b:53"
 
+// newTestCanary builds a canary whose targets have answered once, as Run's
+// first sweep finds them on a host that is online when it starts, and moves
+// the clock past that round's cache window and forgets its dials, so the
+// test starts from a canary with nothing cached and a known history.
 func newTestCanary(t *testing.T, fn *fakeNet, clk *fakeClock, onRestored func(from, to time.Time)) *Canary {
+	t.Helper()
+	c := newUnprovenCanary(t, fn, clk, onRestored, nil)
+	prove(t, c, fn, clk)
+	return c
+}
+
+// newUnprovenCanary builds a canary whose targets have not been tried.
+func newUnprovenCanary(t *testing.T, fn *fakeNet, clk *fakeClock, onRestored func(from, to time.Time), onUnusable func(Unusable)) *Canary {
 	t.Helper()
 	c, err := New(Options{
 		Targets:    []string{targetA, targetB},
 		Dial:       fn.dial,
 		Now:        clk.now,
 		OnRestored: onRestored,
+		OnUnusable: onUnusable,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// prove runs the sweep a starting canary runs, with every target reachable,
+// then puts the network back as the test set it.
+func prove(t *testing.T, c *Canary, fn *fakeNet, clk *fakeClock) {
+	t.Helper()
+	saved := fn.snapshot()
+	fn.set(targetA, true)
+	fn.set(targetB, true)
+	c.Sweep(context.Background())
+	fn.restore(saved)
+	if _, _, unusable := c.TargetsUnusable(); unusable {
+		t.Fatal("reachable targets were found unusable")
+	}
+	clk.advance(DefaultCacheFor)
+	fn.dials.Store(0)
 }
 
 func TestOfflineOnlyWhenEveryTargetFails(t *testing.T) {
