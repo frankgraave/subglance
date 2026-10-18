@@ -7175,7 +7175,10 @@ components:
           description: |
             Days before certificate expiry at which to warn; applies to https
             and ssl checks, and a value other than 14 is refused on any other
-            type. Defaults to 14. 0 is rejected rather than read as
+            type. Defaults to 14. The warning starts no earlier than a quarter
+            of the certificate's lifetime before expiry, so a certificate that
+            lasts six days is warned about with 40 hours left, not all its
+            life. 0 is rejected rather than read as
             "never warn", because the stored default would turn it back into
             14 and the client would be told it had disabled a warning it
             still gets.

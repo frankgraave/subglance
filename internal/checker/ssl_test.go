@@ -202,8 +202,10 @@ func TestSSLCheckNotYetValid(t *testing.T) {
 // notice that alerts without counting as downtime.
 func TestSSLCheckWarnsBeforeExpiry(t *testing.T) {
 	now := time.Now()
+	// A 90-day certificate: one that lasts days is warned about later, see
+	// TestSSLCheckWarnsAboutAShortLivedCertificateOnlyNearItsEnd.
 	cert, pool := newTestCert(t, certOpts{
-		notBefore: now.Add(-24 * time.Hour),
+		notBefore: now.Add(-85 * 24 * time.Hour),
 		notAfter:  now.Add(5 * 24 * time.Hour),
 	})
 	addr := startTLSServer(t, cert)

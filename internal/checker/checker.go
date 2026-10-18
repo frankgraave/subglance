@@ -75,8 +75,9 @@ type Monitor struct {
 	// not satisfy it. Nil means the body is not parsed as JSON at all.
 	JSONAssertion *JSONAssertion
 
-	// SSLWarnDays sets how many days before certificate expiry a check starts
-	// failing. Zero disables the check.
+	// SSLWarnDays sets how many days before certificate expiry a passing
+	// check is marked Expiring, or a quarter of the certificate's lifetime
+	// when that is shorter (see warnWindow). Zero disables the warning.
 	SSLWarnDays int
 
 	// MinTLSVersion is the lowest TLS version this monitor will negotiate, as
@@ -210,7 +211,7 @@ type Result struct {
 	Error string
 
 	// Expiring marks a passing check whose certificate expires within the
-	// monitor's SSLWarnDays. The target answered and the certificate is
+	// monitor's warning window (see SSLWarnDays). The target answered and the certificate is
 	// valid, so OK is true: a certificate running out is nobody's outage
 	// yet, and counting it as one put reachable sites at 0% uptime and in
 	// red on public status pages. The state engine turns it into a notice

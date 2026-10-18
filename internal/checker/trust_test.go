@@ -107,7 +107,7 @@ func TestSSLPinnedCertificateThatChangedFailsWithItsOwnSentence(t *testing.T) {
 func TestSSLPinnedCertificateStillWarnsAndExpires(t *testing.T) {
 	now := time.Now()
 	t.Run("expiring", func(t *testing.T) {
-		cert, _ := newTestCert(t, certOpts{notBefore: now.Add(-time.Hour), notAfter: now.Add(5 * 24 * time.Hour)})
+		cert, _ := newTestCert(t, certOpts{notBefore: now.Add(-85 * 24 * time.Hour), notAfter: now.Add(5 * 24 * time.Hour)})
 		res := sslCheckerTrusting(noRoots(), now).Check(context.Background(), Monitor{
 			Type: TypeSSL, Target: startTLSServer(t, cert), Timeout: 5 * time.Second, SSLWarnDays: 14,
 			TrustedCertSHA256: CertFingerprint(cert.Leaf), TrustedCertAt: trustedOn,
@@ -235,7 +235,7 @@ func TestHTTPPinnedCertificateThatChangedFailsWithItsOwnSentence(t *testing.T) {
 
 func TestHTTPPinnedCertificateStillWarnsBeforeExpiry(t *testing.T) {
 	now := time.Now()
-	cert, _ := newTestCert(t, certOpts{notBefore: now.Add(-time.Hour), notAfter: now.Add(5 * 24 * time.Hour)})
+	cert, _ := newTestCert(t, certOpts{notBefore: now.Add(-85 * 24 * time.Hour), notAfter: now.Add(5 * 24 * time.Hour)})
 	srv := httpsServer(t, &cert, nil)
 	m := monitor(srv.URL)
 	m.SSLWarnDays = 14

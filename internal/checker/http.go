@@ -380,7 +380,8 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 
 	// Report certificate expiry even on success, so the UI can warn ahead of
 	// time instead of only once the certificate has already expired.
-	if leaf := monitoredLeaf(resp); leaf != nil {
+	leaf := monitoredLeaf(resp)
+	if leaf != nil {
 		res.CertExpiry = leaf.NotAfter
 	}
 
@@ -480,19 +481,22 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 	// surfaces as a notice rather than a detail nobody reads until the site
 	// breaks, without counting as downtime while the site answers. One that
 	// has expired fails: visitors' browsers refuse it.
-	if m.SSLWarnDays > 0 && !res.CertExpiry.IsZero() {
-		remaining := time.Until(res.CertExpiry)
-		if remaining < time.Duration(m.SSLWarnDays)*24*time.Hour {
+	// The window is the one the ssl check uses, shortened for a
+	// certificate that lasts days rather than months: see warnWindow.
+	if m.SSLWarnDays > 0 && leaf != nil {
+		now := time.Now()
+		if !now.Before(leaf.NotAfter) {
+			res.Latency = time.Since(start)
+			res.OK = false
+			res.Kind = FailCertExpiry
+			res.Error = fmt.Sprintf("TLS certificate expired on %s", leaf.NotAfter.Format(time.DateOnly))
+			return res
+		}
+		if notice := expiryNotice(leaf, m.SSLWarnDays, now); notice != "" {
 			res.Latency = time.Since(start)
 			res.Kind = FailCertExpiry
-			if remaining <= 0 {
-				res.OK = false
-				res.Error = fmt.Sprintf("TLS certificate expired on %s", res.CertExpiry.Format(time.DateOnly))
-			} else {
-				res.Expiring = true
-				res.Error = fmt.Sprintf("TLS certificate expires in %d days (on %s)",
-					int(remaining.Hours()/24), res.CertExpiry.Format(time.DateOnly))
-			}
+			res.Expiring = true
+			res.Error = notice
 			return res
 		}
 	}

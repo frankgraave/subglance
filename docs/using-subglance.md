@@ -267,8 +267,26 @@ every uptime figure, and a public status page shows the service as up with the
 note "Certificate expires soon" and no date. It still alerts, once, as
 "api: certificate expires soon", repeats on the monitor's reminder schedule until
 someone acknowledges it, and sends "certificate no longer expires soon" on the
-first check that sees a renewed certificate. The same applies to an `http`
-monitor with an `https` target, at the same threshold. When that check follows
+first check that sees a renewed certificate.
+
+The warning starts at `ssl_warn_days` or at a quarter of the certificate's own
+lifetime before it expires, whichever is later. Certificates do not all last
+90 days any more: Let's Encrypt issues ones that last 160 hours (Caddy's
+`profile shortlived`, Certbot's `--preferred-profile shortlived`, and every
+certificate for an IP address), and with a fixed 14 days such a certificate
+would be expiring from the hour it was issued, a notice that never goes away
+and that you learn to ignore. A quarter of 160 hours is 40 hours, well after
+the point where an ACME client renews, so a certificate still not renewed then
+is a renewal that failed. A 90-day certificate's quarter is 22 days, so 14 days
+stays 14; a 45-day one warns at 11 days. The cap applies to a value you set as
+well, since a warning window longer than the certificate's life can only mean
+always warning. When it shortened the window, the notice says so:
+"certificate expires in 35 hours (on 2026-10-24); it lasts 6 days, so the
+warning starts 40 hours before expiry". With less than two days left, the
+notice counts hours rather than days.
+
+The same applies to an `http` monitor with an `https` target, at the same
+threshold and with the same sentence. When that check follows
 a redirect to another host, as a site behind a single sign-on proxy does to its
 login page, the certificate it reports is the one of the first host that
 answered over TLS: the host in the URL field for an `https` target, the host it

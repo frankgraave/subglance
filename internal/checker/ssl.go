@@ -195,15 +195,14 @@ func (c *SSLChecker) check(ctx context.Context, m Monitor, peer *netip.Addr) Res
 // it still opens an incident and alerts; it just does not count as downtime,
 // because the service is up. See Result.Expiring. A pinned certificate gets
 // the same notice: trusting it says nothing about how long it lasts.
+//
+// The window is the monitor's SSLWarnDays, or a quarter of the certificate's
+// lifetime when that is shorter: see warnWindow.
 func expiringNotice(res Result, leaf *x509.Certificate, m Monitor, now time.Time) Result {
-	if m.SSLWarnDays > 0 {
-		remaining := leaf.NotAfter.Sub(now)
-		if remaining < time.Duration(m.SSLWarnDays)*24*time.Hour {
-			res.Expiring = true
-			res.Kind = FailCertExpiry
-			res.Error = fmt.Sprintf("certificate expires in %d days (on %s)",
-				int(remaining.Hours()/24), leaf.NotAfter.Format(time.DateOnly))
-		}
+	if notice := expiryNotice(leaf, m.SSLWarnDays, now); notice != "" {
+		res.Expiring = true
+		res.Kind = FailCertExpiry
+		res.Error = notice
 	}
 	return res
 }
