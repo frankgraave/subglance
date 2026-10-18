@@ -31,6 +31,12 @@ export type PushUrlRevealProps = {
   url: string;
   /** The monitor’s name, so the screen says which one this belongs to. */
   name: string;
+  /**
+   * The heading. Defaults to the one for a monitor that was just made; a
+   * monitor whose URL was replaced has reported before, so "waiting for its
+   * first report" would be untrue there.
+   */
+  title?: string;
   /** Dismisses the reveal. The caller closes the dialog. */
   onDone?: () => void;
   /** Injected in tests; defaults to the real clipboard when there is one. */
@@ -40,6 +46,7 @@ export type PushUrlRevealProps = {
 export function PushUrlReveal({
   url,
   name,
+  title,
   onDone,
   writeClipboard,
 }: PushUrlRevealProps) {
@@ -83,7 +90,7 @@ export function PushUrlReveal({
       aria-labelledby="push-reveal-title"
     >
       <h2 id="push-reveal-title" className="form-title">
-        {name} is waiting for its first report
+        {title ?? `${name} is waiting for its first report`}
       </h2>
 
       {/*
@@ -93,8 +100,8 @@ export function PushUrlReveal({
        */}
       <p role="alert" className="warn-note">
         This URL is shown once. It is stored hashed, so closing this panel loses
-        it — a monitor whose URL was never saved has to be deleted and made
-        again.
+        it. You can make a new one from the monitor’s page, which stops this one
+        working.
       </p>
 
       <div className="field">

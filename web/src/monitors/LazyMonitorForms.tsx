@@ -3,6 +3,7 @@ import { ErrorBoundary } from "../shell/ErrorBoundary";
 import type { AddMonitorProps } from "./AddMonitor";
 import type { EditMonitorFormProps } from "./EditMonitorForm";
 import type { BulkChannelFormProps } from "./BulkChannelForm";
+import type { ReplacePushUrlProps } from "./ReplacePushUrl";
 import { retryableLazy } from "./retryableLazy";
 import type { RetryableLazy } from "./retryableLazy";
 
@@ -45,6 +46,13 @@ const bulkChannelFormChunk = retryableLazy<BulkChannelFormProps>(() =>
   import("./BulkChannelForm").then((module) => ({ default: module.BulkChannelForm })),
 );
 
+// A push monitor's new URL: the question and the reveal, opened from one
+// push monitor's page now and then. The reveal is imported statically there,
+// so the button that retires the old URL arrives only together with it.
+const replacePushUrlChunk = retryableLazy<ReplacePushUrlProps>(() =>
+  import("./ReplacePushUrl").then((module) => ({ default: module.ReplacePushUrl })),
+);
+
 function FormLoading() {
   return <p className="field-help">Loading the form…</p>;
 }
@@ -80,6 +88,11 @@ export function LazyAddMonitor(props: AddMonitorProps) {
 /** `EditMonitorForm`, fetched on first use. */
 export function LazyEditMonitorForm(props: EditMonitorFormProps) {
   return <ChunkedForm chunk={editMonitorFormChunk} props={props} />;
+}
+
+/** `ReplacePushUrl`, fetched on first use. */
+export function LazyReplacePushUrl(props: ReplacePushUrlProps) {
+  return <ChunkedForm chunk={replacePushUrlChunk} props={props} />;
 }
 
 /** `BulkChannelForm`, fetched on first use. */

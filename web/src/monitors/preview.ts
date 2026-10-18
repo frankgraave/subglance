@@ -195,8 +195,8 @@ export async function previewCheck(
  *
  * `pushUrl` is present for exactly one response in the life of a push monitor
  * and is never retrievable afterwards — only a hash is stored. Losing it means
- * deleting the monitor and making a new one, so it is typed as part of the
- * create result rather than fetched later, because there is no later.
+ * replacing it, which stops the old one working, so it is typed as part of
+ * the create result rather than fetched later, because there is no later.
  */
 export type CreatedMonitor = {
   id: string;

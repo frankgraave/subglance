@@ -1,6 +1,6 @@
 import { Card, Panel } from "../components/Card";
 import { Legend, type LegendItem } from "../components/Legend";
-import { IconAlert, IconClock, IconGauge, IconPause, IconPlay, IconPulse, IconTrash } from "../components/icons";
+import { IconAlert, IconClock, IconGauge, IconKey, IconPause, IconPlay, IconPulse, IconTrash } from "../components/icons";
 import { Menu, type MenuItem } from "../components/Menu";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import type { Beat } from "../heartbeat/model";
@@ -152,6 +152,12 @@ export type MonitorDetailProps = {
    * from here the point is to plan a window, which is a write.
    */
   onMaintenance?: () => void;
+  /**
+   * Asks to give this push monitor a new push URL. The screen that owns the
+   * data confirms it, since the current URL stops working. Absent for
+   * read-only users and for every monitor that is not a push monitor.
+   */
+  onReplacePushUrl?: () => void;
 };
 
 /**
@@ -169,6 +175,7 @@ function detailMenuItems(
   onTogglePaused: ((paused: boolean) => void) | undefined,
   onDelete: (() => void) | undefined,
   onMaintenance: (() => void) | undefined,
+  onReplacePushUrl: (() => void) | undefined,
 ): MenuItem[] {
   const items: MenuItem[] = [];
   /*
@@ -206,6 +213,21 @@ function detailMenuItems(
             onSelect: () => onTogglePaused(true),
           },
     );
+  }
+  /*
+   * Above Delete, because it is what someone reaching for Delete on a push
+   * monitor usually wants: a leaked or lost URL used to be fixable only by
+   * deleting the monitor, and that took its history with it.
+   */
+  if (onReplacePushUrl !== undefined) {
+    items.push({
+      key: "push-url",
+      title: "New push URL",
+      description: "Stops the current URL working. History is kept.",
+      icon: <IconKey />,
+      disabled: busy,
+      onSelect: onReplacePushUrl,
+    });
   }
   if (onDelete !== undefined) {
     items.push({
@@ -248,6 +270,7 @@ export function MonitorDetail({
   onDelete,
   actionError = null,
   onMaintenance,
+  onReplacePushUrl,
 }: MonitorDetailProps) {
   const {
     name,
@@ -262,7 +285,8 @@ export function MonitorDetail({
   const gap = describeGap(lastCheck, now);
   const push = monitor.push;
   const churn = describeChurn(incidents, now);
-  const menuItems = detailMenuItems(status === "paused", busy, onTogglePaused, onDelete, onMaintenance);
+  const menuItems = detailMenuItems(status === "paused", busy, onTogglePaused, onDelete, onMaintenance,
+    monitor.push === undefined ? undefined : onReplacePushUrl);
 
   return (
     <article
