@@ -128,6 +128,42 @@ func Available() bool {
 type shell struct {
 	body []byte
 	csp  string
+	// nested[d-1] is body as served d directory levels below the root;
+	// see shellAt.
+	nested [][]byte
+}
+
+// maxShellDepth is how many shells are built ahead: the deepest client-side
+// route the dashboard has (/monitors/{id}, /notifications/new) is one level
+// down, so eight leaves room for trailing slashes and mistyped segments. A
+// deeper address, always the not-found screen, gets its shell built on
+// request.
+const maxShellDepth = 8
+
+// maxServedDepth is the deepest address the shell is served at. Past
+// maxShellDepth every request builds its own shell, and each level adds a
+// "../" to each of the shell's references, so an unauthenticated request
+// made of slashes would get a response several times its own length. No
+// route of the dashboard comes near this; deeper than it is a 404.
+const maxServedDepth = 64
+
+func nestedShells(body []byte) [][]byte {
+	out := make([][]byte, maxShellDepth)
+	for d := range out {
+		out[d] = shellAt(body, d+1)
+	}
+	return out
+}
+
+// at is the shell for a document depth directory levels below the root.
+func (sh shell) at(depth int) []byte {
+	if depth <= 0 {
+		return sh.body
+	}
+	if depth > maxShellDepth {
+		return shellAt(sh.body, depth)
+	}
+	return sh.nested[depth-1]
 }
 
 // loadShell reads index.html out of files once.
@@ -137,7 +173,7 @@ func loadShell(files fs.FS) func() shell {
 		if err != nil {
 			return shell{}
 		}
-		return shell{body: b, csp: contentSecurityPolicy(b)}
+		return shell{body: b, csp: contentSecurityPolicy(b), nested: nestedShells(b)}
 	})
 }
 
@@ -210,6 +246,12 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 			writeUnbuilt(w)
 			return
 		}
+		d := depth(r.URL.EscapedPath())
+		if d > maxServedDepth {
+			http.NotFound(w, r)
+			return
+		}
+		body := sh.at(d)
 
 		h := w.Header()
 		h.Set("Content-Type", "text/html; charset=utf-8")
@@ -222,7 +264,9 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 		if r.Method == http.MethodHead {
 			return
 		}
-		_, _ = w.Write(sh.body)
+		// Only the number of slashes in the path reaches body (shellAt
+		// writes that many "../"); no byte of the request is copied into it.
+		_, _ = w.Write(body) //nolint:gosec // G705: the depth is a count, not request text
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,6 +336,38 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 		}
 		http.ServeContent(w, r, info.Name(), info.ModTime(), rs)
 	})
+}
+
+// relativeRef matches a reference in the shell that the build wrote relative
+// to the directory the dashboard is served from (web/vite.config.ts `base`).
+var relativeRef = regexp.MustCompile(`(\s(?:src|href)=")\./`)
+
+// depth is the number of directory levels below the root that the document
+// at urlPath sits at: 0 for /monitors, 1 for /monitors/12. urlPath is the
+// escaped path, because the browser resolves against the address as it shows
+// it, so an encoded slash is not a level.
+func depth(urlPath string) int {
+	return strings.Count(urlPath, "/") - 1
+}
+
+// shellAt is the shell as a document depth levels below the root must read
+// it.
+//
+// The build writes the shell's scripts, stylesheet and font preloads as
+// ./assets/… and ./fonts/…, relative, so the dashboard works under a path
+// prefix (https://example.com/subglance/) as well as at the root of a host:
+// SubGlance cannot know the prefix, because the proxy in front strips it.
+// The same shell is served at every client-side route, though, and a browser
+// resolves ./ against the directory of the address it shows. At /monitors/12
+// that is /monitors/, where no assets live. So each extra directory level of
+// the path the request arrived at becomes one ../, which leads back to where
+// the dashboard is served from with or without a prefix in front.
+//
+// The shells are built once, when index.html is first read, and the request
+// only picks one; the inline theme script carries no such reference, so the
+// policy's hash of it holds for every one of them.
+func shellAt(body []byte, depth int) []byte {
+	return relativeRef.ReplaceAll(body, []byte("${1}"+strings.Repeat("../", depth)))
 }
 
 // writeUnbuilt explains an empty embed instead of returning a blank 200.

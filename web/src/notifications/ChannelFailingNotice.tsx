@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { useQuery } from "@tanstack/react-query";
 import { channelsQueryKey, fetchChannels } from "./channelsApi";
 import { describeFailureNotice, failingChannels } from "./channels";
@@ -61,7 +62,7 @@ export function ChannelFailingNotice({
       {text}
       {tail === null ? null : ` ${tail}.`}{" "}
       <a
-        href={NOTIFICATIONS_PATH}
+        href={appPath(NOTIFICATIONS_PATH)}
         onClick={(event) => {
           if (
             onOpen === undefined ||

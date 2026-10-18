@@ -17,6 +17,8 @@
  * a result it never received.
  */
 
+import { appPath } from "./base";
+
 /** Notified whenever the API rejects the credentials sent with a request. */
 type UnauthorizedListener = () => void;
 
@@ -116,7 +118,8 @@ export async function readError(res: Response): Promise<ApiError> {
  * form replaces it, which reads as a flash of a broken page.
  */
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  const res = await fetch(input, {
+  // Callers name the API path; where the instance is served decides the URL.
+  const res = await fetch(input.startsWith("/") ? appPath(input) : input, {
     credentials: "same-origin",
     ...init,
     headers: { Accept: "application/json", ...init.headers },

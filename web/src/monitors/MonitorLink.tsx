@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { monitorPath } from "../shell/route";
 
 /**
@@ -36,7 +37,7 @@ export function MonitorLink({ id, name, onOpen, className }: MonitorLinkProps) {
   return (
     <a
       className={className}
-      href={monitorPath(id)}
+      href={appPath(monitorPath(id))}
       onClick={(event) => {
         if (onOpen === undefined) return;
         // Modified clicks and anything that is not the primary button belong

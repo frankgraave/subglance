@@ -11,6 +11,7 @@
  * takes.
  */
 
+import { appPath } from "../api/base";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LiveConnection } from "./connection";
@@ -55,7 +56,7 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   const queryClient = useQueryClient();
   // Survives re-renders without causing one; nothing on screen depends on it.
   const lastResyncRef = useRef(0);
-  const { streamUrl = "/api/v1/stream", createEventSource } = options;
+  const { streamUrl = appPath("/api/v1/stream"), createEventSource } = options;
   const [seen, setSeen] = useState<{ monitors: Monitor[]; announcement: string | null }>({
     monitors: EMPTY,
     announcement: null,

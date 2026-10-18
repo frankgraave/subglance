@@ -337,8 +337,18 @@ const budgets = {
    * sort) kept on its own entry and validated when read back. It is shell
    * and list code every screen loads, so a lazy chunk would not move it. No
    * new dependency. 152 leaves 815 bytes.
+   *
+   * 152 -> 153 KiB gzip for SUB-330 (the dashboard under a path prefix).
+   * Develop at 3cfd775 measures 155,221 bytes of entry JS (Node gzip, level
+   * 6, every script index.html loads), 427 under 152; this branch measures
+   * 155,565, 344 more and 83 under. That is the base read from the bundle's
+   * own address, every request, stream and link written under it, and the
+   * router reading and writing paths inside it. It is shell and request code
+   * every screen loads, so a lazy chunk would not move it. No new dependency.
+   * 83 bytes is a tripwire for the next fix, by the argument above; 153
+   * leaves 1,107.
    */
-  js: 152,
+  js: 153,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -464,7 +474,7 @@ function fontPreloads(html) {
   const preloaded = [];
   for (const tag of html.matchAll(/<link\b[^>]*>/g)) {
     const attrs = tag[0];
-    const href = /\shref="\/?((?:assets|fonts)\/[^"]+\.woff2)"/.exec(attrs);
+    const href = /\shref="(?:\.?\/)?((?:assets|fonts)\/[^"]+\.woff2)"/.exec(attrs);
     if (!href) continue;
     if (!/\srel="preload"/.test(attrs)) continue;
     if (!/\sas="font"/.test(attrs)) continue;
@@ -476,7 +486,10 @@ function fontPreloads(html) {
 
 function entries(html) {
   const found = { js: [], css: [], fonts: fontPreloads(html) };
-  for (const match of html.matchAll(/(?:src|href)="\/?((?:assets|fonts)\/[^"]+)"/g)) {
+  // "./" since the build is relative (vite.config.ts `base`); a leading
+  // slash is still read, so an absolute build is measured rather than
+  // reported as one with no JavaScript.
+  for (const match of html.matchAll(/(?:src|href)="(?:\.?\/)?((?:assets|fonts)\/[^"]+)"/g)) {
     const path = match[1];
     if (path.endsWith(".js")) found.js.push(path);
     else if (path.endsWith(".css")) found.css.push(path);

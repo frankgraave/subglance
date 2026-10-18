@@ -1,3 +1,4 @@
+import { appPath } from "../api/base";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
@@ -27,7 +28,7 @@ const rejectionOf = (error: unknown): Rejection => error instanceof ApiError
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** The address a visitor opens, relative to wherever this instance is served. */
-const address = (slug: string) => `/status/${slug}`;
+const address = (slug: string) => appPath(`/status/${slug}`);
 
 /**
  * Keeps a drawer's unsaved draft from being dropped by Escape, the scrim or a

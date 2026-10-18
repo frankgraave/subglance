@@ -4,6 +4,17 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  /*
+   * Relative, so the dashboard can be served under a path prefix
+   * (https://example.com/subglance/) as well as at the root of a host. Every
+   * reference the build writes becomes relative to the file that holds it:
+   * a chunk's imports and preloads to the chunk, a font to the stylesheet.
+   * index.html is the exception, because it is served at every client-side
+   * route: internal/webui rewrites its `./` references for the depth of the
+   * path it answers, and src/api/base.ts derives the API's address from the
+   * bundle's own URL.
+   */
+  base: "./",
   build: {
     // The bundle is embedded into the Go binary by internal/webui, so it is
     // built straight into that package: one artefact in one place, with no
