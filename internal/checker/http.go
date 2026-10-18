@@ -380,8 +380,8 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 
 	// Report certificate expiry even on success, so the UI can warn ahead of
 	// time instead of only once the certificate has already expired.
-	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
-		res.CertExpiry = resp.TLS.PeerCertificates[0].NotAfter
+	if leaf := monitoredLeaf(resp); leaf != nil {
+		res.CertExpiry = leaf.NotAfter
 	}
 
 	if !matcher.Matches(resp.StatusCode) {
@@ -499,6 +499,41 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 
 	res.Latency = time.Since(start)
 	return res
+}
+
+// monitoredLeaf returns the certificate the monitor is about: the leaf of
+// the first response in the redirect chain that arrived over TLS, or nil when
+// none did.
+//
+// Not the final response's. A site behind a single sign-on proxy answers a
+// visitor without a session with a redirect to its login host, so the last
+// hop is a different host with a different certificate. Reading that one
+// hides the expiring certificate of the host in the URL field, and puts a
+// warning about the login host's certificate on every monitor that redirects
+// to it, naming a host the user is not watching there.
+//
+// The first hop that spoke TLS, rather than the very first response, so an
+// http:// target keeps its certificate check: http://example.com redirecting
+// to https://www.example.com reports www's certificate, the host the visitor
+// is upgraded to. For an https:// target the first TLS hop is the target
+// itself.
+//
+// net/http keeps the chain: each request after a redirect carries, in
+// Request.Response, the response that caused it. Walking back from the final
+// response visits every hop, newest first, so the last one seen with TLS is
+// the earliest.
+func monitoredLeaf(resp *http.Response) *x509.Certificate {
+	var leaf *x509.Certificate
+	for r := resp; r != nil; {
+		if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+			leaf = r.TLS.PeerCertificates[0]
+		}
+		if r.Request == nil {
+			break
+		}
+		r = r.Request.Response
+	}
+	return leaf
 }
 
 // captureResponse keeps the beginning of a failed response, when the monitor
