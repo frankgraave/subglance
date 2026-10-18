@@ -4,3 +4,5 @@
 .maintenance-list li { padding: var(--space-3); background: var(--surface-panel); border-radius: var(--r-md); }
 .maintenance-fields { display: grid; gap: var(--space-3); border: 0; padding: 0; min-width: 0; }
 .maintenance-days { display: flex; flex-wrap: wrap; gap: var(--space-3); border: 1px solid var(--border); padding: var(--space-3); }
+/* Removing ended windows, and the question before it: apart from the list above and the form below. */
+.maintenance-clear { margin-block: var(--space-4); }

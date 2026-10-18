@@ -202,10 +202,10 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
         : oneOffSpan(window.starts_at ?? "", window.ends_at ?? "")}</p>
       {canWrite ? <button className="button" type="button" disabled={busy} aria-label={`${state === "ended" ? "Remove" : "Cancel"} maintenance ${window.name}`} onClick={() => void cancel(window, state)}>{state === "ended" ? "Remove" : "Cancel maintenance"}</button> : null}
     </li>)}</ul>
-    {canWrite && clearing === null && ended.length > 0 ? <div className="button-row">
+    {canWrite && clearing === null && ended.length > 0 ? <div className="button-row maintenance-clear">
       <button ref={clearButton} className="button" type="button" disabled={busy} onClick={() => setClearing(ended)}>Remove ended windows</button>
     </div> : null}
-    {canWrite && clearing !== null ? <div role="group" aria-labelledby={`${id}-clear-question`}>
+    {canWrite && clearing !== null ? <div role="group" className="maintenance-clear" aria-labelledby={`${id}-clear-question`}>
       <p id={`${id}-clear-question`}>Remove {windowsWord(clearing.length)}? They no longer apply. Checks they excluded from uptime stay excluded.</p>
       <div className="button-row">
         <button className="button button--primary" type="button" disabled={busy} onClick={() => void removeEnded(clearing)}>{busy ? "Removing…" : `Remove ${windowsWord(clearing.length)}`}</button>
