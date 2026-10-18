@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConnectivityCard } from "./ConnectivityCard";
@@ -11,7 +11,12 @@ import {
 } from "./fixtures";
 
 const clients: QueryClient[] = [];
-afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  for (const client of clients.splice(0)) client.clear();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const URL = "/api/v1/settings/connectivity";
 
@@ -60,6 +65,35 @@ it("says nothing about the addresses while they answer, or when the state is una
   mount(defaultConnectivitySettings, undefined, { nonsense: true });
   await targetsBox();
   await waitFor(() => expect(screen.queryByText(UNANSWERED)).toBeNull());
+});
+
+// The Settings route unmounts the dashboard and the query client never
+// refetches on focus, so without its own poll the card would keep the first
+// answer for as long as the page is open: an old warning, or a missing new one.
+it("follows the addresses' standing while the card stays open, and drops an answer nobody vouches for", async () => {
+  vi.useFakeTimers();
+  const live: { body: unknown; hang: boolean } = { body: unansweredConnectivity, hang: false };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/api/v1/connectivity") return live.hang ? new Promise<Response>(() => {}) : json(live.body);
+    return json(defaultConnectivitySettings, 200, 'W/"1"');
+  }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  render(<QueryClientProvider client={client}><ConnectivityCard /></QueryClientProvider>);
+  const settle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  await settle(1);
+  expect(screen.queryByText(UNANSWERED)).not.toBeNull();
+  // The next poll clears it, and the one after brings a new kind in.
+  live.body = onlineConnectivity;
+  await settle(15_100);
+  expect(screen.queryByText(UNANSWERED)).toBeNull();
+  live.body = contradictedConnectivity;
+  await settle(15_100);
+  expect(screen.queryByText(CONTRADICTED)).not.toBeNull();
+  // The server stops answering: the last answer stands until it is too old to trust.
+  live.hang = true;
+  await settle(61_000);
+  expect(screen.queryByText(CONTRADICTED)).toBeNull();
 });
 const targetsBox = () => screen.findByLabelText("Addresses to dial") as Promise<HTMLTextAreaElement>;
 const toggle = () => screen.getByRole("checkbox", { name: /Check this host's own connection/ }) as HTMLInputElement;

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNow } from "../live/useNow";
 import { formatClock, formatDayTime, sameDay } from "../format/format";
-import { connectivityKey, fetchConnectivity, type TargetsUnusable } from "./api";
+import { connectivityKey, fetchConnectivity, type ConnectivityState, type TargetsUnusable } from "./api";
 
 /*
  * The hook and the wording behind HostOfflineNotice. Their own module because
@@ -37,6 +37,26 @@ export interface HostProblem {
 }
 
 /**
+ * The server's last connectivity answer, polled every POLL_MS, or null when
+ * it is failing, missing or older than TRUST_MS.
+ *
+ * Shared by every reader of the state, so the Settings card and the dashboard
+ * refresh and expire it the same way: the query client never refetches on
+ * focus, so a reader without the poll would keep its first answer for as
+ * long as the page stays open.
+ */
+export function useConnectivity(): ConnectivityState | null {
+  const query = useQuery({
+    queryKey: connectivityKey,
+    queryFn: ({ signal }) => fetchConnectivity(signal),
+    refetchInterval: POLL_MS,
+  });
+  const now = useNow();
+  if (query.data === undefined || query.isError || now - query.dataUpdatedAt > TRUST_MS) return null;
+  return query.data;
+}
+
+/**
  * What the server's own connection has lost and since when, or null when
  * nothing (or when that is not known right now).
  *
@@ -46,14 +66,8 @@ export interface HostProblem {
  * fine and the server is the problem is the dangerous direction of the two.
  */
 export function useHostProblem(): HostProblem | null {
-  const query = useQuery({
-    queryKey: connectivityKey,
-    queryFn: ({ signal }) => fetchConnectivity(signal),
-    refetchInterval: POLL_MS,
-  });
-  const now = useNow();
-  const data = query.data;
-  if (data === undefined || query.isError || now - query.dataUpdatedAt > TRUST_MS) return null;
+  const data = useConnectivity();
+  if (data === null) return null;
   if (data.offline && data.offlineSince !== null) return { kind: "offline", since: data.offlineSince };
   if (data.resolverDown && data.resolverDownSince !== null) {
     return { kind: "resolver", since: data.resolverDownSince };

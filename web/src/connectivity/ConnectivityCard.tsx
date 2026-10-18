@@ -9,7 +9,8 @@ import {
   connectivitySettingsKey, fetchConnectivitySettings, parseTargets, saveConnectivitySettings,
   type ConnectivityChange, type ConnectivitySettings,
 } from "./settings";
-import { connectivityKey, fetchConnectivity, type TargetsUnusable } from "./api";
+import { connectivityKey, type TargetsUnusable } from "./api";
+import { useConnectivity } from "./offlineState";
 
 type Outcome = "saved" | "stale" | null;
 
@@ -139,10 +140,13 @@ const UNUSABLE: Record<TargetsUnusable, string> = {
     + "host, and failures are not being held back. Set addresses this host can reach, such as your gateway.",
 };
 
-/** The targets' standing, read from the same state the dashboard reads. */
+/**
+ * The targets' standing, read through the dashboard's own hook: polled, and
+ * dropped once no answer has vouched for it within its trust window, so the
+ * warning appears, clears and expires while the card stays open.
+ */
 function useTargetsUnusable(): TargetsUnusable | null {
-  const query = useQuery({ queryKey: connectivityKey, queryFn: ({ signal }) => fetchConnectivity(signal) });
-  return query.isError ? null : query.data?.targetsUnusable ?? null;
+  return useConnectivity()?.targetsUnusable ?? null;
 }
 
 /**
