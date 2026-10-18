@@ -242,6 +242,55 @@ func (db *DB) MonitorByPushToken(ctx context.Context, token string) (Monitor, er
 	return m, nil
 }
 
+// ReplacePushToken issues a push monitor a new token and stops the old one
+// from resolving, in one statement.
+//
+// The returned monitor carries the new plaintext in PushToken, exactly as
+// CreateMonitor's does, and that is the only place it ever exists: the row
+// keeps the hash and the display prefix, nothing else.
+//
+// There is no overlap during which both tokens work. A token is replaced
+// because it leaked or because it was lost; in the first case it has to stop
+// now, and in the second no job still uses it. The monitor's push window is
+// left where it is, since a new URL is not a report from the job: a monitor
+// that was overdue stays overdue, and one that was waiting keeps waiting for
+// the same deadline.
+//
+// It returns sql.ErrNoRows for an unknown id and ErrNotPushMonitor for a
+// monitor of another type, which has no token to replace.
+func (db *DB) ReplacePushToken(ctx context.Context, id int64) (Monitor, error) {
+	token, prefix, err := auth.GeneratePushToken()
+	if err != nil {
+		return Monitor{}, err
+	}
+	now := time.Now().Unix()
+	res, err := db.Writer.ExecContext(ctx,
+		"UPDATE monitors SET push_token_hash = ?, push_token_prefix = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND type = ?",
+		auth.HashToken(token), prefix, now, id, TypePush)
+	if err != nil {
+		return Monitor{}, fmt.Errorf("replace push token for monitor %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return Monitor{}, fmt.Errorf("replace push token for monitor %d: %w", id, err)
+	}
+	if n == 0 {
+		// Either there is no such monitor or it is not a push monitor; the
+		// caller answers those differently, so find out which.
+		if _, err := db.GetMonitor(ctx, id); err != nil {
+			return Monitor{}, err
+		}
+		return Monitor{}, ErrNotPushMonitor
+	}
+
+	m, err := db.GetMonitor(ctx, id)
+	if err != nil {
+		return Monitor{}, err
+	}
+	m.PushToken = token
+	return m, nil
+}
+
 // LastActivity reports when this monitor last produced a heartbeat, falling
 // back to when it was created.
 //
