@@ -19,6 +19,8 @@ import (
 type recordingRelay struct {
 	host, port string
 
+	ehlo string
+
 	mu      sync.Mutex
 	lines   []string
 	headers []string
@@ -30,8 +32,16 @@ func startRecordingRelay(t *testing.T) *recordingRelay {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
+	return serveRelay(t, ln, "")
+}
+
+// serveRelay runs a recording relay on ln, which may be a TLS listener.
+// ehlo is the reply to EHLO, set here rather than later so the relay's
+// goroutines never race the test for it; empty means a bare "250 relay".
+func serveRelay(t *testing.T, ln net.Listener, ehlo string) *recordingRelay {
+	t.Helper()
 	t.Cleanup(func() { _ = ln.Close() })
-	r := &recordingRelay{}
+	r := &recordingRelay{ehlo: ehlo}
 	r.host, r.port, _ = net.SplitHostPort(ln.Addr().String())
 	go func() {
 		for {
@@ -68,7 +78,14 @@ func (r *recordingRelay) serve(conn net.Conn) {
 			r.headers = append(r.headers, l)
 		case inData:
 		case strings.HasPrefix(l, "EHLO"):
-			reply("250 relay")
+			if r.ehlo != "" {
+				reply(r.ehlo)
+			} else {
+				reply("250 relay")
+			}
+		case strings.HasPrefix(l, "AUTH "):
+			r.lines = append(r.lines, l)
+			reply("235 accepted")
 		case l == "DATA":
 			inData, inHeaders = true, true
 			reply("354 go on")

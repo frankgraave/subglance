@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -26,6 +27,22 @@ type EmailSender struct {
 	// dial is swappable so tests can exercise the delivery path against a
 	// local listener instead of a real mail server.
 	dial func(ctx context.Context, addr string) (net.Conn, error)
+
+	// roots verifies the relay's certificate. Nil means the system pool,
+	// which is what every delivery outside a test uses.
+	roots *x509.CertPool
+}
+
+// smtpsPort is the port RFC 8314 (section 3.3) assigns to mail submission
+// over TLS from the first byte. A relay there sends nothing until it has
+// seen a TLS handshake, so speaking plain SMTP to it, as every other port
+// is spoken to, waits for a greeting that never comes.
+const smtpsPort = 465
+
+// tlsConfig is the TLS configuration for host, whether the connection
+// starts in TLS or upgrades to it with STARTTLS.
+func (s *EmailSender) tlsConfig(host string) *tls.Config {
+	return &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, RootCAs: s.roots}
 }
 
 // NewEmailSender builds an e-mail channel. The guard may be nil, which means
@@ -128,8 +145,32 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		_ = conn.SetDeadline(time.Now().Add(defaultTimeout))
 	}
 
+	// Port 465 is TLS before anything else, as the RFC 8314 relays that
+	// listen there expect. The deadline set above holds the handshake too,
+	// since the TLS connection reads through conn. net/smtp sees a
+	// *tls.Conn and treats the session as encrypted, so PlainAuth sends the
+	// password over it as it does after STARTTLS.
+	// Compared as a number, as Validate parsed it, so "0465" is 465 too.
+	pn, _ := strconv.Atoi(port)
+	implicit := pn == smtpsPort
+	if implicit {
+		tc := tls.Client(conn, s.tlsConfig(host))
+		if err := tc.HandshakeContext(ctx); err != nil {
+			return retryable("tls with %s on port %s: %w", host, port, err)
+		}
+		conn = tc
+	}
+
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
+		var ne net.Error
+		if !implicit && errors.As(err, &ne) && ne.Timeout() {
+			// The one way a relay that wants TLS from the start shows
+			// itself to plain SMTP: it says nothing. A bare "i/o
+			// timeout" reads as a slow or overloaded server.
+			return retryable("smtp handshake with %s: no greeting on port %s before the deadline; "+
+				"a relay that expects TLS from the start is reached on port %d: %w", host, port, smtpsPort, err)
+		}
 		return retryable("smtp handshake with %s: %w", host, err)
 	}
 	defer func() { _ = c.Close() }()
@@ -138,9 +179,10 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 	// self-hosted case is a relay on localhost or inside a compose network
 	// where there is no certificate and no eavesdropper; refusing to send
 	// there would mean no alerts at all, which is worse than an unencrypted
-	// hop that never leaves the host.
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+	// hop that never leaves the host. A session that started in TLS has
+	// nothing to upgrade.
+	if ok, _ := c.Extension("STARTTLS"); ok && !implicit {
+		if err := c.StartTLS(s.tlsConfig(host)); err != nil {
 			return retryable("starttls with %s: %w", host, err)
 		}
 	}
