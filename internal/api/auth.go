@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -209,8 +211,9 @@ func (s *Server) sameOrigin(origin string, r *http.Request) bool {
 
 // originOf is the origin a browser sends for a page under base, a URL in
 // the form notifier.ParseBaseURL returns: scheme and host, without the
-// path, the host in lower case and the scheme's own port dropped, which is
-// how the Origin header is serialised.
+// path, the host in lower case, an IPv6 address written as a browser
+// writes it and the scheme's own port dropped, which is how the Origin
+// header is serialised.
 func originOf(base string) string {
 	u, err := url.Parse(base)
 	if err != nil || u.Host == "" {
@@ -218,7 +221,7 @@ func originOf(base string) string {
 	}
 	host := strings.ToLower(u.Hostname())
 	if strings.Contains(host, ":") {
-		host = "[" + host + "]"
+		host = "[" + browserIPv6(host) + "]"
 	}
 	port := u.Port()
 	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
@@ -228,6 +231,58 @@ func originOf(base string) string {
 		host += ":" + port
 	}
 	return u.Scheme + "://" + host
+}
+
+// browserIPv6 writes an IPv6 address the way a browser writes it in an
+// Origin, by the WHATWG URL standard's IPv6 serializer: eight pieces in
+// lower-case hex without leading zeroes, the first longest run of two or
+// more zero pieces cut to "::", and an IPv4-mapped address in hex like the
+// rest. A --base-url of http://[2001:0db8::1] is then compared as the
+// http://[2001:db8::1] the browser sends. netip's String follows RFC 5952
+// instead, which keeps the dotted IPv4 tail, so it is not used. A host that
+// is not an IPv6 address is returned unchanged.
+func browserIPv6(host string) string {
+	addr, err := netip.ParseAddr(host)
+	if err != nil || !addr.Is6() {
+		return host
+	}
+	b := addr.As16()
+	var pieces [8]uint16
+	for i := range pieces {
+		pieces[i] = uint16(b[2*i])<<8 | uint16(b[2*i+1])
+	}
+	compress, longest := -1, 1
+	for i := 0; i < len(pieces); {
+		if pieces[i] != 0 {
+			i++
+			continue
+		}
+		j := i
+		for j < len(pieces) && pieces[j] == 0 {
+			j++
+		}
+		if j-i > longest {
+			compress, longest = i, j-i
+		}
+		i = j
+	}
+	var out strings.Builder
+	for i := 0; i < len(pieces); i++ {
+		if i == compress {
+			if i == 0 {
+				out.WriteString("::")
+			} else {
+				out.WriteString(":")
+			}
+			i += longest - 1
+			continue
+		}
+		out.WriteString(strconv.FormatUint(uint64(pieces[i]), 16))
+		if i < len(pieces)-1 {
+			out.WriteString(":")
+		}
+	}
+	return out.String()
 }
 
 type loginRequest struct {

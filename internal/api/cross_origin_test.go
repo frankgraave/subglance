@@ -140,6 +140,17 @@ func TestOriginOf(t *testing.T) {
 		"http://example.com:8080":       "http://example.com:8080",
 		"https://example.com:80":        "https://example.com:80",
 		"http://[2001:DB8::1]:8080":     "http://[2001:db8::1]:8080",
+		// IPv6 as a browser serialises it (WHATWG URL; checked against
+		// Node's URL): leading zeroes dropped, the first longest zero run
+		// cut, a single zero piece kept, IPv4-mapped written in hex.
+		"http://[2001:0db8::1]:8080":    "http://[2001:db8::1]:8080",
+		"http://[2001:0DB8:0000::0001]": "http://[2001:db8::1]",
+		"http://[0:0:0:0:0:0:0:1]":      "http://[::1]",
+		"http://[1:0:0:0:0:0:0:0]":      "http://[1::]",
+		"http://[2001:db8:0:0:1:0:0:1]": "http://[2001:db8::1:0:0:1]",
+		"http://[2001:db8:0:1:1:1:1:1]": "http://[2001:db8:0:1:1:1:1:1]",
+		"http://[::ffff:192.0.2.10]":    "http://[::ffff:c000:20a]",
+		"https://[2001:db8::]:443":      "https://[2001:db8::]",
 		"http://192.0.2.10":             "http://192.0.2.10",
 	} {
 		if got := originOf(base); got != want {

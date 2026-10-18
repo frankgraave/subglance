@@ -1199,7 +1199,17 @@ paths:
               schema:
                 type: string
         '401':
-          description: No valid session, or a cross-site request.
+          description: No valid session; the caller is already signed out.
+        '403':
+          description: |
+            A valid session cookie on a request from another site's page,
+            refused by the cross-origin check. The session is left as it was.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "cross-origin request refused: a change made with a session cookie must come from SubGlance's own pages"
       x-subglance-access: read
   /api/v1/push/{token}:
     parameters:

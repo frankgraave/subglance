@@ -336,9 +336,9 @@ unless `ProxyPreserveHost` is on. Each change is then refused with
 instead of saving. Either fix works:
 
 - set `--base-url` to the address in the browser's address bar, or
-- have the proxy pass the browser's `Host` on (`proxy_set_header Host $host;`
-  in nginx, `ProxyPreserveHost On` in Apache; Caddy and Traefik do by
-  default).
+- have the proxy pass the browser's `Host` on (`proxy_set_header Host
+  $http_host;` in nginx, which keeps a port that `$host` drops,
+  `ProxyPreserveHost On` in Apache; Caddy and Traefik do by default).
 
 ### Under a path
 
