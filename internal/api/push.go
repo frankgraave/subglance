@@ -349,6 +349,55 @@ func validatePushTimezone(typ string, interval int, zone string) problem {
 	return problem{}
 }
 
+// handleReplacePushToken issues a push monitor a new URL and stops the old one
+// working, without touching the monitor's history.
+//
+// Deleting and recreating the monitor was the only way to get a new URL, and
+// it cost every heartbeat, incident and uptime figure the monitor had. That
+// price is what kept a leaked URL in service: someone who can reach it can
+// keep a dead job green.
+//
+// The response is the create response's shape, push_url included, and like
+// that one it is the only time the new URL is ever shown. The old token gets
+// the same 404 as one that never existed (see handlePush): a separate answer
+// would confirm to whoever holds it that it was once valid.
+func (s *Server) handleReplacePushToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "monitor")
+	if !ok {
+		return
+	}
+
+	m, err := s.db.ReplacePushToken(r.Context(), id)
+	switch {
+	case err == nil:
+	case errors.Is(err, sql.ErrNoRows):
+		writeError(w, http.StatusNotFound, "monitor not found")
+		return
+	case errors.Is(err, store.ErrNotPushMonitor):
+		writeProblem(w, http.StatusBadRequest,
+			fieldProblem("type", "only a push monitor has a push URL to replace"))
+		return
+	default:
+		s.log.Error("replace push token", "id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not replace the push URL")
+		return
+	}
+
+	var userID int64
+	if user, ok := UserFromContext(r.Context()); ok {
+		userID = user.ID
+	}
+	// The token stays out of the log, like everywhere else: the prefix is
+	// what tells two push monitors apart.
+	s.log.Info("push URL replaced", "monitor_id", m.ID, "monitor", m.Name,
+		"prefix", m.PushTokenPrefix, "user_id", userID)
+
+	resp := s.describeMonitor(r, m)
+	resp.PushURL = s.pushURL(r, m.PushToken)
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // pushPath is where a push URL points under the address SubGlance is
 // reached at. The route table registers the same path with {token}.
 const pushPath = "/api/v1/push/"

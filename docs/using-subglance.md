@@ -534,8 +534,8 @@ curl -b jar -X POST http://localhost:8080/api/v1/monitors \
 ```
 
 The response contains `push_url`, **once**. Only a hash is stored, so it cannot
-be looked up afterwards — copy it now or recreate the monitor. Then, at the end
-of the job:
+be looked up afterwards — copy it now, or replace it later (see below), which
+stops the old one working. Then, at the end of the job:
 
 ```bash
 restic backup /data && curl -fsS "$PUSH_URL"
@@ -621,6 +621,16 @@ line cannot hold either, and handing a backup script an API token would give it
 authority over every monitor you have. Anyone holding a push URL can report on
 that one monitor and nothing else. Treat it as a secret anyway: a leaked one lets
 someone tell you a job ran when it did not.
+
+If a push URL leaks (a crontab committed to git, a shared script, a colleague
+who left), or it was lost before anyone saved it, replace it rather than
+deleting the monitor. On the monitor's page, **More actions → New push URL**
+shows a new one, once, like the first; over the API it is
+`POST /api/v1/monitors/{id}/push-token`. The old URL stops working at once and
+gets the same 404 as one that never existed, so update every job that uses it.
+The monitor keeps its heartbeats, incidents and uptime, and its deadline stays
+where it was: a new URL is not a report, so a job that is overdue stays overdue
+until it reports on the new one.
 
 With [`--base-url`](channels.md#links-back-to-subglance) set, the push URL is
 built on that address, path prefix included, because behind a reverse proxy

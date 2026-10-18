@@ -489,6 +489,7 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/monitors/{id}/check", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/{id}/pause", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/{id}/resume", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/{id}/push-token", accessWrite},
 		{http.MethodPost, "/api/v1/incidents/{id}/ack", accessWrite},
 		{http.MethodPut, "/api/v1/monitors/{id}/channels", accessWrite},
 
@@ -705,6 +706,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handlePauseMonitor
 	case "POST /api/v1/monitors/{id}/resume":
 		return s.handleResumeMonitor
+	case "POST /api/v1/monitors/{id}/push-token":
+		return s.handleReplacePushToken
 	case "POST /api/v1/incidents/{id}/ack":
 		return s.handleAckIncident
 	case "PUT /api/v1/monitors/{id}/channels":

@@ -68,6 +68,28 @@ export async function setMonitorPaused(
   );
 }
 
+/**
+ * Gives a push monitor a new push URL and returns it.
+ *
+ * The old URL stops working the moment the server answers, and the new one is
+ * in this response only: it is stored hashed, like the first. So a response
+ * without one is an error, not an empty success the screen could show.
+ */
+export async function replacePushUrl(
+  id: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await apiRequest(
+    `/api/v1/monitors/${encodeURIComponent(id)}/push-token`,
+    { method: "POST", signal },
+  );
+  const body = (await res.json()) as { push_url?: unknown };
+  if (typeof body.push_url !== "string" || body.push_url === "") {
+    throw new Error("the server did not return the new push URL");
+  }
+  return body.push_url;
+}
+
 /** Deletes one monitor. The server answers 204 and there is nothing to read. */
 export async function deleteMonitor(
   id: string,

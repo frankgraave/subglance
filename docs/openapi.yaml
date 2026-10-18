@@ -2617,6 +2617,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/monitors/{id}/push-token:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    post:
+      tags: [Monitors]
+      operationId: replacePushToken
+      summary: Give a push monitor a new push URL
+      description: |
+        Issues a new push token and returns the monitor with its new
+        `push_url`, shown in this response only, like the one in the response
+        that created the monitor. The old URL stops working immediately: a
+        report sent to it gets the same 404 as a URL that never existed.
+
+        The monitor keeps its heartbeats, incidents and uptime. Its push
+        window is unchanged, because a new URL is not a report from the job:
+        an overdue monitor stays overdue until the job reports on the new URL.
+      responses:
+        '200':
+          description: The monitor, with its new `push_url`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          description: |
+            An invalid id, or a monitor that is not a push monitor, which is
+            refused with `field` set to `type`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The token could not be replaced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/incidents:
     get:
       tags: [Incidents]
@@ -6904,9 +6948,10 @@ components:
           type: string
           description: |
             The full secret URL the job should ping. Present **only** in the
-            response that created the monitor, and never again: only a hash is
-            stored, so it genuinely cannot be looked up afterwards. Lose it and
-            the monitor has to be recreated.
+            response that created the monitor or replaced its token
+            (`replacePushToken`), and never again: only a hash is stored, so it
+            genuinely cannot be looked up afterwards. Lose it and ask for a new
+            one, which stops the old one working.
 
             Built on `--base-url` when the server was started with one, path
             prefix included; otherwise on the host and scheme of the request

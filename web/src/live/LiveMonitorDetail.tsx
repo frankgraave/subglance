@@ -6,6 +6,10 @@ import { createQueryClient } from "./queryClient";
 import { IncidentDeliveriesScope } from "../incidents/deliveriesScope";
 import { checkMonitorNow, deleteMonitor, setMonitorPaused, type CheckOutcome } from "../monitors/inventoryApi";
 import { ConfirmDelete } from "../components/ConfirmDelete";
+import { Drawer } from "../components/Drawer";
+import { Panel } from "../components/Card";
+import { LazyReplacePushUrl } from "../monitors/LazyMonitorForms";
+import { replacePushUrl } from "../monitors/inventoryApi";
 import { monitorDeleteConsequence } from "../monitors/inventory";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
@@ -48,6 +52,8 @@ export type LiveMonitorDetailProps = LiveOptions & {
   pause?: typeof setMonitorPaused;
   /** Delete seam for tests; defaults to the real endpoint. */
   remove?: typeof deleteMonitor;
+  /** Push URL replacement seam for tests; defaults to the real endpoint. */
+  replacePush?: typeof replacePushUrl;
   /** The shell supplies the authenticated user's write permission. */
   canWrite?: boolean;
 };
@@ -61,6 +67,7 @@ export function LiveMonitorDetail({
   check = checkMonitorNow,
   pause = setMonitorPaused,
   remove = deleteMonitor,
+  replacePush = replacePushUrl,
   canWrite = true,
   ...live
 }: LiveMonitorDetailProps) {
@@ -74,6 +81,8 @@ export function LiveMonitorDetail({
   // Clear before children commit so returning cannot reopen or focus a drawer.
   if (editingId !== null && editingId !== id) setEditingId(null);
   if (maintenanceId !== null && maintenanceId !== id) setMaintenanceId(null);
+  const [replacingPushId, setReplacingPushId] = useState<string | null>(null);
+  if (replacingPushId !== null && replacingPushId !== id) setReplacingPushId(null);
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),
@@ -301,6 +310,20 @@ export function LiveMonitorDetail({
         }}
       />
     )}
+    {canWrite && replacingPushId === id && monitor.push !== undefined && (
+      <Drawer open onClose={() => setReplacingPushId(null)} title="New push URL">
+        <Panel>
+          <LazyReplacePushUrl
+            id={id}
+            name={monitor.name}
+            replace={replacePush}
+            onClose={() => setReplacingPushId(null)}
+            // The token prefix in the cached list is the old one now.
+            onReplaced={() => void queryClient.invalidateQueries({ queryKey: ["monitors"] })}
+          />
+        </Panel>
+      </Drawer>
+    )}
     <MonitorDetail
       monitor={monitor}
       windows={detail.data?.windows ?? []}
@@ -346,6 +369,7 @@ export function LiveMonitorDetail({
       busy={(pauseMutation.isPending && pauseMutation.variables?.monitorId === id) || (deleteMutation.isPending && deleteMutation.variables === id)}
       onDelete={canWrite ? () => setConfirmingDelete(id) : undefined}
       onMaintenance={canWrite ? () => setMaintenanceId(id) : undefined}
+      onReplacePushUrl={canWrite ? () => setReplacingPushId(id) : undefined}
       actionError={actionErrors[id] ?? null}
       ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
