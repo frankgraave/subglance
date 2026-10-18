@@ -97,7 +97,9 @@ storage.
 Two credential types reach the same endpoints with the same rights:
 
 - **Session cookie** — for the browser. HttpOnly, SameSite=Lax, and
-  `__Host-`-prefixed when served over HTTPS.
+  `Secure` with the `__Host-` prefix when the dashboard is opened over HTTPS,
+  behind a TLS-terminating proxy included (see
+  [the sign-in cookie over HTTPS](operations.md#the-sign-in-cookie-over-https)).
 - **API token** — for scripts and CI, sent as an `Authorization: Bearer` header.
 
 ```sh

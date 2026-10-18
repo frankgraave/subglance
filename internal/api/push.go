@@ -366,21 +366,19 @@ const pushPath = "/api/v1/push/"
 // push monitor alerts on a job that ran.
 //
 // Without --base-url the request is all there is, so the host comes from it
-// and the scheme from TLS or X-Forwarded-Proto.
+// and the scheme from the rule that decides the session cookie (isHTTPS):
+// TLS, X-Forwarded-Proto, or an https Origin from the dashboard.
 func (s *Server) pushURL(r *http.Request, token string) string {
 	if s.baseURL != "" {
 		return s.baseURL + pushPath + token
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
 	// Behind a TLS-terminating proxy the request arrives as plain HTTP, so
-	// the header the proxy sets is the only evidence of the original scheme.
-	// Only the scheme is taken from it: the host is not, because trusting a
+	// the headers are the only evidence of the original scheme. Only the
+	// scheme is taken from them: the host is not, because trusting a
 	// client-supplied X-Forwarded-Host for a secret URL would let anyone who
 	// can reach the API mint a link pointing at their own server.
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "https" {
+	scheme := "http"
+	if isHTTPS(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + pushPath + token
