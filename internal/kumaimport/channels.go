@@ -97,7 +97,14 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		plain("to", to)
 		plain("from", get("smtpFrom"))
 		plain("host", get("smtpHost"))
-		plain("port", get("smtpPort"))
+		// Kuma's mailer connects to 465 when Secure is on and no port is
+		// set, and SubGlance would otherwise fall back to 587.
+		port := get("smtpPort")
+		secure := get("smtpSecure") == "true"
+		if port == "" && secure {
+			port = "465"
+		}
+		plain("port", port)
 		if get("smtpUsername") != "" {
 			plain("username", get("smtpUsername"))
 			secret("password")
@@ -115,8 +122,13 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		if get("smtpBCC") != "" {
 			note("the Bcc recipients were left out: SubGlance has no Bcc, and adding them as recipients would show their addresses to everyone")
 		}
-		if get("smtpSecure") == "true" {
-			note("Kuma connected with TLS from the start; SubGlance uses STARTTLS, so a server that only offers TLS on port 465 needs its submission port, usually 587")
+		// SubGlance speaks TLS from the first byte on port 465 and
+		// STARTTLS everywhere else, so a Secure channel on 465 arrives
+		// as it was. One on another port is a relay that wants TLS
+		// before anything else on a port SubGlance speaks plain SMTP to.
+		if secure && port != "465" {
+			note("Kuma connected with TLS from the start on port " + port +
+				"; SubGlance does that only on port 465 and uses STARTTLS on every other port, so set the port to 465 or to the server's STARTTLS port, usually 587")
 		}
 	case "ntfy":
 		out.Type = "ntfy"

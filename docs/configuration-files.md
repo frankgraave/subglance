@@ -560,7 +560,10 @@ so the converted file still imports. Names without controls are not flattened.
   channel before switching Kuma off. A monitor that kept some keeps those
   channels, which alert while they are enabled.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
-  are left out rather than shown to everyone, and listed.
+  are left out rather than shown to everyone, and listed. One with *Secure*
+  on keeps working on port 465, which SubGlance speaks TLS to from the first
+  byte as Kuma did, and gets 465 when Kuma had no port. On any other port it
+  is listed: SubGlance starts there in plain SMTP and upgrades with STARTTLS.
 - Every channel is held to the rules SubGlance holds a saved channel to. Kuma
   accepted server addresses that no request can reach: a port of 0 or above
   65535, a hostname the resolver refuses, an ntfy server with a path. Such an

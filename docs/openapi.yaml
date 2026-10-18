@@ -2959,7 +2959,9 @@ paths:
         The settings are also held to every rule the channel's sender applies
         before it sends, so a channel that is saved is one that can deliver:
         an email channel needs `to`, `from` and `host`, e-mail addresses with
-        an `@` and a `port` from 1 to 65535; a Telegram channel needs a
+        an `@` and a `port` from 1 to 65535 (465 is spoken to in TLS from the
+        first byte, every other port, 587 by default, in plain SMTP upgraded
+        with STARTTLS when the relay offers it); a Telegram channel needs a
         `chat_id` and a bot token of the `123456:ABC` form; a Discord URL has
         to name Discord. Each refusal names the setting in `field`
         (`config.host`, `config.port`, ...).

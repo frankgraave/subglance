@@ -58,6 +58,14 @@ Each of these used to be saved and then fail every delivery as "no such
 host"; now it is refused on `config.host`. Spaces around the host are
 ignored.
 
+An email channel on port 465 is spoken to in TLS from the first byte, which
+is what a relay listening there expects (implicit TLS, RFC 8314). Every other
+port, 587 when none is set, starts in plain SMTP and upgrades with STARTTLS
+when the relay offers it. Either way the relay's certificate has to be valid
+for `host`. A relay that wants TLS from the start but is reached on another
+port says nothing at all, so that delivery fails after the 10-second deadline
+with an error that names port 465.
+
 An email channel's `from` is one address, and `to` is one or more separated
 by commas. Either may carry a name, as in `SubGlance <sg@example.com>` or
 `"Doe, Jane" <jane@example.com>`: the relay is handed the bare addresses and
