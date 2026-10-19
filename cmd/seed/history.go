@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -84,6 +85,11 @@ func buildHistory(m store.Monitor, p profile, id int64, pl plan, rnd *rand.Rand)
 
 	interval := beatInterval(m)
 	outages := resolveOutages(p, start, end, interval, m.Retries, rnd)
+	for i := range outages {
+		if outages[i].notice && outages[i].message == "" {
+			outages[i].message = noticeMessage(m, outages[i].start, end)
+		}
+	}
 
 	h := history{}
 	for _, o := range outages {
@@ -114,6 +120,27 @@ func buildHistory(m store.Monitor, p profile, id int64, pl plan, rnd *rand.Rand)
 	h.buckets = buildBuckets(id, m, p, start, rawFrom, interval, outages, pl)
 	h.beats = buildBeats(id, m, p, rawFrom, end, interval, outages, pl, rnd)
 	return h
+}
+
+// noticeMessage is what the checker says about a date that came inside the
+// monitor's warning window at start, as read at the last check before end.
+//
+// The notice opened the moment the date entered the window, so the date is
+// start plus the window: a certificate's SSLWarnDays, a domain's
+// DomainWarnDays. Writing it through the checker's own functions keeps the
+// demo's sentence the product's sentence, with a date that moves with the run
+// instead of one frozen into the catalogue.
+func noticeMessage(m store.Monitor, start, end time.Time) string {
+	if m.Type == store.TypeDomain {
+		expiry := start.Add(time.Duration(m.DomainWarnDays) * 24 * time.Hour).UTC()
+		domain, err := checker.RegisteredDomain(m.Target)
+		if err != nil {
+			domain = m.Target
+		}
+		return checker.DomainExpiryNotice(domain, expiry.Sub(end), expiry)
+	}
+	expiry := start.Add(time.Duration(m.SSLWarnDays) * 24 * time.Hour).UTC()
+	return checker.CertExpiryNotice(expiry.Sub(end), expiry)
 }
 
 // monitorStart is when this monitor began producing data.
@@ -418,6 +445,14 @@ func dayCurve(hour float64) float64 {
 func snapshotFor(o outage) *store.ResponseSnapshot {
 	if o.status == 0 {
 		return nil
+	}
+	if o.cause == "assertion" {
+		// The document answered and parsed; the field in it is what was
+		// wrong, so the stored response has to show that field.
+		return &store.ResponseSnapshot{
+			Body:    `{"status":"degraded","checks":{"disk":"ok","replication":"lagging"}}`,
+			Headers: map[string]string{"Content-Type": "application/json", "Server": "example-edge"},
+		}
 	}
 	body := `{"error":"service unavailable","request_id":"demo-` +
 		o.start.UTC().Format("20060102T150405") + `"}`

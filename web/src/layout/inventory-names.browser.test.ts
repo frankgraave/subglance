@@ -78,7 +78,7 @@ async function openInventory(width: number, role: "admin" | "viewer"): Promise<P
 
 describe("the seed estate in the monitors inventory", () => {
   it("is read from the seed catalogue", () => {
-    // Twenty-six monitors, one of them paused and three of them push: if the
+    // Twenty-eight monitors, one of them paused and three of them push: if the
     // parser stops finding them, every check below passes on nothing.
     expect(ESTATE.length).toBeGreaterThanOrEqual(20);
     expect(ESTATE.some((monitor) => !monitor.enabled)).toBe(true);

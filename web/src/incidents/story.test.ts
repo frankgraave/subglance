@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CHURN_THRESHOLD,
+  CHIP_CAUSE_CHARS,
   causeWords,
   describeChurn,
   incidentState,
@@ -120,7 +121,7 @@ describe("the cause, in words a person would use", () => {
     expect(causeWords("dns")).toBe("DNS failure");
     expect(causeWords("connection")).toBe("connection refused");
     expect(causeWords("push_overdue")).toBe("no report received");
-    expect(causeWords("assertion")).toBe("JSON field did not match");
+    expect(causeWords("assertion")).toBe("JSON field mismatch");
   });
 
   it("names what SubGlance measured when it filed local_network", () => {
@@ -146,6 +147,24 @@ describe("the cause, in words a person would use", () => {
       const words = causeWords(kind);
       expect(words === kind ? null : words, `no words for failure kind "${kind}"`).not.toBeNull();
     }
+  });
+
+  it("keeps every cause a dashboard chip shows short enough to stay whole", () => {
+    // The chip shows the cause of a down, expiring or unknown monitor
+    // (monitorCause). The two local kinds are filed under a warning, which
+    // shows no chip, so they may be sentences. "domain registration
+    // expiring", "the job reported a failure" and "JSON field did not match"
+    // were each cut on a compact line at 651px until this held them.
+    const chipless = new Set(["local_network", "local_dns"]);
+    const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const checker = readFileSync(join(repoRoot, "internal/checker/checker.go"), "utf8");
+    const kinds = [...checker.matchAll(/\bFailureKind = "([a-z_]+)"/g)].map((m) => m[1]!);
+    expect(kinds.length).toBeGreaterThan(5);
+    const long = kinds
+      .filter((kind) => !chipless.has(kind))
+      .map((kind) => causeWords(kind) ?? "")
+      .filter((words) => words.length > CHIP_CAUSE_CHARS);
+    expect(long).toEqual([]);
   });
 
   it("passes an unknown kind through rather than losing it", () => {

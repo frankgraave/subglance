@@ -158,7 +158,6 @@ func TestPausedMonitorStopsReporting(t *testing.T) {
 }
 
 func TestCatalogueCoversEveryFeature(t *testing.T) {
-	types := map[string]bool{}
 	keywordModes := map[string]bool{}
 	channelTypes := map[string]bool{}
 	tagKeys := map[string]bool{}
@@ -167,11 +166,11 @@ func TestCatalogueCoversEveryFeature(t *testing.T) {
 		paused, unmonitored, neverChecked  bool
 		withBody, withHeaders, noRedirects bool
 		capture, noCapture, reminders      bool
+		assertion                          bool
 	)
 
 	for _, spec := range monitors() {
 		m := spec.monitor
-		types[m.Type] = true
 		if m.KeywordMode != "" {
 			keywordModes[m.KeywordMode] = true
 		}
@@ -187,13 +186,11 @@ func TestCatalogueCoversEveryFeature(t *testing.T) {
 		capture = capture || m.CaptureResponse
 		noCapture = noCapture || (m.Type == "http" && !m.CaptureResponse)
 		reminders = reminders || m.RepeatAfterS > 0
+		assertion = assertion || m.JSONAssertion != nil
 	}
 
-	for _, want := range []string{"http", "tcp", "ping", "ssl", store.TypePush} {
-		if !types[want] {
-			t.Errorf("no %s monitor in the catalogue", want)
-		}
-	}
+	// Every monitor type is TestCatalogueCoversEveryMonitorType's, which
+	// reads them from the schema rather than from a list here.
 	for _, want := range []string{"absent_ok", "must_contain", "must_not_contain"} {
 		if !keywordModes[want] {
 			t.Errorf("no monitor uses keyword mode %s", want)
@@ -227,6 +224,7 @@ func TestCatalogueCoversEveryFeature(t *testing.T) {
 		"response capture on":              capture,
 		"response capture off":             noCapture,
 		"repeat reminders":                 reminders,
+		"a JSON assertion":                 assertion,
 	} {
 		if !ok {
 			t.Errorf("the catalogue has no example of %s", name)
