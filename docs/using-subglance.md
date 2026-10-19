@@ -186,8 +186,10 @@ A port has to be one a connection can use: an `http` target with port 0 or a
 port above 65535 (`https://example.com:99999/`) is refused on `target`, as a
 `tcp` target already was. An empty port (`http://example.com:/`) means the
 scheme's default. A monitor saved before these rules keeps its target until
-it is edited; the check reports it as a DNS or connection failure, as it did
-before.
+the target is changed: an edit that sends it back as stored, such as a
+rename, or an import of the monitor's own export, is not refused over it,
+while a new target or a new type is held to them. The check reports such a
+target as a DNS or connection failure, as it did before.
 
 A monitor's free-text settings have ceilings, as its name does: the target,
 `keyword`, `expected_status` and a JSON assertion's path and expected value
@@ -380,7 +382,10 @@ type of one name and compares the answer with the values it expects:
   by name follows the hostname rule above (an `xn--` form for an
   internationalised name, no `exa..mple.com`, no `999.1.1.1`), and is refused
   on `dns.resolver` otherwise: it is looked up before it is asked, and a name
-  the lookup refuses would read as a resolver that never answers.
+  the lookup refuses would read as a resolver that never answers. A monitor
+  saved before this rule keeps its resolver through an edit, or an import of
+  its own export, that sends it back unchanged; a changed resolver is held to
+  it.
 
 For A, AAAA, CNAME and MX the answer must hold exactly the expected values, in
 any order: an extra address is what a hijacked zone looks like. For TXT each

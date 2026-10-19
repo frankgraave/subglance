@@ -80,6 +80,25 @@ func dnsCheckFromWire(w *dnsCheckWire) (*store.DNSCheck, problem) {
 	return out, problem{}
 }
 
+// dnsEditFromWire is dnsCheckFromWire for an edit of a monitor whose dns
+// settings are stored. A resolver equal to the stored one is not judged
+// again: a monitor saved before the resolver had to be a name the lookup
+// accepts keeps it through an edit, and through an import of its own export,
+// that sends it back unchanged. A changed resolver is held to every rule.
+func dnsEditFromWire(w *dnsCheckWire, stored *store.DNSCheck) (*store.DNSCheck, problem) {
+	if w == nil || stored == nil || stored.Resolver == "" || strings.TrimSpace(w.Resolver) != stored.Resolver {
+		return dnsCheckFromWire(w)
+	}
+	rest := *w
+	rest.Resolver = ""
+	d, p := dnsCheckFromWire(&rest)
+	if !p.ok() {
+		return nil, p
+	}
+	d.Resolver = stored.Resolver
+	return d, problem{}
+}
+
 // validateDNSResolver accepts a host or an IP address, with an optional port.
 // It is dialled at check time through the SSRF guard, so a private resolver
 // is refused there, with the same message every other check gives.

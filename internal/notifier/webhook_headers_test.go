@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -103,7 +104,8 @@ func TestWebhookHeaderRefusalsNameTheLineNotTheValue(t *testing.T) {
 // channel was saved with before these rules are not refused by an edit that
 // sends them back unchanged, so a rename or switching off a failing channel
 // still works. Changed lines, a new channel and another stored type are
-// held to every rule; the Name: value form still applies to all of them.
+// held to every rule; the Name: value form applies to any edit that changes
+// a setting.
 func TestWebhookHeadersStoredUnderTheOldRuleSurviveAnEdit(t *testing.T) {
 	const legacy = "X Api: k\nX-Dup: 1\nx-dup: 2"
 	stored := &store.Channel{Type: store.ChannelWebhook,
@@ -128,14 +130,51 @@ func TestWebhookHeadersStoredUnderTheOldRuleSurviveAnEdit(t *testing.T) {
 		}
 	}
 
+	// A stored line without a colon fails every delivery, so the channel
+	// is one an operator switches off: sent back with every other setting
+	// as stored, it is not refused. Beside any changed setting the Name:
+	// value form applies to it again.
 	noColon := &store.Channel{Type: store.ChannelWebhook, Config: cfg("Authorization")}
-	if err := ValidateEditedConfig(store.ChannelWebhook, cfg("Authorization"), noColon); ConfigKey(err) != "headers" {
-		t.Errorf("a stored line without a colon: err = %v, want the Name: value refusal", err)
+	if err := ValidateEditedConfig(store.ChannelWebhook, cfg("Authorization"), noColon); err != nil {
+		t.Errorf("a stored line without a colon, sent back unchanged: %v", err)
+	}
+	withMethod := cfg("Authorization")
+	withMethod["method"] = "PUT"
+	if err := ValidateEditedConfig(store.ChannelWebhook, withMethod, noColon); ConfigKey(err) != "headers" {
+		t.Errorf("a stored line without a colon beside a new method: err = %v, want the Name: value refusal", err)
 	}
 	// The exemption is for the header lines only.
 	other := cfg(legacy)
 	other["method"] = "DELETE"
 	if err := ValidateEditedConfig(store.ChannelWebhook, other, stored); ConfigKey(err) != "method" {
 		t.Errorf("a bad method beside unchanged headers: err = %v, want a refusal of method", err)
+	}
+}
+
+// TestAnUnchangedStoredConfigIsNotJudgedAgain: a channel whose settings
+// break a sender rule added after it was saved (an email port of 99999, a
+// webhook to port 0) is accepted by an edit that sends every setting back as
+// stored, so it can be renamed and switched off. One changed setting, a new
+// channel or another stored type is held to every rule.
+func TestAnUnchangedStoredConfigIsNotJudgedAgain(t *testing.T) {
+	email := map[string]string{"host": "smtp.example.com", "port": "99999", "from": "sg@example.com", "to": "ops@example.com"}
+	stored := &store.Channel{Type: store.ChannelEmail, Config: email}
+	if err := ValidateEditedConfig(store.ChannelEmail, maps.Clone(email), stored); err != nil {
+		t.Errorf("the stored settings sent back: %v", err)
+	}
+	changed := maps.Clone(email)
+	changed["to"] = "oncall@example.com"
+	for name, tc := range map[string]struct {
+		cfg    map[string]string
+		stored *store.Channel
+	}{
+		"one setting changed": {changed, stored},
+		"a setting added":     {map[string]string{"host": "smtp.example.com", "port": "99999", "from": "sg@example.com", "to": "ops@example.com", "username": "u"}, stored},
+		"a new channel":       {maps.Clone(email), nil},
+		"another stored type": {maps.Clone(email), &store.Channel{Type: store.ChannelWebhook, Config: email}},
+	} {
+		if err := ValidateEditedConfig(store.ChannelEmail, tc.cfg, tc.stored); ConfigKey(err) != "port" {
+			t.Errorf("%s: err = %v, want a refusal of port", name, err)
+		}
 	}
 }

@@ -1877,7 +1877,7 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		}
 	}
 	if req.DNS != nil {
-		d, p := dnsCheckFromWire(req.DNS)
+		d, p := dnsEditFromWire(req.DNS, m.DNS)
 		if !p.ok() {
 			return p
 		}
@@ -1928,7 +1928,10 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	// Re-validate whenever either half of the pair moved. The target the
 	// monitor ends up with is what the checker will dial, so that is what has
 	// to be legal — the SSRF guard itself runs at dial time, in the checker.
-	if req.Target != nil || req.Type != nil {
+	// Moved means changed, not sent: a monitor saved before a target rule
+	// existed (port 0, two dots in a row) is sent back with its own target
+	// by an import of its own export, and refusing that refuses the file.
+	if m.Target != before.Target || m.Type != before.Type {
 		if p := validateTargetForType(m.Type, m.Target); !p.ok() {
 			return p
 		}

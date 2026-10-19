@@ -78,6 +78,16 @@ before the rule when the file sends it back unchanged.
 A maintenance window with such a name is kept only when the entire window is
 unchanged; another window must use a name that meets the rule.
 
+A monitor's target and a dns monitor's resolver, and a channel's settings,
+follow it too. A monitor saved before a target rule existed (port 0, a
+hostname with two dots in a row) is not refused when the file sends its
+target back unchanged with the same type, and the same holds for its
+resolver; a channel whose stored settings a newer sender rule refuses is not
+refused when the file leaves every setting as stored. So an instance
+upgraded from a release that accepted them imports its own export. A
+changed value is held to every rule, and on another instance, where there is
+nothing stored to keep, the value is a new one and is refused at its field.
+
 Tag values follow the same rule: no line breaks, tabs or other control
 characters, in a monitor's `tags` and in the `tag_value` of a routing rule, a
 maintenance window or a status page. A value saved before this rule is kept

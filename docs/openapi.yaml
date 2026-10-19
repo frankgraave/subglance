@@ -1682,7 +1682,10 @@ paths:
 
         Validation runs against the merged monitor, not the request: changing
         only the type can invalidate a target that was never touched, and that
-        combination is rejected just as firmly as a bad create.
+        combination is rejected just as firmly as a bad create. A target or a
+        dns resolver sent back exactly as stored, with the same type, is not
+        judged again: a monitor saved before a target rule existed keeps it
+        through a rename or an import of its own export.
 
         Unlike create, an explicit `0` for `interval_s`, `timeout_s` or
         `ssl_warn_days` is an error rather than "use the default" — the client
@@ -3086,6 +3089,13 @@ paths:
         server the caller has just chosen. Typing the value again is accepted.
 
         `enabled` is left as-is when the field is omitted.
+
+        A channel saved before one of its type's rules existed (an email port
+        above 65535, a webhook URL on port 0) is not refused over it when every
+        setting is sent back as stored, so it can be renamed and switched off.
+        Changing any setting holds the channel to every rule, except that
+        webhook header lines the edit leaves unchanged are checked only for
+        the `Name: value` form.
 
         The destination host is checked against the SSRF guard on edit exactly
         as on create — see `createChannel` for which field is checked per type

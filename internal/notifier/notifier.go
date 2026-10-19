@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"math/big"
 	"sync"
@@ -722,14 +723,20 @@ func ValidateConfig(channelType string, cfg map[string]string) error {
 
 // ValidateEditedConfig is ValidateConfig for an edit of a channel whose
 // settings are stored, where a value saved under an earlier rule is kept
-// through an edit that does not change it. A webhook channel whose header
-// lines are the ones stored is not refused over them by the rules that came
-// after it was saved: a rename, switching it off or an import of its own
-// export cannot be refused over a setting the edit does not touch, and
-// switching off is what an operator does with a channel that fails. Changed
-// header lines are held to every rule. stored is the channel as it is now;
-// nil, or another type, means there is nothing to keep.
+// through an edit that does not change it. A rename, switching a channel off
+// or an import of its own export cannot be refused over a setting the edit
+// does not touch, and switching off is what an operator does with a channel
+// that fails. So an edit that leaves every setting as stored is accepted
+// whatever rules came after the channel was saved: an email channel saved
+// with port 99999, or a webhook to port 0, before those were refused. An
+// edit that changes any setting is held to every rule, except that a
+// webhook's header lines, when they are the ones stored, are held only to
+// the Name: value form. stored is the channel as it is now; nil, or another
+// type, means there is nothing to keep.
 func ValidateEditedConfig(channelType string, cfg map[string]string, stored *store.Channel) error {
+	if stored != nil && stored.Type == channelType && maps.Equal(cfg, stored.Config) {
+		return nil
+	}
 	if channelType == store.ChannelWebhook && stored != nil && stored.Type == store.ChannelWebhook &&
 		cfg["headers"] == stored.Config["headers"] {
 		return validateWebhook(cfg, false)

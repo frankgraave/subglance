@@ -49,6 +49,15 @@ rules keeps its header lines through an edit that leaves them as they are,
 such as a rename or switching it off, and through an import of its own
 export.
 
+The same holds for every rule on this page that is newer than the channel
+it applies to, such as an email port above 65535 or a webhook URL on port 0.
+An edit that sends every setting back as stored, which is what renaming a
+channel or switching it off does, and an import of the channel's own export,
+are not refused over them: a failing channel is the one to switch off. An
+edit that changes any setting holds the channel to every rule, except that
+a webhook's header lines, when the edit leaves them as they are, are checked
+only for the `Name: value` form, as above.
+
 An email channel's `host` is the relay's name or address alone, held to the
 rule a `tcp` monitor's host is: a name the resolver will look up, written in
 its `xn--` form when it is internationalised, or an IP address (IPv6 without
