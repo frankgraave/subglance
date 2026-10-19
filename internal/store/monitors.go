@@ -1000,33 +1000,48 @@ func (db *DB) Uptime(ctx context.Context, monitorID int64, window time.Duration)
 	return stats, nil
 }
 
-// CheckedMonitorIDs returns the set of monitors that have at least one
-// heartbeat.
+// lastCheckTimesQuery is LastCheckTimes' query, named so a test can read its
+// plan.
+const lastCheckTimesQuery = `
+	SELECT id, (SELECT MAX(ts) FROM heartbeats WHERE monitor_id = monitors.id)
+	FROM monitors`
+
+// LastCheckTimes returns when each monitor's newest heartbeat was recorded.
+// A monitor that has none is not in the map.
 //
-// The scheduler needs this to tell a brand-new monitor from one that is simply
-// due later. It is one grouped query rather than a LatestHeartbeat call per
-// monitor, because this runs on every reload and an N+1 there would scale with
-// the monitor count several times a minute.
-func (db *DB) CheckedMonitorIDs(ctx context.Context) (map[int64]struct{}, error) {
-	rows, err := db.Reader.QueryContext(ctx,
-		`SELECT DISTINCT monitor_id FROM heartbeats`)
+// The scheduler needs this for two things on every reload: telling a
+// brand-new monitor from one that is simply due later, and keeping a checked
+// monitor's place across a restart, so its next check is due one interval
+// after its last one rather than one interval after the start. It is one
+// query rather than a LatestHeartbeat call per monitor, because this runs on
+// every reload and an N+1 there would scale with the monitor count several
+// times a minute. The subquery per monitor reads one entry of
+// idx_heartbeats_monitor_ts each, so it costs what the monitor list costs,
+// not what the heartbeat table holds.
+func (db *DB) LastCheckTimes(ctx context.Context) (map[int64]time.Time, error) {
+	rows, err := db.Reader.QueryContext(ctx, lastCheckTimesQuery)
 	if err != nil {
-		return nil, fmt.Errorf("list checked monitors: %w", err)
+		return nil, fmt.Errorf("list last checks: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	ids := make(map[int64]struct{})
+	last := make(map[int64]time.Time)
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan checked monitor id: %w", err)
+		var (
+			id int64
+			ts sql.NullInt64
+		)
+		if err := rows.Scan(&id, &ts); err != nil {
+			return nil, fmt.Errorf("scan last check: %w", err)
 		}
-		ids[id] = struct{}{}
+		if ts.Valid {
+			last[id] = time.Unix(ts.Int64, 0).UTC()
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list checked monitors: %w", err)
+		return nil, fmt.Errorf("list last checks: %w", err)
 	}
-	return ids, nil
+	return last, nil
 }
 
 // LatestHeartbeat returns the most recent heartbeat for a monitor.

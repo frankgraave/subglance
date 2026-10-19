@@ -42,6 +42,15 @@ import (
 // spread a bulk import.
 const firstCheckDelay = 2 * time.Second
 
+// catchUpSpread caps how far apart overdue monitors are spread when they enter
+// the queue together, at startup after downtime or when many are resumed at
+// once. Their own jitter window would be the natural spread, but for a daily
+// monitor that is 2.4 hours, and a check that was due before the start should
+// run while the person who restarted it is still looking. Thirty seconds is
+// enough to keep a few hundred overdue monitors from firing in one burst; the
+// worker pool bounds the rest.
+const catchUpSpread = 30 * time.Second
+
 // Job is one monitor as the scheduler sees it.
 type Job struct {
 	// Failing puts the monitor on the failure cadence (see Cadence) without
@@ -59,6 +68,15 @@ type Job struct {
 	// hours to discover the URL was mistyped. The moment right after saving a
 	// monitor is exactly when someone is watching to see whether it works.
 	NeverChecked bool
+
+	// LastCheck is when the monitor's newest recorded check ran, zero when
+	// there is none or it could not be read. A monitor entering the queue,
+	// at startup or when it is resumed, is due one cadence after this rather
+	// than one cadence after the moment it entered: otherwise every restart
+	// moved every monitor a full interval out, and a daily monitor on a host
+	// that restarts daily was never checked at all. A monitor already in the
+	// queue keeps its scheduled time and ignores this.
+	LastCheck time.Time
 }
 
 // Outcome pairs a check result with the monitor that produced it.
@@ -568,19 +586,11 @@ func (s *Scheduler) reload(ctx context.Context) error {
 			continue
 		}
 
-		// New monitors get a jittered first run rather than firing instantly,
-		// so importing fifty monitors does not produce fifty simultaneous
-		// requests.
-		//
-		// A monitor that has never been checked is the exception: it gets a
-		// short jittered delay instead of a full interval, so someone who just
-		// saved a monitor sees a result while still looking at the screen. The
-		// jitter still applies, so a bulk import stays spread out.
-		first := s.nextRun(now, job.cadence())
-		if job.NeverChecked {
-			first = s.nextRun(now, firstCheckDelay)
-		}
-		*next = append(*next, &queueItem{job: job, next: first})
+		// New to the queue: a monitor just created or resumed, or every
+		// monitor at startup. firstRun places it by its own last check, with
+		// jitter, so importing fifty monitors does not produce fifty
+		// simultaneous requests and a restart does not reset the schedule.
+		*next = append(*next, &queueItem{job: job, next: s.firstRun(now, job)})
 		added++
 	}
 
@@ -612,13 +622,61 @@ func (s *Scheduler) reload(ctx context.Context) error {
 
 // nextRun returns when a job with this interval should run next, with jitter.
 func (s *Scheduler) nextRun(from time.Time, interval time.Duration) time.Time {
-	if s.jitterFraction <= 0 {
-		return from.Add(interval)
+	return from.Add(interval + spread(s.jitterWindow(interval)))
+}
+
+// firstRun returns when a job that is not yet in the queue runs first: at
+// startup, when a monitor is created, and when one is resumed.
+//
+//   - Never checked: in firstCheckDelay, so someone who just saved a monitor
+//     sees a result while still looking at the screen.
+//   - Checked before: one cadence after its last check, with the usual
+//     jitter. The schedule is the monitor's, not the process's: a restart
+//     that lands 40 seconds into a one-minute interval leaves 20 seconds,
+//     not another minute.
+//   - Overdue (the start came after the check was due, or the pause lasted
+//     longer than the interval): in firstCheckDelay, spread over at most
+//     catchUpSpread so a restart after downtime does not fire every monitor
+//     in the same instant.
+//   - A last check later than now means the clock moved back. Counting from
+//     it would postpone the check by however far the clock moved, so the
+//     wait is capped at one cadence from now, which is what a restart did
+//     before last checks were read.
+//   - Last check unknown: one cadence from now.
+func (s *Scheduler) firstRun(now time.Time, job Job) time.Time {
+	cadence := job.cadence()
+	if job.NeverChecked {
+		return s.nextRun(now, firstCheckDelay)
 	}
-	maxJitter := float64(interval) * s.jitterFraction
+	if job.LastCheck.IsZero() {
+		return s.nextRun(now, cadence)
+	}
+	due := job.LastCheck.Add(cadence)
+	if due.After(now.Add(cadence)) {
+		return s.nextRun(now, cadence)
+	}
+	if due.After(now.Add(firstCheckDelay)) {
+		return due.Add(spread(s.jitterWindow(cadence)))
+	}
+	return now.Add(firstCheckDelay + spread(min(s.jitterWindow(cadence), catchUpSpread)))
+}
+
+// jitterWindow is how much later than its due time a job with this cadence
+// may run: the jitter fraction of the cadence, or nothing when jitter is off.
+func (s *Scheduler) jitterWindow(cadence time.Duration) time.Duration {
+	if s.jitterFraction <= 0 {
+		return 0
+	}
+	return time.Duration(float64(cadence) * s.jitterFraction)
+}
+
+// spread returns a random delay in [0, window).
+func spread(window time.Duration) time.Duration {
+	if window <= 0 {
+		return 0
+	}
 	//nolint:gosec // scheduling jitter, not a security decision
-	offset := time.Duration(rand.Float64() * maxJitter)
-	return from.Add(interval + offset)
+	return time.Duration(rand.Float64() * float64(window))
 }
 
 // Size reports how many monitors are scheduled. For tests and diagnostics.

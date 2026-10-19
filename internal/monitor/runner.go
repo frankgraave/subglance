@@ -581,14 +581,16 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 		return nil, err
 	}
 
-	// Monitors with no heartbeat yet get a fast first check rather than a full
-	// interval's wait. A failure here is not fatal: falling back to the normal
-	// schedule is slower, not wrong.
-	checked, err := r.db.CheckedMonitorIDs(ctx)
+	// When each monitor last ran places it in the queue: one with no
+	// heartbeat yet gets a fast first check, and one that has run before is
+	// due an interval after that run, so a restart does not move it a whole
+	// interval out (scheduler.Job.LastCheck). A failure here is not fatal:
+	// falling back to the normal schedule is slower, not wrong.
+	lastChecks, err := r.db.LastCheckTimes(ctx)
 	if err != nil {
-		r.log.Warn("could not determine which monitors are new; "+
+		r.log.Warn("could not read when monitors were last checked; "+
 			"first checks will follow the normal interval", "error", err)
-		checked = nil
+		lastChecks = nil
 	}
 
 	live := make(map[int64]struct{}, len(monitors))
@@ -604,11 +606,12 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 		if m.Type == store.TypePush {
 			continue
 		}
-		_, seen := checked[m.ID]
+		last, seen := lastChecks[m.ID]
 		jobs = append(jobs, scheduler.Job{
 			Monitor:      toCheckerMonitor(m),
 			Interval:     time.Duration(m.IntervalS) * time.Second,
-			NeverChecked: checked != nil && !seen,
+			NeverChecked: lastChecks != nil && !seen,
+			LastCheck:    last,
 			Failing:      r.engine.Status(m.ID).Failing(),
 		})
 	}
