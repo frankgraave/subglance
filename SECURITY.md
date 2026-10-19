@@ -105,6 +105,17 @@ environment:
   SUBGLANCE_SECRET_KEY: /run/secrets/subglance.key
 ```
 
+The image runs as `65532:65532`, and a mounted file keeps the owner it has on
+the host. Give the file to that user and keep it readable by it alone:
+
+```sh
+openssl rand -hex 32 > subglance.key
+chmod 600 subglance.key && sudo chown 65532:65532 subglance.key
+```
+
+A key file SubGlance cannot read is a refusal to start that names the file,
+its owner, the user SubGlance runs as and the command that fixes it.
+
 Keep the key somewhere other than the backup of the database it decrypts. A key
 stored beside the ciphertext is the design that was rejected above, rebuilt by
 hand.

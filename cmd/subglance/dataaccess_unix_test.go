@@ -15,6 +15,7 @@ import (
 
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/datalock"
+	"github.com/frankgraave/subglance/internal/fileaccess"
 	"github.com/frankgraave/subglance/internal/mutelink"
 )
 
@@ -158,7 +159,7 @@ func TestServerRefusesADataDirItCannotCreate(t *testing.T) {
 		"cannot create the data directory " + dataDir,
 		"/ belongs to 0:",
 		"SubGlance runs as user",
-		"mkdir -p " + dataDir + " && chown " + processOwner() + " " + dataDir,
+		"mkdir -p " + dataDir + " && chown " + fileaccess.ProcessOwner() + " " + dataDir,
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("refusal does not say %q:\n%s", want, msg)
@@ -253,7 +254,7 @@ func TestServerChecksTheMuteLinkKeyOnlyWhenItReadsIt(t *testing.T) {
 func TestRefusalOfAnotherUsersFileSaysChown(t *testing.T) {
 	skipAsRoot(t)
 	got := remedy("/", "/data")
-	want := "chown -R " + processOwner() + " /data"
+	want := "chown -R " + fileaccess.ProcessOwner() + " /data"
 	if !strings.Contains(got, want) {
 		t.Errorf("remedy for a root-owned path = %q, want it to contain %q", got, want)
 	}

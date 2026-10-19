@@ -19,6 +19,7 @@ import (
 	"github.com/frankgraave/subglance/internal/backup"
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/connectivity"
+	"github.com/frankgraave/subglance/internal/fileaccess"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -282,6 +283,9 @@ func (c Config) ConnectivityNameList() []string {
 func (c Config) BackupSecret() (string, error) {
 	if c.BackupSecretAccessKeyFile == "" {
 		return c.BackupSecretAccessKey, nil
+	}
+	if err := fileaccess.RequireReadable("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", c.BackupSecretAccessKeyFile); err != nil {
+		return "", err
 	}
 	// The path is the operator's own setting, read by the process they
 	// started.
@@ -702,6 +706,17 @@ func (c Config) validate() error {
 	// Resolving the key here rather than at store.Open means a mistyped path
 	// or a short key is a config error named after the flag, next to every
 	// other config error, instead of a database error further in.
+	//
+	// A key file that is there but may not be read is named first, with its
+	// owner and the fix: the documented recipe mounts a root-owned file,
+	// readable by its owner only, into an image that runs as another user.
+	if err := fileaccess.RequireReadable("--secret-key (SUBGLANCE_SECRET_KEY)", strings.TrimSpace(c.SecretKey)); err != nil {
+		return err
+	}
+	if err := fileaccess.RequireReadable("--secret-key-previous (SUBGLANCE_SECRET_KEY_PREVIOUS)",
+		strings.TrimSpace(c.PreviousSecretKey)); err != nil {
+		return err
+	}
 	if _, err := c.ResolveSecretKey(); err != nil {
 		return fmt.Errorf("invalid secret-key: %w", err)
 	}

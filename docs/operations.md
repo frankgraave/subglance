@@ -253,6 +253,13 @@ chmod 600 /etc/subglance/secret.key
 subglance --secret-key /etc/subglance/secret.key
 ```
 
+The file has to belong to the user SubGlance runs as. In the container image
+that is `65532:65532`, and a file mounted from the host keeps its host owner,
+so give it to that user before the first start
+(`sudo chown 65532:65532 subglance.key`); the
+[Compose file](../docker-compose.yml) shows the mount. A key file SubGlance
+cannot read is refused at start with its owner and that command.
+
 **Prefer the file form.** A key passed as an environment variable is readable in
 `/proc/<pid>/environ` and is printed by `docker inspect` from the stored
 container configuration, where it outlives the process.
@@ -1006,7 +1013,9 @@ visible to every user on the host in `ps`. Prefer
 `SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE` pointing at a mounted secret over
 putting the key itself in the environment, for the same reason as
 `--secret-key`. Give the key only what it needs on that one bucket: list, get,
-put and delete objects.
+put and delete objects. The mounted file has to be readable by the user the
+image runs as, so keep it owner-only and give it to that user:
+`chmod 600 s3.secret && sudo chown 65532:65532 s3.secret`.
 
 AWS S3, with the bucket in `eu-west-1`:
 
