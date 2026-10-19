@@ -157,9 +157,13 @@ type outageSpec struct {
 	cause   string
 	message string
 
-	// notice marks a certificate notice rather than an outage: the checks
-	// pass, so the heartbeats stay up, and the incident is a notice that is
-	// confirmed as it opens. cause and message are the notice's.
+	// notice marks an expiry notice rather than an outage: a certificate
+	// or a domain registration whose date has come inside the monitor's
+	// warning window. The checks pass, so the heartbeats stay up, and the
+	// incident is a notice that is confirmed as it opens. cause is the
+	// notice's; message is left empty, because the sentence names a date
+	// and a number of days that depend on when the seeder runs, so
+	// buildHistory writes it with the checker's own wording.
 	notice bool
 
 	// unconfirmed marks an outage that never reached the failure threshold:
@@ -205,13 +209,18 @@ const (
 	errStatus5  = "unexpected status 503, want 200-299"
 	errStatus4  = "unexpected status 502, want 200-299"
 	errKeyword  = `expected keyword "ok" not found in response body`
-	errCert     = "certificate expires in 6 days, threshold is 21"
 	errOverdue  = "no report received within the expected window"
 	errReported = "the nightly run exited non-zero"
+
+	// The two below are what internal/checker writes for the settings the
+	// dns monitor and Object storage carry in this catalogue, and
+	// TestSeedFailureTextsMatchTheChecker runs the checker to hold them to it.
+	errDNSMismatch = "A records for example.com: expected 192.0.2.10, got 198.51.100.7"
+	errAssertion   = `status was "degraded", expected "ok"`
 )
 
 // monitors is the fictional estate. Types, tags, options and states are spread
-// across it deliberately: every monitor type, every keyword mode, both
+// across it deliberately: every monitor type, a JSON assertion, every keyword mode, both
 // redirect settings, a custom method with a body and headers, response capture
 // on and off, reminders on and off, a paused monitor, a monitor nobody is
 // alerted about, and one that has never been checked at all.
@@ -425,7 +434,46 @@ func monitors() []monitorSpec {
 			profile: profile{
 				baseLatency: 70, spread: 20,
 				outages: []outageSpec{
-					{ago: 30 * hour, cause: string(checker.FailCertExpiry), message: errCert, notice: true},
+					{ago: 30 * hour, cause: string(checker.FailCertExpiry), notice: true},
+				},
+			},
+		},
+		{
+			// A DNS record that changed under the service and changed back:
+			// the zone answered the whole time, pointing the apex at the old
+			// host, which is what a migration gone wrong looks like.
+			monitor: store.Monitor{
+				Name: "Apex A record", Type: store.TypeDNS,
+				Target: "example.com", IntervalS: 300, TimeoutS: 10, Retries: 2,
+				DNS:     &store.DNSCheck{RecordType: checker.DNSRecordA, Expected: []string{"192.0.2.10"}},
+				Enabled: true,
+				Tags:    map[string]string{"env": "prod", "team": "it"},
+			},
+			channels:   []string{"Ops Slack"},
+			createdAgo: 330 * day,
+			profile: profile{
+				baseLatency: 18, spread: 10,
+				outages: []outageSpec{
+					{ago: 15 * day, dur: 40 * min, cause: string(checker.FailDNSMismatch),
+						message: errDNSMismatch},
+				},
+			},
+		},
+		{
+			// A registration coming up for renewal: like the certificate
+			// above, a notice rather than an outage, read once a day.
+			monitor: store.Monitor{
+				Name: "Company domain", Type: store.TypeDomain,
+				Target: "example.com", IntervalS: 86400, TimeoutS: 10, Retries: 0,
+				DomainWarnDays: 30, Enabled: true,
+				Tags: map[string]string{"env": "prod", "team": "it"},
+			},
+			channels:   []string{"Ops mailbox"},
+			createdAgo: 400 * day,
+			profile: profile{
+				baseLatency: 340, spread: 120,
+				outages: []outageSpec{
+					{ago: 3 * day, cause: string(checker.FailDomainExpiry), notice: true},
 				},
 			},
 		},
@@ -499,7 +547,11 @@ func monitors() []monitorSpec {
 				Target: "https://files.example.com/healthz", IntervalS: 120, TimeoutS: 10, Retries: 2,
 				Method: "GET", ExpectedStatus: "200-299",
 				FollowRedirects: true, KeywordMode: string(checker.KeywordIgnore),
-				SSLWarnDays: 14, Enabled: true, CaptureResponse: true,
+				// The JSON assertion: a health route that answers 200 and
+				// says in its body that it is not healthy, which a status
+				// check alone reads as up.
+				JSONAssertion: &store.JSONAssertion{Path: "status", Operator: string(checker.JSONEquals), Expected: `"ok"`},
+				SSLWarnDays:   14, Enabled: true, CaptureResponse: true,
 				Tags: map[string]string{"env": "prod", "team": "platform"},
 			},
 			channels:   []string{"Ops Slack"},
@@ -508,6 +560,8 @@ func monitors() []monitorSpec {
 				baseLatency: 140, spread: 55,
 				outages: []outageSpec{
 					{ago: 12 * day, dur: 2*hour + 10*min, cause: string(checker.FailDNS), message: errDNS},
+					{ago: 8 * day, dur: 35 * min, cause: string(checker.FailAssertion),
+						message: errAssertion, status: 200},
 				},
 			},
 		},

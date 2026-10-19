@@ -20,6 +20,8 @@ const SEED_TYPES: Record<string, string> = {
   "string(checker.TypeTCP)": "tcp",
   "string(checker.TypePing)": "ping",
   "string(checker.TypeSSL)": "ssl",
+  "store.TypeDNS": "dns",
+  "store.TypeDomain": "domain",
   "store.TypePush": "push",
 };
 
@@ -90,7 +92,8 @@ export function seedFailures(): { cause: string; message: string }[] {
     errStatus5: "status",
     errStatus4: "status",
     errKeyword: "keyword",
-    errCert: "cert_expiry",
+    errDNSMismatch: "dns_mismatch",
+    errAssertion: "assertion",
     errOverdue: "push_overdue",
     errReported: "push_reported",
   };

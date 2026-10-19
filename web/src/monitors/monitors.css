@@ -1311,9 +1311,11 @@
  * The name's is rung 4 (168px, the rows table's and the inventory's floor for
  * a name), which holds every seed name (the longest is 156px). The address
  * slot's is rung 4 for the chip plus the 8px gap after it, because the chip
- * is the one thing in the slot that must stay whole: the widest seed kind,
- * "unexpected status code", is 160px, and at a bare 168 the gap pushed it
- * into an ellipsis by a fraction of a pixel. A down line spends 143px before
+ * is the one thing in the slot that must stay whole: the widest cause,
+ * "unexpected status code", is 162px, and at a bare 168 the gap pushed it
+ * into an ellipsis by a fraction of a pixel. Every cause a chip can show is
+ * held to that length (`CHIP_CAUSE_CHARS` in incidents/story.ts), which is
+ * what keeps this floor true as kinds are added. A down line spends 143px before
  * its body: its 2px status edge and 1px right border, 12px of padding each
  * side, and the 104px status cell with its 12px gap. The body then needs
  * 168 + 176 + 64 + 64 and three 12px gaps, 508px. The floors in the grid

@@ -66,13 +66,21 @@ func expiryNotice(leaf *x509.Certificate, warnDays int, now time.Time) string {
 	if remaining <= 0 || remaining > window {
 		return ""
 	}
-	notice := fmt.Sprintf("certificate expires in %s (on %s)",
-		timeLeft(remaining), leaf.NotAfter.Format(time.DateOnly))
+	notice := CertExpiryNotice(remaining, leaf.NotAfter)
 	if capped {
 		notice += fmt.Sprintf("; it lasts %s, so the warning starts %s before expiry",
 			timeLeft(leaf.NotAfter.Sub(leaf.NotBefore)), timeLeft(window))
 	}
 	return notice
+}
+
+// CertExpiryNotice is the first half of that notice, "certificate expires in
+// 6 days (on 2026-10-12)", for a certificate with remaining left before
+// notAfter. It is exported so the demo seeder writes the checker's sentence
+// rather than a copy that drifts.
+func CertExpiryNotice(remaining time.Duration, notAfter time.Time) string {
+	return fmt.Sprintf("certificate expires in %s (on %s)",
+		timeLeft(remaining), notAfter.Format(time.DateOnly))
 }
 
 // timeLeft writes a span of time before an expiry in the unit a reader acts

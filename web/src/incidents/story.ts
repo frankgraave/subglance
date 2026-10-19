@@ -134,6 +134,10 @@ export const STATE_TONE: Record<IncidentState, "down" | "warn" | "idle"> = {
  * example says "DNS error", not "dns", and that difference is the whole point
  * of the ticket.
  *
+ * A kind the dashboard can show as a chip is at most CHIP_CAUSE_CHARS long:
+ * the compact line keeps that chip whole at its narrowest (monitors.css,
+ * `@container mon-lines`), and three of these words once did not fit there.
+ *
  * An unknown kind is passed through rather than dropped or replaced with
  * "unknown": a cause this build has not heard of is still more information
  * than no cause, and a newer server adding one must not make its incidents
@@ -147,15 +151,15 @@ const CAUSE_WORDS: Record<string, string> = {
   timeout: "timed out",
   status: "unexpected status code",
   keyword: "keyword missing",
-  assertion: "JSON field did not match",
+  assertion: "JSON field mismatch",
   cert_expiry: "certificate expiring",
-  domain_expiry: "domain registration expiring",
+  domain_expiry: "domain expiring",
   // Not a failure: a domain monitor whose registry could not say. It is
   // never an incident's cause, only a monitor's latest word.
   unknown: "expiry date unknown",
   internal: "internal error",
   push_overdue: "no report received",
-  push_reported: "the job reported a failure",
+  push_reported: "job reported a failure",
   // Not a checker kind: the runner files a network failure under this one
   // when SubGlance could reach none of its connectivity targets either. The
   // words say what was measured: an unreachable target does not prove the
@@ -167,6 +171,15 @@ const CAUSE_WORDS: Record<string, string> = {
   // not: its lookups, not its uplink, are what failed.
   local_dns: "SubGlance's DNS resolver did not answer",
 };
+
+/**
+ * The longest cause a dashboard chip holds whole on a compact line at its
+ * narrowest. The chip is set in the mono face at the helper size, 6.92px a
+ * character, with 10px of padding and border; the slot gives it rung 4
+ * (168px), and (168 - 10) / 6.92 is 22.8. Monospace makes the character count
+ * the width, so `story.test.ts` can hold every word to it without a browser.
+ */
+export const CHIP_CAUSE_CHARS = 22;
 
 export function causeWords(cause: string | undefined): string | null {
   if (cause === undefined || cause === "") return null;

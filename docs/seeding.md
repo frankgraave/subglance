@@ -32,12 +32,16 @@ The estate is a fictional company's infrastructure, sized so that every screen
 has something to show and every branch a screen can take is taken by at least
 one row.
 
-- **Twenty-six monitors** covering all five types: `http`, `tcp`, `ping`,
-  `ssl` and `push`. Among them a POST with a JSON body and custom headers, all
-  three keyword modes including the inverse one that catches an error page
-  returning 200, a monitor with redirects deliberately not followed, response
-  capture both on and off, a paused monitor, a monitor no channel is attached
-  to, and one that has never been checked at all.
+- **Twenty-eight monitors** covering all seven types: `http`, `tcp`, `ping`,
+  `ssl`, `dns`, `domain` and `push`. Among them a POST with a JSON body and
+  custom headers, all three keyword modes including the inverse one that
+  catches an error page returning 200, a JSON assertion on a health route's
+  `status` field, a DNS monitor comparing a domain's A record, a domain
+  registration and a certificate both inside their warning windows, a monitor
+  with redirects deliberately not followed, response capture both on and off,
+  a paused monitor, a monitor no channel is attached to, and one that has
+  never been checked at all. A test reads the types from the schema, so a
+  type added to the product fails it until the seed has one.
 - **Months of heartbeats**, as individual beats for the recent window and as
   hourly rollup buckets before that — which is the shape a long-running
   instance actually has, because that is what `RollupHeartbeats` leaves behind.
@@ -52,7 +56,11 @@ one row.
   seeder does not relabel it.
 - **Incidents in every state**: resolved, open and confirmed, open but not yet
   confirmed, acknowledged and still broken, and one escalating through repeat
-  reminders because nobody has answered it.
+  reminders because nobody has answered it. Two open notices — a certificate
+  and a domain registration about to expire — whose dates are counted from the
+  moment you seed, so they read as the checker would write them today. The
+  failure texts are the checker's own words for the seeded settings, and a
+  test runs the checker to keep them that way.
 - **Eight notification channels**: Slack, Discord, Telegram, email and four
   webhooks, one healthy, one failing, one with a backlog and one switched off,
   so the Delivery column has something other than a row of green to show. The

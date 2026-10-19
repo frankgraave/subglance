@@ -202,17 +202,25 @@ func (c *DomainChecker) check(ctx context.Context, m Monitor, start time.Time) R
 		// A threshold of 0 never gets here: remaining is positive.
 		res.Expiring = true
 		res.Kind = FailDomainExpiry
-		// Rounded up: with hours left the registration still holds, and
-		// "expires in 0 days" would read as already gone.
-		days := int(math.Ceil(remaining.Hours() / 24))
-		unit := "days"
-		if days == 1 {
-			unit = "day"
-		}
-		res.Error = fmt.Sprintf("domain registration of %s expires in %d %s (on %s)",
-			domain, days, unit, expiry.Format(time.DateOnly))
+		res.Error = DomainExpiryNotice(domain, remaining, expiry)
 	}
 	return res
+}
+
+// DomainExpiryNotice is the sentence a domain monitor writes for a
+// registration that expires inside its warning window: "domain registration
+// of example.com expires in 26 days (on 2026-11-14)". It is exported so the
+// demo seeder writes the same sentence rather than a copy that drifts.
+func DomainExpiryNotice(domain string, remaining time.Duration, expiry time.Time) string {
+	// Rounded up: with hours left the registration still holds, and
+	// "expires in 0 days" would read as already gone.
+	days := int(math.Ceil(remaining.Hours() / 24))
+	unit := "days"
+	if days == 1 {
+		unit = "day"
+	}
+	return fmt.Sprintf("domain registration of %s expires in %d %s (on %s)",
+		domain, days, unit, expiry.Format(time.DateOnly))
 }
 
 // unknown is a check that could not learn the answer.
