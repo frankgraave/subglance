@@ -48,7 +48,11 @@ curl -X POST http://localhost:8080/api/v1/setup \
 
 Press Add a monitor, paste an address and press Test it: the check runs
 before anything is saved, so you find out immediately whether the target is
-reachable rather than waiting for the first red row. The dashboard has
+reachable rather than waiting for the first red row. Pressing Save monitor
+without testing runs the same check first. If it passes, the monitor is
+saved. If it fails, the form shows the result and saves nothing; press Save
+monitor again to watch the service anyway, since a target that is down right
+now is a fair thing to start monitoring. The dashboard has
 something to show within a minute of `docker compose up -d`, and neither
 setup nor the first monitor needs a terminal.
 

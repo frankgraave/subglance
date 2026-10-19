@@ -217,6 +217,11 @@ export type AddMonitorFormProps = {
   onSubmit: (values: AddMonitorValues) => void;
   /** The current preview phase, owned by the caller. */
   preview: PreviewState;
+  /**
+   * True when Save monitor tested these settings itself, the check failed,
+   * and so nothing was created yet.
+   */
+  held?: boolean;
   /** True while a save is in flight. */
   saving?: boolean;
   /** A save that failed, as the server explained it. */
@@ -272,6 +277,7 @@ export function AddMonitorForm({
   onPreview,
   onSubmit,
   preview,
+  held = false,
   saving = false,
   saveError = null,
   onCancel,
@@ -515,6 +521,10 @@ export function AddMonitorForm({
       return;
     }
     setRepeatError(undefined);
+    // A save with no type tests the address before it creates anything, so
+    // what it tests is the tested address from here on, as for Test it: the
+    // certificate offer and the hint below follow it.
+    if (!push && values.type === "") setTestedAddress(addressOf(values));
     onSubmit({ ...effective, repeatAfterS: Number(repeatText) });
   };
 
@@ -1051,7 +1061,11 @@ export function AddMonitorForm({
        * rather than for them, and it gets `role="alert"` below.
        */}
       <div role="status" aria-live="polite" className="result-region">
-        <PreviewNotice preview={preview} placed={badControl !== null} />
+        <PreviewNotice
+          preview={preview}
+          placed={badControl !== null}
+          held={held && testedAddress === addressOf(values)}
+        />
       </div>
 
       {/* Outside the live region: the result sentence says a certificate can
@@ -1117,9 +1131,11 @@ function ControlRefusal({
 function PreviewNotice({
   preview,
   placed,
+  held,
 }: {
   preview: PreviewState;
   placed: boolean;
+  held: boolean;
 }) {
   switch (preview.phase) {
     case "idle":
@@ -1136,11 +1152,19 @@ function PreviewNotice({
       if (placed) return null;
       return <p className="result result--bad">{preview.message}</p>;
     case "done":
-      return <PreviewSummary result={preview.result} />;
+      return <PreviewSummary result={preview.result} held={held} />;
   }
 }
 
-function PreviewSummary({ result }: { result: PreviewResult }) {
+/*
+ * Said only after Save monitor ran the test itself and it failed. The user
+ * pressed Save, not Test it, so without this the form would look as if it
+ * had ignored them. A service that is down right now is a fair thing to
+ * start watching, so the way on is a second press, not a dead end.
+ */
+const HELD = "Nothing was saved yet. Press Save monitor again to watch it anyway.";
+
+function PreviewSummary({ result, held }: { result: PreviewResult; held: boolean }) {
   return (
     <p
       className={
@@ -1155,6 +1179,7 @@ function PreviewSummary({ result }: { result: PreviewResult }) {
             user commits. */}
         Checked as {labelForType(result.type)}.
       </span>
+      {held && !result.ok && <>{" "}{HELD}</>}
     </p>
   );
 }

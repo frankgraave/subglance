@@ -296,10 +296,17 @@ describe("AddMonitor", () => {
     // https, then switch the dropdown to Ping and save. The stale result was
     // still considered valid because only the target was compared, so a ping
     // monitor was created for a target that had only ever been tested as HTTP.
+    //
+    // The save tests the form as it stands instead of reusing the old answer:
+    // the second probe is the one that decides, and it says TCP here so a
+    // save built from the first answer cannot pass.
     const preview = vi
       .fn()
-      .mockResolvedValue(
+      .mockResolvedValueOnce(
         result({ type: "http", target: "https://example.com" }),
+      )
+      .mockResolvedValueOnce(
+        result({ type: "tcp", target: "example.com:443", status_code: undefined }),
       );
     const create = vi.fn().mockResolvedValue({ id: "1" });
     render(<AddMonitor api={{ preview, create }} />);
@@ -315,10 +322,106 @@ describe("AddMonitor", () => {
     });
     click(/save monitor/i);
 
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent ?? "").toMatch(/test it/i),
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(preview.mock.calls[1][0]).toMatchObject({ target: "example.com", timeout_s: 45 });
+    expect(create.mock.calls[0][0]).toMatchObject({ type: "tcp", target: "example.com:443", timeout_s: 45 });
+  });
+
+  it("tests a pasted address itself when Save monitor is pressed first", async () => {
+    // The first monitor of a fresh install: paste a URL, press the primary
+    // button. It used to be refused with "press Test it first".
+    const preview = vi
+      .fn()
+      .mockResolvedValue(result({ type: "http", target: "https://example.com" }));
+    const create = vi.fn().mockResolvedValue({ id: "3" });
+    const onCreated = vi.fn();
+    render(<AddMonitor api={{ preview, create }} onCreated={onCreated} />);
+
+    setField(/what should be watched/i, "https://example.com");
+    click(/save monitor/i);
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("3"));
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({ type: "http", target: "https://example.com" });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows a failing check instead of saving it, and saves it on a second press", async () => {
+    const preview = vi.fn().mockResolvedValue(
+      result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }),
     );
+    const create = vi.fn().mockResolvedValue({ id: "4" });
+    const onCreated = vi.fn();
+    render(<AddMonitor api={{ preview, create }} onCreated={onCreated} />);
+
+    setField(/what should be watched/i, "down.example.com");
+    click(/save monitor/i);
+
+    await waitFor(() => expect(statusText()).toMatch(/connection refused/i));
+    // The user has not seen the answer yet, so nothing is created on it.
     expect(create).not.toHaveBeenCalled();
+    expect(statusText()).toMatch(/press save monitor again/i);
+    expect((screen.getByRole("button", { name: /save monitor/i }) as HTMLButtonElement).disabled).toBe(false);
+
+    // A service that is down right now is a fair thing to start watching.
+    click(/save monitor/i);
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("4"));
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({ type: "http", target: "https://down.example.com" });
+  });
+
+  it("says nothing about saving again after a failing check from Test it", async () => {
+    const preview = vi.fn().mockResolvedValue(
+      result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }),
+    );
+    render(<AddMonitor api={{ preview, create: vi.fn() }} />);
+
+    setField(/what should be watched/i, "down.example.com");
+    click(/test it/i);
+
+    await waitFor(() => expect(statusText()).toMatch(/connection refused/i));
+    expect(statusText()).not.toMatch(/save monitor/i);
+  });
+
+  it("puts a refusal of the address under the box when Save monitor tested it", async () => {
+    const preview = vi.fn().mockRejectedValue(
+      new ApiError(400, "could not tell what to check from \"db/x\"", null, "target"),
+    );
+    const create = vi.fn();
+    render(<AddMonitor api={{ preview, create }} />);
+
+    setField(/what should be watched/i, "db/x");
+    click(/save monitor/i);
+
+    const target = field(/what should be watched/i);
+    await waitFor(() => expect(target.getAttribute("aria-invalid")).toBe("true"));
+    expect(screen.getByRole("alert").textContent).toMatch(/could not tell what to check/i);
+    expect(create).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: /save monitor/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("waits for a test of the same settings that is already running", async () => {
+    // Test it, then Save before the answer: a second probe would be refused
+    // by the server's cooldown, so the save waits for the first one.
+    let release: (value: PreviewResult) => void = () => {};
+    const preview = vi.fn().mockImplementation(
+      () => new Promise<PreviewResult>((resolve) => { release = resolve; }),
+    );
+    const create = vi.fn().mockResolvedValue({ id: "5" });
+    const onCreated = vi.fn();
+    render(<AddMonitor api={{ preview, create }} onCreated={onCreated} />);
+
+    setField(/what should be watched/i, "example.com");
+    click(/test it/i);
+    click(/save monitor/i);
+    expect(preview).toHaveBeenCalledTimes(1);
+
+    release(result({ type: "http", target: "https://example.com" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("5"));
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({ type: "http", target: "https://example.com" });
   });
 
   it("saves the type and target the preview actually resolved", async () => {
@@ -436,9 +539,13 @@ describe("AddMonitor", () => {
       target: { value: "1.3" },
     });
     click(/save monitor/i);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(create).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert").textContent).toMatch(/press Test it/i);
+    // The save does not ride on the old answer: it probes again, with the
+    // floor that will be stored, before anything is created.
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(preview.mock.calls[0][0]).not.toHaveProperty("min_tls_version");
+    expect(preview.mock.calls[1][0]).toMatchObject({ min_tls_version: "1.3" });
+    expect(create.mock.calls[0][0]).toMatchObject({ min_tls_version: "1.3" });
   });
 
   it("explains both directions of the TLS floor rather than listing versions", () => {
@@ -476,8 +583,8 @@ describe("AddMonitor", () => {
     render(<AddMonitor api={{ preview: vi.fn(), create }} />);
 
     setField(/what should be watched/i, "example.com");
-    // An explicit type, so the save actually reaches the server: an untested
-    // bare address is refused locally now and would never call create().
+    // An explicit type, so the save goes straight to the server: with none,
+    // it would test the address first and need a preview answer to proceed.
     fireEvent.change(screen.getByLabelText(/check type/i), {
       target: { value: "http" },
     });
@@ -540,10 +647,10 @@ describe("a rejection that names a field", () => {
    * The advanced panel and a rejection it would hide.
    *
    * Driven through AddMonitorForm with a `saveError` prop rather than through
-   * AddMonitor: the container refuses to call `create` at all until a bare
-   * address has been previewed, so a server rejection about interval_s is not
-   * reachable from the outside without also staging a preview. The panel logic
-   * lives in the form, and this is the input it actually reacts to.
+   * AddMonitor: the container tests a bare address before it calls `create`,
+   * so a server rejection about interval_s is not reachable from the outside
+   * without also staging a preview. The panel logic lives in the form, and
+   * this is the input it actually reacts to.
    */
   const panel = () =>
     document.querySelector("details.add-advanced") as HTMLDetailsElement;
@@ -728,20 +835,15 @@ describe("a rejection that names a field", () => {
     );
 
     // A number typed as one is sent as one, and a changed assertion needs a
-    // new preview rather than riding on the old one.
+    // new preview rather than riding on the old one: the save runs it.
     fireEvent.change(screen.getByLabelText(/^must$/i), { target: { value: "less_than" } });
     setField(/^value$/i, "30");
     click(/save monitor/i);
-    await waitFor(() =>
-      expect(field(/what should be watched/i).getAttribute("aria-invalid")).toBe("true"),
-    );
-    expect(create).not.toHaveBeenCalled();
-
-    click(/test it/i);
-    await waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(statusText()).toMatch(/answered/i));
-    click(/save monitor/i);
     await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(preview.mock.calls[1][0]).toMatchObject({
+      json_assertion: { path: "checks.db.status", operator: "less_than", expected: 30 },
+    });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         json_assertion: { path: "checks.db.status", operator: "less_than", expected: 30 },

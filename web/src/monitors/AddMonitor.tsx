@@ -16,7 +16,7 @@ import {
   fingerprintPreview,
   previewCheck,
 } from "./preview";
-import type { PreviewRequest, PreviewState } from "./preview";
+import type { PreviewFingerprint, PreviewRequest, PreviewState } from "./preview";
 import type { Rejection } from "./AddMonitorForm";
 import type { Channel } from "../notifications/channels";
 import { readsHttpSettings, readsTlsSettings } from "./typeSettings";
@@ -77,90 +77,84 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
    * *after* the fast second one and leave the form claiming a result for a
    * target the user has already corrected — the one failure mode that makes a
    * pre-save check worse than no check.
+   *
+   * It carries the fingerprint and the outcome as well as the controller, so
+   * a save pressed while a test of the same settings is still running waits
+   * for that answer instead of starting a second probe the server would
+   * refuse as too soon after the first.
    */
-  const inFlight = useRef<AbortController | null>(null);
+  const inFlight = useRef<Probe | null>(null);
   const saveInFlight = useRef<AbortController | null>(null);
+  /*
+   * The settings a save tested and found failing, so nothing was created.
+   *
+   * A service that is down right now is a legitimate thing to start watching,
+   * so the refusal is not final: the next press of Save monitor with the same
+   * settings finds a matching preview and saves. This only decides whether
+   * the form says so.
+   */
+  const [held, setHeld] = useState<PreviewFingerprint | null>(null);
   const [formVersion, setFormVersion] = useState(0);
   useEffect(() => () => {
-    inFlight.current?.abort();
+    inFlight.current?.controller.abort();
     saveInFlight.current?.abort();
   }, []);
 
-  const runPreview = useCallback(
-    (values: AddMonitorValues) => {
-      inFlight.current?.abort();
+  const startPreview = useCallback(
+    (values: AddMonitorValues): Probe => {
+      inFlight.current?.controller.abort();
       const controller = new AbortController();
-      inFlight.current = controller;
-      setState({ phase: "checking" });
-
-      const unsendable = assertionProblem(values);
-      if (unsendable !== null) {
-        setState({ phase: "rejected", ...unsendable });
-        return;
-      }
       const request = previewRequestFor(values);
-
-      void (async () => {
+      // The fingerprint travels with the result, so the save can ask "was
+      // this run with what is in the form right now?" instead of guessing
+      // from the target alone.
+      const fingerprint = fingerprintPreview(request);
+      setHeld(null);
+      setState({ phase: "checking" });
+      const outcome = (async (): Promise<PreviewState | null> => {
+        let next: PreviewState;
         try {
-          const result = await preview(request, controller.signal);
-          // The fingerprint travels with the result, so the save can ask "was
-          // this run with what is in the form right now?" instead of guessing
-          // from the target alone.
-          if (!controller.signal.aborted) {
-            setState({
-              phase: "done",
-              result,
-              request: fingerprintPreview(request),
-            });
-          }
+          next = { phase: "done", result: await preview(request, controller.signal), request: fingerprint };
         } catch (error) {
-          if (controller.signal.aborted) return;
-          setState({ phase: "rejected", ...explain(error) });
+          next = { phase: "rejected", ...explain(error) };
         }
+        if (controller.signal.aborted) return null;
+        setState(next);
+        return next;
       })();
+      const probe = { fingerprint, controller, outcome };
+      inFlight.current = probe;
+      return probe;
     },
     [preview],
   );
 
-  const save = useCallback(
+  const runPreview = useCallback(
     (values: AddMonitorValues) => {
-      if (saveInFlight.current) return;
-      setSaving(true);
-      setSaveError(null);
-      // Before the preview check: a value that cannot be sent as typed is the
-      // thing to fix, and Test it would refuse it the same way.
       const unsendable = assertionProblem(values);
       if (unsendable !== null) {
-        setSaving(false);
-        setSaveError(unsendable);
+        inFlight.current?.controller.abort();
+        setHeld(null);
+        setState({ phase: "rejected", ...unsendable });
         return;
       }
-      // Inference lives on the server and runs only for a preview, so without
-      // a matching one there is nothing to infer from: the old `http` fallback
-      // sent a bare hostname to an endpoint that requires a scheme, and the
-      // user got a validation error about a field they never filled in.
-      if (values.type === "" && !previewMatches(values, state)) {
-        setSaving(false);
-        setSaveError({
-          // Tagged as a target problem: the form is telling the user their
-          // address has not been tested, and the address is what they act on.
-          field: "target",
-          message:
-            "press Test it first, or pick a type — SubGlance works out what a bare address means" +
-            " by probing it, and the settings changed since the last test",
-        });
-        return;
-      }
+      startPreview(values);
+    },
+    [startPreview],
+  );
 
+  const commit = useCallback(
+    (values: AddMonitorValues, tested: PreviewState) => {
       const controller = new AbortController();
       saveInFlight.current = controller;
       void (async () => {
         try {
-          const created = await create(bodyFor(values, state), controller.signal);
+          const created = await create(bodyFor(values, tested), controller.signal);
           if (controller.signal.aborted) return;
           dirty.current = false;
-          inFlight.current?.abort();
+          inFlight.current?.controller.abort();
           setState({ phase: "idle" });
+          setHeld(null);
           setFormVersion((version) => version + 1);
           if (created.pushUrl !== undefined) {
             // A push monitor is not finished at "saved": without this URL in
@@ -184,7 +178,68 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
         }
       })();
     },
-    [create, onCreated, state],
+    [create, onCreated],
+  );
+
+  const save = useCallback(
+    (values: AddMonitorValues) => {
+      if (saveInFlight.current) return;
+      setSaving(true);
+      setSaveError(null);
+      // Before the preview check: a value that cannot be sent as typed is the
+      // thing to fix, and Test it would refuse it the same way.
+      const unsendable = assertionProblem(values);
+      if (unsendable !== null) {
+        setSaving(false);
+        setSaveError(unsendable);
+        return;
+      }
+      if (values.type !== "" || previewMatches(values, state)) {
+        commit(values, state);
+        return;
+      }
+      /*
+       * The type is left to be worked out and nothing has tested these
+       * settings, so Save monitor tests them first instead of refusing.
+       *
+       * Inference lives on the server and runs only for a preview, so a save
+       * needs one; it used to send the user back to press Test it, which made
+       * the first monitor of a fresh install a refusal of a pasted URL. A
+       * preview of different settings is never reused: it is replaced by a
+       * test of the form as it stands. A test of these settings that is
+       * already running is waited for rather than started again.
+       */
+      const pending = inFlight.current;
+      const probe =
+        pending !== null &&
+        !pending.controller.signal.aborted &&
+        pending.fingerprint === fingerprintPreview(previewRequestFor(values))
+          ? pending
+          : startPreview(values);
+      saveInFlight.current = probe.controller;
+      void probe.outcome.then((tested) => {
+        // Superseded or closed: whoever aborted it owns the form now, and
+        // only a save still waiting on this probe has anything to release.
+        if (tested === null) {
+          if (saveInFlight.current === probe.controller) {
+            saveInFlight.current = null;
+            setSaving(false);
+          }
+          return;
+        }
+        if (tested.phase === "done" && tested.result.ok) {
+          commit(values, tested);
+          return;
+        }
+        // A failed check is shown as Test it shows it, and nothing is
+        // created: the user has not seen the answer yet. A refusal of the
+        // address is already under the box it is about.
+        if (tested.phase === "done") setHeld(tested.request);
+        saveInFlight.current = null;
+        setSaving(false);
+      });
+    },
+    [commit, startPreview, state],
   );
 
   if (revealed !== null) {
@@ -205,6 +260,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       onPreview={runPreview}
       onSubmit={save}
       preview={state}
+      held={held !== null && state.phase === "done" && state.request === held}
       saving={saving}
       saveError={saveError}
       onCancel={onCancel === undefined ? undefined : () => {
@@ -213,6 +269,14 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
     /></div>
   );
 }
+
+/** A preview in flight: what it tests, how to stop it, and what it found. */
+type Probe = {
+  fingerprint: PreviewFingerprint;
+  controller: AbortController;
+  /** The state it settled into, or null when it was aborted first. */
+  outcome: Promise<PreviewState | null>;
+};
 
 /**
  * The create body for a set of form values.
@@ -386,7 +450,7 @@ function previewMatches(
  *
  * A preview of these exact settings is authoritative, because the server ran
  * the inference and told us what it decided. Otherwise the explicit choice
- * wins — and `save` refuses before it gets here when there is neither.
+ * wins — and `save` tests first when there is neither.
  */
 function resolvedType(values: AddMonitorValues, state: PreviewState): string {
   if (values.type !== "") return values.type;
