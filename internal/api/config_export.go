@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -48,7 +50,7 @@ func (s *Server) exportConfig(ctx context.Context, now time.Time, withPages bool
 		out := configfile.Channel{
 			Key: channelKeys[c.ID], Name: c.Name, Type: c.Type,
 			Enabled: ptr(c.Enabled), Default: c.IsDefault,
-			Config: exportChannelConfig(c.Config),
+			Config: exportChannelConfig(c),
 		}
 		// Written for every channel, null when it has none, so importing
 		// the file removes quiet hours the target channel still has.
@@ -127,20 +129,84 @@ func (s *Server) exportConfig(ctx context.Context, now time.Time, withPages bool
 
 // exportChannelConfig withholds every value whose key is not on the public
 // allowlist. An empty value is not a secret and stays empty, so the file does
-// not claim a credential exists where none was set.
-func exportChannelConfig(cfg map[string]string) map[string]string {
-	if len(cfg) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(cfg))
-	for k, v := range cfg {
+// not claim a credential exists where none was set. A value the channel is
+// stored without but cannot be imported without is written as withheld too
+// (stillWithheld).
+func exportChannelConfig(c store.Channel) map[string]string {
+	out := make(map[string]string, len(c.Config))
+	for k, v := range c.Config {
 		if publicKeys[k] || v == "" {
 			out[k] = v
 			continue
 		}
 		out[k] = configfile.Placeholder
 	}
+	for _, k := range stillWithheld(c, out) {
+		out[k] = configfile.Placeholder
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
+}
+
+// stillWithheld returns the settings a channel is stored without that an
+// import would refuse the written file for lacking. An import of a file that
+// withheld a credential leaves it out and switches the channel off, so a
+// Discord channel can be stored with no url at all; written without one, the
+// file was refused for a missing required value, by another instance and by
+// the one that wrote it, which promises that its own export imports as
+// unchanged. Written as withheld, the file says what is still to be filled
+// in and imports the way the first file did: switched off, the setting
+// listed under needs_secrets.
+//
+// The check is the importer's own: the channel as the file has it, each
+// withheld value replaced by its stand-in (configfile.WithheldStandIn), held
+// to the rules a save is. A refusal of a setting the file leaves out, and
+// that has a stand-in, adds it and checks again. So does a webhook body
+// refused while the headers are left out, because the body is read by the
+// Content-Type the headers name. A key is kept only when the refusal moves
+// on: one that changes nothing would claim a setting the channel never had.
+// Each round adds a key from the finite set that has a stand-in, so the loop
+// ends.
+func stillWithheld(c store.Channel, written map[string]string) []string {
+	cfg := maps.Clone(written)
+	var added []string
+	pr := importRefusal(c, cfg)
+	for !pr.ok() {
+		key, isConfig := strings.CutPrefix(pr.field, "config.")
+		if c.Type == store.ChannelWebhook && key == "body" {
+			key = "headers"
+		}
+		if _, given := cfg[key]; given || !isConfig {
+			break
+		}
+		if _, ok := configfile.WithheldStandIn(c.Type, key); !ok {
+			break
+		}
+		cfg[key] = configfile.Placeholder
+		next := importRefusal(c, cfg)
+		if next == pr {
+			break
+		}
+		added = append(added, key)
+		pr = next
+	}
+	return added
+}
+
+// importRefusal is what the importer says of a channel written with cfg as
+// its settings, on the instance the channel is stored in.
+func importRefusal(c store.Channel, cfg map[string]string) problem {
+	req := channelRequest{Name: c.Name, Type: c.Type, Config: map[string]string{}}
+	for k, v := range cfg {
+		if v != configfile.Placeholder {
+			req.Config[k] = v
+		} else if s, ok := configfile.WithheldStandIn(c.Type, k); ok {
+			req.Config[k] = s
+		}
+	}
+	return validateChannel(req, &c)
 }
 
 // exportMonitor writes every field that applies to the monitor's type, so the

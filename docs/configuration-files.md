@@ -144,6 +144,18 @@ fail every attempt and look like an outage, so it waits for you instead. Fill
 the value in, either in the file before importing or in the interface
 afterwards, and switch the object on.
 
+A channel created that way is stored without the value, and its export still
+writes the field as `<fill in after import>`, so the file says what is left to
+fill in and imports again: into the same instance as unchanged, and into
+another switched off, with the field under `needs_secrets` as before.
+
+A webhook's `headers` are withheld whole, and they can name the
+`Content-Type` its `body` is written for, such as a form. When an import has
+no headers to keep, it cannot know that type, so it checks the body only for
+what holds for every type: known placeholders, each closed with `}}`. The
+body is held to its type's rules too once the headers are in the file or kept
+from the instance, and again when they are filled in.
+
 ## Keys
 
 Every monitor and channel in a file has a `key`: lowercase letters, digits,

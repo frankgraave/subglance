@@ -33,6 +33,15 @@ var withheldStandIn = map[string]string{
 	// is the field its channel type cannot work without.
 	"topic": "withheld",
 	"token": "withheld",
+	// A webhook's headers are withheld whole, and they may name the
+	// Content-Type its body is written for, such as a form. With nothing to
+	// hold them, the importer would read the body as JSON, the type a
+	// webhook without headers sends, and refuse a form body as invalid JSON:
+	// refused for what the file leaves out. A type that is neither JSON nor
+	// a form holds the body to the rules every type shares, its
+	// placeholders and their braces; it is held to its own type once the
+	// headers are filled in.
+	"headers": "Content-Type: text/plain",
 }
 
 // withheldTypeStandIn overrides withheldStandIn where a type's sender holds
