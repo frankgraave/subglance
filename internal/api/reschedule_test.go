@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -120,12 +121,13 @@ func TestMonitorWritesWithoutARescheduler(t *testing.T) {
 // through the API is checked within seconds, not at the reload tick. The
 // target is a local listener, so nothing leaves the host.
 func TestCreatedMonitorIsCheckedWithinSeconds(t *testing.T) {
-	var seedHits, freshHits atomic.Int32
+	// The first request for /fresh closes freshHit, so the wait below
+	// returns the moment the check arrives instead of polling a counter.
+	freshHit := make(chan struct{})
+	var once sync.Once
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/fresh" {
-			freshHits.Add(1)
-		} else {
-			seedHits.Add(1)
+			once.Do(func() { close(freshHit) })
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -158,6 +160,9 @@ func TestCreatedMonitorIsCheckedWithinSeconds(t *testing.T) {
 		cancel()
 		<-done
 	}()
+	// The scheduler has no readiness signal, and adding one to the runner
+	// for this test is not worth it: Size is polled, and the 5 s is only the
+	// bound on a first read that takes milliseconds.
 	waitUntil(t, 5*time.Second, func() bool { return runner.Size() == 1 })
 
 	created := time.Now()
@@ -167,7 +172,11 @@ func TestCreatedMonitorIsCheckedWithinSeconds(t *testing.T) {
 	}
 	// firstCheckDelay (2 s) plus up to 10% jitter of it, plus the settle
 	// time: well under 5 s. The tick would take up to 30.
-	waitUntil(t, 10*time.Second, func() bool { return freshHits.Load() > 0 })
+	select {
+	case <-freshHit:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the created monitor was not checked within 10 s")
+	}
 	if took := time.Since(created); took > 5*time.Second {
 		t.Errorf("first check %v after the create, want within 5 s", took)
 	}
