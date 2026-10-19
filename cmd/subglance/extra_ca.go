@@ -6,6 +6,7 @@ import (
 
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/config"
+	"github.com/frankgraave/subglance/internal/fileaccess"
 )
 
 // extraRoots is the trust store checks verify against: nil, the host's own,
@@ -16,6 +17,9 @@ import (
 func extraRoots(cfg config.Config, log *slog.Logger) (*x509.CertPool, error) {
 	if cfg.ExtraCAFile == "" {
 		return nil, nil
+	}
+	if err := fileaccess.RequireReadable("--extra-ca-file (SUBGLANCE_EXTRA_CA_FILE)", cfg.ExtraCAFile); err != nil {
+		return nil, err
 	}
 	pool, n, err := checker.ExtraRoots(cfg.ExtraCAFile)
 	if err != nil {

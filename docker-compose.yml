@@ -121,6 +121,15 @@ services:
       #   environment:
       #     SUBGLANCE_SECRET_KEY: /run/secrets/subglance.key
       #
+      # The container runs as 65532:65532 and a mounted file keeps its owner
+      # from the host, so give the file to that user and keep it owner-only:
+      #
+      #   openssl rand -hex 32 > subglance.key
+      #   chmod 600 subglance.key && sudo chown 65532:65532 subglance.key
+      #
+      # A key file the container cannot read is refused at start, naming its
+      # owner and this chown.
+      #
       # A key written here as a literal value is visible in `docker inspect`
       # and in /proc/<pid>/environ, so it survives outside the process in the
       # container's stored configuration; a mounted file does not.

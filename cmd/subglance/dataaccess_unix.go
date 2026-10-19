@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/frankgraave/subglance/internal/fileaccess"
 )
 
 // requireDataAccess refuses a data directory, or a file in it, that this
@@ -82,7 +84,7 @@ func requireDirAccess(dir string) error {
 	return fmt.Errorf("cannot create the data directory %s: %s %s, and SubGlance runs as %s; "+
 		"create it and give it to that user (mkdir -p %s && chown %s %s, as root), "+
 		"or point --data-dir somewhere it can write",
-		dir, existing, ownerOf(existing), processUser(), dir, processOwner(), dir)
+		dir, existing, fileaccess.Owner(existing), fileaccess.ProcessUser(), dir, fileaccess.ProcessOwner(), dir)
 }
 
 // unreachableRefusal names the directory above the data directory that
@@ -113,7 +115,7 @@ func unreachableRefusal(dir, path string) error {
 	}
 	return fmt.Errorf("cannot reach the data directory %s: %s %s, and SubGlance runs as %s, "+
 		"which may not pass through it; %s, or point --data-dir somewhere it can reach",
-		dir, blocked, ownerOf(blocked), processUser(), fix)
+		dir, blocked, fileaccess.Owner(blocked), fileaccess.ProcessUser(), fix)
 }
 
 // remedy is the one command that fixes a refusal of path. A file the
@@ -133,7 +135,7 @@ func remedy(path, dataDir string) string {
 		}
 	}
 	return fmt.Sprintf("give the data directory to that user (chown -R %s %s, as root), or run SubGlance as the owner",
-		processOwner(), dataDir)
+		fileaccess.ProcessOwner(), dataDir)
 }
 
 // checkAccess reports a permission refusal for path, and nothing else: a
@@ -156,27 +158,5 @@ func accessRefusal(path, dataDir string, write bool, err error) error {
 		return fmt.Errorf("cannot %s %s: the data directory %s is on a read-only file system", verb, path, dataDir)
 	}
 	return fmt.Errorf("cannot %s %s: it %s, and SubGlance runs as %s; %s",
-		verb, path, ownerOf(path), processUser(), remedy(path, dataDir))
-}
-
-// ownerOf describes who owns path and its mode, in the numbers chown takes:
-// inside a container a name means nothing on the host.
-func ownerOf(path string) string {
-	info, err := os.Stat(path)
-	if err != nil {
-		return "cannot be read"
-	}
-	st, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return fmt.Sprintf("has mode %v", info.Mode())
-	}
-	return fmt.Sprintf("belongs to %d:%d with mode %v", st.Uid, st.Gid, info.Mode())
-}
-
-func processUser() string {
-	return fmt.Sprintf("user %d (group %d)", os.Getuid(), os.Getgid())
-}
-
-func processOwner() string {
-	return fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+		verb, path, fileaccess.Owner(path), fileaccess.ProcessUser(), remedy(path, dataDir))
 }
