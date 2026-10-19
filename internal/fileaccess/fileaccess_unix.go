@@ -47,21 +47,32 @@ func present(path string) bool {
 // In a container the path is the one inside it, so the chown is for the
 // file on the host that is mounted there.
 func readFix(path string) string {
-	if ownedByProcess(path) {
-		return fmt.Sprintf("make it readable by its owner (chmod u+r %s)", path)
+	owned, ownerReads := false, true
+	if info, err := os.Stat(path); err == nil {
+		st, ok := info.Sys().(*syscall.Stat_t)
+		owned = ok && int(st.Uid) == os.Getuid()
+		ownerReads = info.Mode().Perm()&0o400 != 0
 	}
-	return fmt.Sprintf("give it to that user (chown %s %s, as root; in a container, on the host file "+
-		"mounted there), or run SubGlance as its owner", ProcessOwner(), path)
+	return fixFor(path, owned, ownerReads)
 }
 
-// ownedByProcess says whether path belongs to the user this process runs as.
-func ownedByProcess(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
+// fixFor is readFix once the file's owner and mode are known. A file that
+// goes to the process without its owner's read bit is still unreadable
+// after the chown, so that remedy adds the chmod; a file whose owner can
+// already read it is not touched beyond the chown.
+func fixFor(path string, owned, ownerReads bool) string {
+	chmod := "chmod u+r " + path
+	if owned {
+		return fmt.Sprintf("make it readable by its owner (%s)", chmod)
 	}
-	st, ok := info.Sys().(*syscall.Stat_t)
-	return ok && int(st.Uid) == os.Getuid()
+	cmd := fmt.Sprintf("chown %s %s", ProcessOwner(), path)
+	runAsOwner := "run SubGlance as its owner"
+	if !ownerReads {
+		cmd += " && " + chmod
+		runAsOwner = fmt.Sprintf("make it readable by its owner (%s) and run SubGlance as that owner", chmod)
+	}
+	return fmt.Sprintf("give it to that user (%s, as root; in a container, on the host file "+
+		"mounted there), or %s", cmd, runAsOwner)
 }
 
 // Owner describes who owns path and its mode, in the numbers chown takes:

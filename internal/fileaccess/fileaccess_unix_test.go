@@ -67,6 +67,36 @@ func TestFixForAnotherUsersFileIsChown(t *testing.T) {
 	}
 }
 
+// The remedy carries a chmod exactly when the owner's read bit is missing:
+// a chown alone leaves a mode-0200 file unreadable by its new owner, and a
+// chmod on a file its owner can already read changes nothing.
+func TestFixAddsTheOwnersReadBitOnlyWhenItIsMissing(t *testing.T) {
+	const path = "/run/secrets/subglance.key"
+	chown := "chown " + ProcessOwner() + " " + path
+	chmod := "chmod u+r " + path
+	for _, tc := range []struct {
+		name              string
+		owned, ownerReads bool
+		want, notWant     []string
+	}{
+		{"owned, read bit missing", true, false, []string{chmod}, []string{"chown"}},
+		{"another user's, readable by it", false, true, []string{chown}, []string{"chmod"}},
+		{"another user's, read bit missing", false, false, []string{chown + " && " + chmod}, nil},
+	} {
+		got := fixFor(path, tc.owned, tc.ownerReads)
+		for _, w := range tc.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: fix = %q, want it to contain %q", tc.name, got, w)
+			}
+		}
+		for _, w := range tc.notWant {
+			if strings.Contains(got, w) {
+				t.Errorf("%s: fix = %q, want no %q", tc.name, got, w)
+			}
+		}
+	}
+}
+
 // Everything that is not a file this process may not read passes, and is
 // left to the read that follows.
 func TestLeavesEverythingElseToTheRead(t *testing.T) {
