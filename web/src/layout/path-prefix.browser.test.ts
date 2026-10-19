@@ -68,9 +68,6 @@ const outside = (requests: string[]) => requests.filter((path) => !path.startsWi
 it("opens an alert's monitor link two levels deep, with its bundle, fonts, tab icon, API and stream under the prefix", async () => {
   const { page, requests, failed } = await watched();
   try {
-    // The icon is fetched on the browser's own schedule, so wait for it by
-    // name rather than hoping it has arrived by the time the screen has.
-    const icon = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/favicon.svg"), { timeout: 15_000 });
     await page.goto(`${server.url}${PREFIX}/monitors/1`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".mon-detail-windows", { timeout: 15_000 });
     expect(await page.$eval("h1", (h) => h.textContent)).toBe(
@@ -82,10 +79,17 @@ it("opens an alert's monitor link two levels deep, with its bundle, fonts, tab i
     expect(requests).toContain(`${PREFIX}/api/v1/stream`);
     expect(requests.some((path) => path.startsWith(`${PREFIX}/assets/`))).toBe(true);
     expect(requests.some((path) => path.startsWith(`${PREFIX}/fonts/`))).toBe(true);
-    const tab = await icon;
-    expect(new URL(tab.url()).pathname).toBe(`${PREFIX}/favicon.svg`);
-    expect(tab.status()).toBe(200);
-    expect(tab.headers()["content-type"]).toMatch(/^image\/svg\+xml/);
+    // chrome-headless-shell draws no tab strip, so it never asks for a tab
+    // icon on its own: resolve the shell's link where the page stands and
+    // fetch what it names, the way a browser with tabs would.
+    const tab = await page.$eval('link[rel="icon"]', async (link) => {
+      const href = (link as HTMLLinkElement).href;
+      const response = await fetch(href);
+      return { path: new URL(href).pathname, status: response.status, type: response.headers.get("content-type") };
+    });
+    expect(tab.path).toBe(`${PREFIX}/favicon.svg`);
+    expect(tab.status).toBe(200);
+    expect(tab.type).toMatch(/^image\/svg\+xml/);
     expect(outside(requests)).toEqual([]);
     expect(failed).toEqual([]);
   } finally {
