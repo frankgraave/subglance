@@ -119,6 +119,10 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
           next = { phase: "rejected", ...explain(error) };
         }
         if (controller.signal.aborted) return null;
+        // Settled, so a later save tests again rather than replaying this
+        // answer: only a probe that is still running is worth waiting for.
+        // A refusal such as a 429 would otherwise come back on every press.
+        if (inFlight.current?.controller === controller) inFlight.current = null;
         setState(next);
         return next;
       })();
@@ -242,6 +246,15 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
     [commit, startPreview, state],
   );
 
+  /*
+   * Asked of the form as it stands, not of the address alone: an edit to the
+   * timeout, the TLS floor or the assertion changes what a second press would
+   * test, so the promise that it saves no longer holds.
+   */
+  const isHeld = (values: AddMonitorValues): boolean =>
+    held !== null && state.phase === "done" && state.request === held &&
+    fingerprintPreview(previewRequestFor(values)) === held;
+
   if (revealed !== null) {
     return (
       <PushUrlReveal
@@ -260,7 +273,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       onPreview={runPreview}
       onSubmit={save}
       preview={state}
-      held={held !== null && state.phase === "done" && state.request === held}
+      isHeld={isHeld}
       saving={saving}
       saveError={saveError}
       onCancel={onCancel === undefined ? undefined : () => {

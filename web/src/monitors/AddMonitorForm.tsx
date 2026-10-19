@@ -218,10 +218,11 @@ export type AddMonitorFormProps = {
   /** The current preview phase, owned by the caller. */
   preview: PreviewState;
   /**
-   * True when Save monitor tested these settings itself, the check failed,
-   * and so nothing was created yet.
+   * Whether Save monitor tested exactly these settings itself, the check
+   * failed, and so nothing was created yet. A predicate rather than a flag
+   * because the answer depends on the values in the form right now.
    */
-  held?: boolean;
+  isHeld?: (values: AddMonitorValues) => boolean;
   /** True while a save is in flight. */
   saving?: boolean;
   /** A save that failed, as the server explained it. */
@@ -277,7 +278,7 @@ export function AddMonitorForm({
   onPreview,
   onSubmit,
   preview,
-  held = false,
+  isHeld,
   saving = false,
   saveError = null,
   onCancel,
@@ -1080,7 +1081,7 @@ export function AddMonitorForm({
         <PreviewNotice
           preview={preview}
           placed={badControl !== null}
-          held={held && testedAddress === addressOf(values)}
+          held={isHeld?.(effective) ?? false}
         />
       </div>
 

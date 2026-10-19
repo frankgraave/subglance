@@ -400,6 +400,44 @@ describe("AddMonitor", () => {
     }
   });
 
+  it("tests again on Save monitor after a test of the same settings was refused", async () => {
+    // A refused probe is an answer, not a test in progress: waiting out the
+    // cooldown and pressing Save monitor must send a new request.
+    const preview = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(429, "too many previews", 1, null))
+      .mockResolvedValueOnce(result({ type: "http", target: "https://example.com" }));
+    const create = vi.fn().mockResolvedValue({ id: "6" });
+    const onCreated = vi.fn();
+    render(<AddMonitor api={{ preview, create }} onCreated={onCreated} />);
+
+    setField(/what should be watched/i, "example.com");
+    click(/save monitor/i);
+    await waitFor(() => expect(statusText()).toMatch(/too many previews/i));
+    expect(create).not.toHaveBeenCalled();
+
+    click(/save monitor/i);
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("6"));
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops offering a second press once a setting it would test has changed", async () => {
+    const preview = vi.fn().mockResolvedValue(
+      result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }),
+    );
+    render(<AddMonitor api={{ preview, create: vi.fn() }} />);
+
+    setField(/what should be watched/i, "down.example.com");
+    click(/save monitor/i);
+    await waitFor(() => expect(statusText()).toMatch(/press save monitor again/i));
+
+    // The next press would test a 45 s timeout, not save the held answer.
+    fireEvent.change(screen.getByLabelText(/give up after/i), { target: { value: "45" } });
+    expect(statusText()).toMatch(/connection refused/i);
+    expect(statusText()).not.toMatch(/press save monitor again/i);
+  });
+
   it("says nothing about saving again after a failing check from Test it", async () => {
     const preview = vi.fn().mockResolvedValue(
       result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }),
