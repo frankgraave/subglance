@@ -36,21 +36,20 @@ it("offers no threshold when the detail read did not carry it", () => {
   expect(screen.queryByLabelText(label)).toBeNull();
 });
 
-it("needs a preview to save a new threshold, and sends no HTTP settings with it", async () => {
+it("tests a new threshold before saving it, and sends no HTTP settings with it", async () => {
   const fetch = vi.fn().mockResolvedValue(passed()); vi.stubGlobal("fetch", fetch);
   const onSave = vi.fn().mockResolvedValue(undefined);
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change(label, "60");
   save();
   expect(onSave).not.toHaveBeenCalled();
-  testIt();
   await screen.findByText(/registered until/);
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ domain_warn_days: 60 }));
+  expect(fetch).toHaveBeenCalledTimes(1);
   const sent = JSON.parse(fetch.mock.calls[0][1].body);
   expect(sent).toMatchObject({ type: "domain", target: "example.com", domain_warn_days: 60 });
   expect(sent).not.toHaveProperty("method");
   expect(sent).not.toHaveProperty("ssl_warn_days");
-  save();
-  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ domain_warn_days: 60 }));
 });
 
 it("refuses an interval under six hours before asking the server", () => {

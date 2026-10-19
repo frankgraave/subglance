@@ -88,9 +88,10 @@ it("real Go API persists the edit, previews without history, rejects stale ETags
     const before = await f.api(`${path}/heartbeats`).then((r) => r.json());
     const probes = await fetch(`${f.target}/stats`).then((r) => r.json());
     await fill(page, 'input[name="target"]', `${f.target}/changed`);
+    // Save changes tests the changed target itself; it fails, so the first
+    // press sends nothing and the held note offers a second press.
     await button(page, "Save changes");
-    expect((await f.api(path).then((r) => r.json())).target).toBe(`${f.target}/old`);
-    await button(page, "Test it"); await page.waitForSelector(".result--bad");
+    await page.waitForFunction(() => document.querySelector(".result--bad")?.textContent?.includes("Nothing was saved yet"));
     expect((await fetch(`${f.target}/stats`).then((r) => r.json())).probes).toBe(probes.probes + 1);
     expect(await f.api(`${path}/heartbeats`).then((r) => r.json())).toEqual(before);
     expect((await f.api(path).then((r) => r.json())).target).toBe(`${f.target}/old`);

@@ -12,20 +12,150 @@ const change = (name: string, value: string) => fireEvent.change(screen.getByLab
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 const testTarget = () => fireEvent.click(screen.getByRole("button", { name: /test it|testing/i }));
 const result = (target = "https://new.example") => new Response(JSON.stringify({ ok: false, target, type: "http", latency_ms: 8, checked_at: "2026-09-20T12:00:00Z", error: "connection refused" }));
+const passed = (target = "https://new.example/") => new Response(JSON.stringify({ ok: true, target, type: "http", latency_ms: 8, checked_at: "2026-09-20T12:00:00Z", status_code: 201 }));
+const status = () => screen.getByRole("status").textContent ?? "";
+const previews = (fetch: ReturnType<typeof vi.fn>) => fetch.mock.calls.filter(([url]) => url === "/api/v1/monitors/preview").length;
 
 it("previews the changed target with every stored check setting, then permits saving a known Down target", async () => {
   const fetch = vi.fn().mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
   const onSave = vi.fn().mockResolvedValue(undefined);
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
-  change("Target", "https://new.example"); save();
-  expect(onSave).not.toHaveBeenCalled();
-  expect(screen.getByRole("alert").textContent).toMatch(/test it/i);
+  change("Target", "https://new.example");
   testTarget();
   await screen.findByText(/connection refused/);
   expect(fetch.mock.calls[0][0]).toBe("/api/v1/monitors/preview");
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ type: "http", target: "https://new.example", timeout_s: 10, method: "POST", expected_status: "201-204", keyword: "healthy", keyword_mode: "must_not_contain", follow_redirects: false, headers: raw.headers, body: "payload", ssl_warn_days: 30, min_tls_version: "1.2" });
   expect(onSave).not.toHaveBeenCalled();
+  // The answer came from Test it, so there is nothing to say about saving.
+  expect(status()).not.toMatch(/nothing was saved/i);
   save(); await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example" }));
+  expect(previews(fetch)).toBe(1);
+});
+
+it("tests a changed target itself when Save changes is pressed first, and saves the target it resolved", async () => {
+  const fetch = vi.fn().mockResolvedValue(passed()); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  expect(onSave).not.toHaveBeenCalled();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example/" }));
+  expect(previews(fetch)).toBe(1);
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ type: "http", target: "https://new.example", timeout_s: 10 });
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("shows a failing check instead of saving it, and saves it on a second press", async () => {
+  const fetch = vi.fn().mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  await screen.findByText(/connection refused/);
+  expect(status()).toMatch(/nothing was saved yet\. press save changes again/i);
+  expect(onSave).not.toHaveBeenCalled();
+  // Nothing refused: the form is ready for the second press.
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" }).disabled).toBe(false);
+  save();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example" }));
+  expect(previews(fetch)).toBe(1);
+});
+
+it("waits for a Test it of the same settings instead of probing twice", async () => {
+  let resolve!: (value: Response) => void;
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); testTarget(); save();
+  expect(previews(fetch)).toBe(1);
+  expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+  expect(onSave).not.toHaveBeenCalled();
+  await act(async () => resolve(passed()));
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example/" }));
+  expect(previews(fetch)).toBe(1);
+});
+
+it("says it is checking, not saving, until the test it ran passes", async () => {
+  let resolve!: (value: Response) => void;
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockReturnValue(new Promise<void>(() => undefined));
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  // Closing the form now would abort the test and send nothing.
+  expect(status()).toMatch(/checking/i);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" }).disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Saving…" })).toBeNull();
+  expect(screen.queryByText(/may still complete/)).toBeNull();
+  await act(async () => resolve(passed()));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Saving…" }).disabled).toBe(true);
+  expect(screen.getByText(/may still complete/)).toBeTruthy();
+});
+
+it("tests again on Save changes after a test of the same settings was refused", async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: "a preview check ran moments ago" }), { status: 429, headers: { "Retry-After": "3" } }))
+    .mockResolvedValueOnce(passed());
+  vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  expect((await screen.findByRole("alert")).textContent).toMatch(/moments ago/);
+  expect(onSave).not.toHaveBeenCalled();
+  save();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example/" }));
+  expect(previews(fetch)).toBe(2);
+});
+
+it("stops offering a second press once a setting it would test has changed", async () => {
+  // A Response body reads once, so every probe gets its own.
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(result())); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  await waitFor(() => expect(status()).toMatch(/press save changes again/i));
+  // The next press would test a 20 s timeout, not save the held answer.
+  change("Give up after", "20");
+  expect(status()).not.toMatch(/press save changes again/i);
+  save();
+  await waitFor(() => expect(previews(fetch)).toBe(2));
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ target: "https://new.example", timeout_s: 20 });
+  await waitFor(() => expect(status()).toMatch(/press save changes again/i));
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it("drops the second-press note once Test it answers instead", async () => {
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(result())); vi.stubGlobal("fetch", fetch);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={vi.fn()} />);
+  change("Target", "https://new.example"); save();
+  await waitFor(() => expect(status()).toMatch(/press save changes again/i));
+  // The same settings, the same failure, but this answer came from Test it.
+  testTarget();
+  await waitFor(() => expect(previews(fetch)).toBe(2));
+  await screen.findByText(/connection refused/);
+  expect(status()).not.toMatch(/press save changes again/i);
+});
+
+it("keeps the held answer through an edit the check does not read", async () => {
+  const fetch = vi.fn().mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  await waitFor(() => expect(status()).toMatch(/press save changes again/i));
+  change("Name", "Auth (moved)");
+  expect(status()).toMatch(/press save changes again/i);
+  save();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: "Auth (moved)", target: "https://new.example" }));
+  expect(previews(fetch)).toBe(1);
+});
+
+it("saves a change the check does not read without testing it", async () => {
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Name", "Auth API"); save();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: "Auth API" }));
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and preserves explicit PATCH clearing", async (floor) => {
@@ -35,7 +165,6 @@ it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and pre
   change("Target", "https://new.example");
   change("Minimum TLS version", floor);
   change("First repeat after: unit", "s"); change("First repeat after", "173");
-  save(); expect(onSave).not.toHaveBeenCalled();
   testTarget(); await screen.findByText(/connection refused/);
   const request = JSON.parse(fetch.mock.calls[0][1].body);
   const settings = raw;
@@ -53,21 +182,30 @@ it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and pre
 });
 
 it.each([
-  ["Keyword", "changed", "Give up after", "20"],
-  ["Minimum TLS version", "1.3", "Minimum TLS version", ""],
-])("invalidates completed and in-flight previews when %s changes", async (first, firstValue, second, secondValue) => {
+  ["Keyword", "changed", { keyword: "changed" }, "Give up after", "20", { timeout_s: 20 }],
+  ["Minimum TLS version", "1.3", { min_tls_version: "1.3" }, "Minimum TLS version", "", {}],
+])("invalidates completed and in-flight previews when %s changes", async (first, firstValue, firstSent, second, secondValue, secondSent) => {
   let resolve!: (value: Response) => void;
-  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })).mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })).mockImplementation(() => Promise.resolve(result())); vi.stubGlobal("fetch", fetch);
   const onSave = vi.fn();
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change("Target", "https://new.example"); testTarget();
   change(first, firstValue);
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
   await act(async () => resolve(result()));
-  expect(screen.queryByText(/connection refused/)).toBeNull(); save(); expect(onSave).not.toHaveBeenCalled();
-  testTarget(); await screen.findByText(/connection refused/);
+  expect(screen.queryByText(/connection refused/)).toBeNull();
+  // The stale answer decides nothing: Save changes tests the draft as it is.
+  save(); await screen.findByText(/connection refused/);
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject(firstSent);
+  expect(onSave).not.toHaveBeenCalled();
   change(second, secondValue);
-  expect(screen.queryByText(/connection refused/)).toBeNull(); save(); expect(onSave).not.toHaveBeenCalled();
+  expect(screen.queryByText(/connection refused/)).toBeNull();
+  save(); await screen.findByText(/connection refused/);
+  expect(fetch).toHaveBeenCalledTimes(3);
+  const third = JSON.parse(fetch.mock.calls[2][1].body);
+  expect(third).toMatchObject(secondSent);
+  expect(fetch.mock.calls[2][1].body).not.toBe(fetch.mock.calls[1][1].body);
+  expect(onSave).not.toHaveBeenCalled();
 });
 
 it("round-trips explicit empty and false settings without resetting untouched fields", async () => {

@@ -13,7 +13,7 @@ import { DOMAIN_INTERVAL_MESSAGE, DOMAIN_MIN_INTERVAL_S, DOMAIN_WARN_DAYS_MESSAG
 import { tagsToText, textToTags } from "./tags";
 import { ApiError, CERTIFICATE_OFFERED, carriesPin, describePreview, fingerprintPreview, previewCheck } from "./preview";
 import { CertificateTrust } from "./CertificateTrust";
-import type { PreviewRequest, PreviewState } from "./preview";
+import type { PreviewFingerprint, PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { TlsFloorField } from "./TlsFloorField";
 import { ChannelPicker } from "./ChannelPicker";
@@ -142,6 +142,21 @@ function controlIn(form: HTMLFormElement | null, field: string, tlsId: string): 
   return form.elements.namedItem(field === "min_tls_version" ? tlsId : field) as HTMLElement | null;
 }
 
+/*
+ * Said only after Save changes ran the test itself and it failed. The user
+ * pressed Save, not Test it, so without this the form would look as if it had
+ * ignored them; the way on is a second press, not a dead end.
+ */
+const HELD = "Nothing was saved yet. Press Save changes again to save it anyway.";
+
+/** A preview in flight: what it tests, how to stop it, and what it found. */
+type Probe = {
+  fingerprint: PreviewFingerprint;
+  controller: AbortController;
+  /** The state it settled into, or null when it was aborted first. */
+  outcome: Promise<PreviewState | null>;
+};
+
 export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChannels }: EditMonitorFormProps) {
   const ids = useId();
   const [initial] = useState(() => valuesFor(monitor));
@@ -149,33 +164,48 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
   const [problem, setProblem] = useState<Problem>(null);
   const [preview, setPreview] = useState<PreviewState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
+  /*
+   * Save changes is waiting on its own test of the settings, before any PATCH
+   * exists. Kept apart from `saving`: closing the form now aborts the test and
+   * nothing is sent, so neither "Saving…" nor the note that a save may still
+   * complete would be true. The form is locked through both.
+   */
+  const [testing, setTesting] = useState(false);
+  const locked = saving || testing;
   const [conflict, setConflict] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const dirty = useRef(false);
   const busy = useRef(false);
   const alive = useRef(true);
-  const inFlight = useRef<AbortController | null>(null);
+  const inFlight = useRef<Probe | null>(null);
+  /*
+   * The settings a Save changes tested and found failing, so nothing was
+   * sent. A service that is down right now is still a fair thing to keep
+   * watching, so the next press with the same settings finds a matching
+   * preview and saves; this only decides whether the form says so.
+   */
+  const [held, setHeld] = useState<PreviewFingerprint | null>(null);
   const changed = JSON.stringify(values) !== JSON.stringify(initial);
   useEffect(() => { dirty.current = changed; }, [changed]);
   useEffect(() => {
     // API errors arrive while the fieldset is disabled. Focus after it unlocks.
-    if (saving || !problem?.field) return;
+    if (locked || !problem?.field) return;
     const control = controlIn(form.current, problem.field, `${ids}-min-tls`);
     const panel = control?.closest("details");
     if (panel) panel.open = true;
     control?.focus();
-  }, [problem, saving, ids]);
+  }, [problem, locked, ids]);
   useEffect(() => {
     alive.current = true;
     const unregister = registerLeaveGuard({ element: () => form.current, dirty: () => dirty.current, discard: () => { dirty.current = false; } });
-    return () => { alive.current = false; inFlight.current?.abort(); unregister(); };
+    return () => { alive.current = false; inFlight.current?.controller.abort(); unregister(); };
   }, []);
 
   const update = (key: string, value: string) => {
     setValues((old) => ({ ...old, [key]: value }));
     if (!conflict) setProblem(null);
     if (CHECK_FIELDS.has(wireFor(key)) || key === "min_tls_version") {
-      inFlight.current?.abort();
+      inFlight.current?.controller.abort(); inFlight.current = null;
       setPreview({ phase: "idle" });
     }
   };
@@ -273,17 +303,40 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     return { patch, request };
   };
 
-  const runPreview = (current = values) => {
-    const draft = validated(current); if (!draft || saving || conflict) return;
-    inFlight.current?.abort();
-    const controller = new AbortController(); inFlight.current = controller;
+  /*
+   * One probe of `request`, superseding any still running. Its outcome is
+   * the state it settled into, or null when it was aborted or the form went
+   * away first, so a save waiting on it knows whether it has an answer.
+   */
+  const startProbe = (request: PreviewRequest): Probe => {
+    inFlight.current?.controller.abort();
+    const controller = new AbortController();
+    const fingerprint = fingerprintPreview(request);
+    setHeld(null);
     setPreview({ phase: "checking" });
-    void previewCheck(draft.request, controller.signal).then((result) => {
-      if (!controller.signal.aborted && alive.current) setPreview({ phase: "done", result, request: fingerprintPreview(draft.request) });
-    }).catch((error: unknown) => {
-      if (controller.signal.aborted || !alive.current) return;
-      setPreview({ phase: "idle" }); explain(error);
+    const outcome = previewCheck(request, controller.signal).then(
+      (result): PreviewState => ({ phase: "done", result, request: fingerprint }),
+      (error: unknown): PreviewState | null => {
+        if (controller.signal.aborted || !alive.current) return null;
+        explain(error);
+        return { phase: "idle" };
+      },
+    ).then((next) => {
+      if (next === null || controller.signal.aborted || !alive.current) return null;
+      // Settled, so a later save tests again rather than replaying this
+      // answer: only a probe that is still running is worth waiting for, and
+      // a refusal such as a 429 would otherwise come back on every press.
+      if (inFlight.current?.controller === controller) inFlight.current = null;
+      setPreview(next);
+      return next;
     });
+    const probe = { fingerprint, controller, outcome };
+    inFlight.current = probe;
+    return probe;
+  };
+  const runPreview = (current = values) => {
+    const draft = validated(current); if (!draft || locked || conflict) return;
+    void startProbe(draft.request);
   };
   /*
    * Trusting a certificate, or no longer trusting one, tests again at once
@@ -299,18 +352,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
   const pinShown = "trusted_cert_sha256" in values && carriesPin(monitor.type, values.target ?? "");
   const offered = pinShown && preview.phase === "done" && !preview.result.ok ? preview.result.certificate : undefined;
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (busy.current || conflict) return;
-    const draft = validated(); if (!draft) return;
-    if (!Object.keys(draft.patch).length) { reject("Nothing changed, so nothing was sent."); return; }
-    const changesProbe = Object.keys(draft.patch).some((key) => CHECK_FIELDS.has(key));
-    if (!monitor.push && changesProbe && (preview.phase !== "done" || preview.request !== fingerprintPreview(draft.request))) {
-      reject("Press Test it before saving changed check settings. A Down result can still be saved.", "target"); return;
-    }
-    if (draft.patch.target !== undefined && preview.phase === "done") draft.patch.target = preview.result.target;
+  /** Sends the patch, with the target the matching preview normalised it to. */
+  const commit = (patch: MonitorPatch, tested: PreviewState) => {
+    if (patch.target !== undefined && tested.phase === "done") patch.target = tested.result.target;
     busy.current = true; setSaving(true);
-    void onSave(draft.patch).then(() => { dirty.current = false; }).catch((error: unknown) => {
+    void onSave(patch).then(() => { dirty.current = false; }).catch((error: unknown) => {
       if (!alive.current) return;
       if (error instanceof ApiError && error.status === 412) {
         setConflict(true);
@@ -319,6 +365,38 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     }).finally(() => { busy.current = false; if (alive.current) setSaving(false); });
   };
 
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (busy.current || conflict) return;
+    const draft = validated(); if (!draft) return;
+    if (!Object.keys(draft.patch).length) { reject("Nothing changed, so nothing was sent."); return; }
+    const changesProbe = Object.keys(draft.patch).some((key) => CHECK_FIELDS.has(key));
+    const fingerprint = fingerprintPreview(draft.request);
+    if (!monitor.push && changesProbe && (preview.phase !== "done" || preview.request !== fingerprint)) {
+      /*
+       * A changed check setting nothing has tested: Save changes tests it
+       * first instead of sending the user to Test it, as Save monitor does
+       * in the create form. A test of these settings that is already
+       * running is waited for, since the server's preview cooldown would
+       * refuse a second one fired at once.
+       */
+      const pending = inFlight.current;
+      const probe = pending !== null && !pending.controller.signal.aborted && pending.fingerprint === fingerprint
+        ? pending : startProbe(draft.request);
+      busy.current = true; setTesting(true);
+      void probe.outcome.then((tested) => {
+        if (!alive.current) return;
+        setTesting(false);
+        if (tested?.phase === "done" && tested.result.ok) { busy.current = false; commit(draft.patch, tested); return; }
+        // A failed check is shown as Test it shows it and nothing is sent:
+        // the user has not seen the answer yet. A refusal is already shown.
+        if (tested?.phase === "done") setHeld(tested.request);
+        busy.current = false;
+      });
+      return;
+    }
+    commit(draft.patch, preview);
+  };
   /** A text input, a textarea, or with `options` a select labelled by its values. */
   const field = (key: string, multiline = false, options?: readonly string[]) => {
     if (!(key in values)) return null;
@@ -337,7 +415,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     </div>;
   };
   return <form ref={form} className="form-column edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
-    <fieldset className="contents" disabled={saving}>
+    <fieldset className="contents" disabled={locked}>
       {field("name")}
       <p className="field-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
       {field("target")}
@@ -388,7 +466,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
             </TlsFloorField>
           </div>
         </details>}
-        <p className="field-help">Test it probes these settings without saving, recording history or sending alerts. A failed check can still be saved.</p>
+        <p className="field-help">Test it probes these settings without saving, recording history or sending alerts. Save changes runs it first when a changed check setting is untested. A failed check can still be saved.</p>
       </>}
       {field("tags", true)}
       <p className="field-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
@@ -406,18 +484,18 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     {problem && !problem.field && <FieldError>{problem.message}</FieldError>}
     <div role="status" aria-live="polite">
       {preview.phase === "checking" && <p className="result">Checking…</p>}
-      {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}{offered !== undefined && ` ${CERTIFICATE_OFFERED}`}</p>}
+      {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}{offered !== undefined && ` ${CERTIFICATE_OFFERED}`}{!preview.result.ok && held === preview.request && ` ${HELD}`}</p>}
     </div>
     {pinShown && <CertificateTrust trusted={values.trusted_cert_sha256}
       trustedAt={values.trusted_cert_sha256 === initial.trusted_cert_sha256 ? monitor.trustedCertAt : undefined}
       offered={offered} onTrust={retest} onStop={() => retest("")} stopId={`${ids}-trusted_cert_sha256`}
       error={problem?.field === "trusted_cert_sha256" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
       errorId={problem?.field === "trusted_cert_sha256" ? `${ids}-error` : undefined}
-      disabled={saving || conflict} />}
+      disabled={locked || conflict} />}
     {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
     <div className="button-row">
-      {!monitor.push && <button className="button" type="button" onClick={() => runPreview()} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
-      <button className="button button--primary" type="submit" disabled={saving || conflict}>{saving ? "Saving…" : "Save changes"}</button>
+      {!monitor.push && <button className="button" type="button" onClick={() => runPreview()} disabled={locked || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
+      <button className="button button--primary" type="submit" disabled={locked || conflict}>{saving ? "Saving…" : "Save changes"}</button>
       {conflict && onReload && <button className="button" type="button" onClick={onReload}>Reload latest settings</button>}
       {onCancel && <button className="button button--quiet" type="button" onClick={() => { if (confirmLeave(form.current)) onCancel(); }}>Cancel</button>}
     </div>
