@@ -58,6 +58,9 @@ func TestLastCheckTimesReadsTheIndexPerMonitor(t *testing.T) {
 		}
 		plan = append(plan, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read plan: %v", err)
+	}
 	joined := strings.Join(plan, "\n")
 	if !strings.Contains(joined, "SEARCH heartbeats") {
 		t.Errorf("heartbeats are not searched by monitor; plan:\n%s", joined)
