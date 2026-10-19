@@ -68,34 +68,43 @@ func TestCatalogueCoversEveryMonitorType(t *testing.T) {
 
 // TestSeedFailureTextsMatchTheChecker runs the real checker against the
 // settings the catalogue gives its dns monitor and its JSON assertion, and
-// compares what it says with the text the seeder files for them. A seeded
-// failure reads like a real one only for as long as these agree.
+// compares what it says with the outage the catalogue scripts for that
+// monitor. A seeded failure reads like a real one only for as long as these
+// agree, so the expected kind and text are read from the monitor's own
+// outage rather than from the constants it was first written with.
 func TestSeedFailureTextsMatchTheChecker(t *testing.T) {
-	spec := func(name string) store.Monitor {
+	spec := func(name string, kind checker.FailureKind) (store.Monitor, outageSpec) {
+		t.Helper()
 		for _, s := range monitors() {
-			if s.monitor.Name == name {
-				return s.monitor
+			if s.monitor.Name != name {
+				continue
 			}
+			for _, o := range s.profile.outages {
+				if o.cause == string(kind) {
+					return s.monitor, o
+				}
+			}
+			t.Fatalf("%q scripts no %s outage", name, kind)
 		}
 		t.Fatalf("no %q in the catalogue", name)
-		return store.Monitor{}
+		return store.Monitor{}, outageSpec{}
 	}
 	guard := checker.NewGuard(true) // loopback stands in for the target
 
 	t.Run("dns mismatch", func(t *testing.T) {
-		m := spec("Apex A record")
+		m, o := spec("Apex A record", checker.FailDNSMismatch)
 		resolver := aResolver(t, m.Target, [4]byte{198, 51, 100, 7})
 		res := checker.NewDNSChecker(guard).Check(context.Background(), checker.Monitor{
 			Type: checker.TypeDNS, Target: m.Target, Timeout: 5 * time.Second,
 			DNSRecordType: m.DNS.RecordType, DNSExpected: m.DNS.Expected, DNSResolver: resolver,
 		})
-		if res.Kind != checker.FailDNSMismatch || res.Error != errDNSMismatch {
-			t.Errorf("checker says %s %q\nseed files     %q", res.Kind, res.Error, errDNSMismatch)
+		if string(res.Kind) != o.cause || res.Error != o.message {
+			t.Errorf("checker says %s %q\nseed files     %s %q", res.Kind, res.Error, o.cause, o.message)
 		}
 	})
 
 	t.Run("json assertion", func(t *testing.T) {
-		m := spec("Object storage")
+		m, o := spec("Object storage", checker.FailAssertion)
 		if m.JSONAssertion == nil {
 			t.Fatal("Object storage carries no JSON assertion")
 		}
@@ -113,8 +122,8 @@ func TestSeedFailureTextsMatchTheChecker(t *testing.T) {
 				Expected: []byte(m.JSONAssertion.Expected),
 			},
 		})
-		if res.Kind != checker.FailAssertion || res.Error != errAssertion {
-			t.Errorf("checker says %s %q\nseed files     %q", res.Kind, res.Error, errAssertion)
+		if string(res.Kind) != o.cause || res.Error != o.message {
+			t.Errorf("checker says %s %q\nseed files     %s %q", res.Kind, res.Error, o.cause, o.message)
 		}
 	})
 }
