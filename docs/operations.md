@@ -621,6 +621,20 @@ to 10% later) and worker queue. This also applies on restart. It is a target cad
 latency guarantee: check duration and worker saturation can delay it. Push
 monitors retain their configured reporting deadline; nothing polls a push job.
 
+A restart does not reset the schedule. Each monitor's next check is due one
+cadence after its last recorded check, with the same jitter, so restarting 40
+seconds into a one-minute interval leaves 20 seconds, and a daily monitor on a
+host that restarts every night is still checked once a day. A monitor whose
+check fell due while SubGlance was stopped runs within about half a minute of
+the start: two seconds, plus up to 30 seconds of spread so a restart after
+downtime does not fire every overdue monitor at once. Resuming a paused monitor
+places it the same way once the scheduler next reads the monitor list, which it
+does every 30 seconds: one paused for longer than its interval is checked within
+about a minute instead of a whole interval later. A monitor never checked gets
+its first check two seconds after the scheduler first sees it. If the clock has
+moved back since the last check, the wait is never longer than one cadence from
+the start.
+
 Uptime is a sample ratio: assessed up / (assessed up + confirmed down). Warning
 samples are excluded, never backdated into downtime. The first failed sample
 still starts the incident's diagnostic duration, so incident duration and uptime

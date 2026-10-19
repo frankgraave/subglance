@@ -803,7 +803,10 @@ Otherwise every restart would manufacture an outage on healthy monitors.
 
 Monitors that are deleted or paused have their in-memory state dropped. A
 monitor resumed an hour later starts clean rather than resuming a failure
-streak from before the pause.
+streak from before the pause. Its next check is due one interval after its
+last one, so a monitor paused for longer than its interval is checked within
+about a minute of resuming; a restart keeps every monitor's place the same way
+(see [the cadence after a restart](operations.md#warning-confirmation-and-recovery-cadence)).
 
 ## API
 
