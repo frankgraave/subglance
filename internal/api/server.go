@@ -67,6 +67,10 @@ type Server struct {
 	// endpoint, matching how bus and prober are treated.
 	pusher PushRecorder
 
+	// rescheduler is told after every write that changes what is checked.
+	// Nil leaves those changes to the scheduler's own reload tick.
+	rescheduler Rescheduler
+
 	// tester sends a real message through a channel, for the test button.
 	// Nil disables that endpoint, on the same principle as the others.
 	tester ChannelTester

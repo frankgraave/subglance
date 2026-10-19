@@ -48,6 +48,9 @@ func (s *Server) handleResetInstance(w http.ResponseWriter, r *http.Request) {
 	// a reset, so it stays.
 	s.manualChecks.clear()
 	s.pushReports.clear()
+	// Every monitor is gone; without this the scheduler goes on checking
+	// them, and can alert on them, until its next tick.
+	s.monitorsChanged()
 
 	// Logged at warn with who did it: this is the one line an operator will
 	// go looking for when an instance is unexpectedly empty.

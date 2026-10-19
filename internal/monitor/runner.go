@@ -376,6 +376,12 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 // Size reports how many monitors are currently scheduled.
 func (r *Runner) Size() int { return r.sch.Size() }
 
+// ReloadSoon asks the scheduler to re-read the monitor set shortly instead
+// of at its next tick, so a monitor created, edited, paused, resumed or
+// deleted through the API is scheduled, rescheduled or dropped within a
+// fraction of a second. See scheduler.Scheduler.ReloadSoon.
+func (r *Runner) ReloadSoon() { r.sch.ReloadSoon() }
+
 // ChecksCompleted reports how many checks have finished since start.
 //
 // Only its movement is meaningful; it is not persisted and resets on restart.

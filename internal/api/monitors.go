@@ -575,6 +575,7 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("monitor created", "id", created.ID, "name", created.Name, "target", created.Target)
+	s.monitorsChanged()
 
 	// The plaintext push URL exists only in this response. The monitor is
 	// useless without it and it can never be retrieved again, so it is
@@ -1151,6 +1152,7 @@ func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.manualChecks.forget(id)
+	s.monitorsChanged()
 	s.log.Info("monitor deleted", "id", id)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1174,6 +1176,9 @@ func (s *Server) setEnabled(w http.ResponseWriter, r *http.Request, enabled bool
 		writeError(w, http.StatusInternalServerError, "could not update monitor")
 		return
 	}
+	// Before the read below, which can still fail: the write has happened,
+	// and a paused monitor must stop being checked whatever the response is.
+	s.monitorsChanged()
 
 	m, err := s.db.GetMonitor(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1608,6 +1613,10 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	// would have to be followed by a GET just to learn the next validator.
 	setMonitorETag(w, updated)
 
+	// Every edit, not only one to the interval or the target: the scheduler
+	// keeps a queued monitor's place unless its cadence changed, so a rename
+	// costs one read and moves nothing.
+	s.monitorsChanged()
 	s.log.Info("monitor updated", "id", updated.ID, "name", updated.Name, "target", updated.Target)
 	writeJSON(w, http.StatusOK, s.describeMonitor(r, updated))
 }

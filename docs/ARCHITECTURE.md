@@ -83,8 +83,15 @@ keeps that from becoming an unbounded-goroutine failure on a small VPS. An
 explicit `--check-workers` is taken literally and never adjusted.
 
 The pool only ever grows, and only on the scheduling loop's own goroutine —
-`sync.WaitGroup.Add` racing the `Wait` in the shutdown path is a panic, and
-`Reload` is reachable from an API request.
+`sync.WaitGroup.Add` racing the `Wait` in the shutdown path is a panic.
+
+A write through the API that changes what is checked (a monitor created,
+edited, deleted, paused or resumed, an import, a reset) calls `ReloadSoon`,
+which asks the scheduling loop to re-read the monitor set 200 ms later; every
+request in that time shares the one read, so a bulk action costs a few reads
+rather than one per monitor. The call never blocks and cannot fail on the
+request's path. The 30-second reload tick stays as the fallback, and is what
+picks up a change made to the database by anything other than the API.
 
 ### Checker
 An interface with a single method so check types can be extended
