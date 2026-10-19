@@ -51,6 +51,14 @@ const firstCheckDelay = 2 * time.Second
 // worker pool bounds the rest.
 const catchUpSpread = 30 * time.Second
 
+// reloadSettle is how long the scheduler waits after a ReloadSoon before it
+// re-reads the monitor set. Every request that arrives in that time is served
+// by the same read, so a bulk pause sent as one request per monitor, or an
+// import that writes a hundred monitors, costs a few reads rather than one per
+// monitor. It is short next to firstCheckDelay, so a monitor saved through the
+// API is still checked while the person who saved it is looking.
+const reloadSettle = 200 * time.Millisecond
+
 // Job is one monitor as the scheduler sees it.
 type Job struct {
 	// Failing puts the monitor on the failure cadence (see Cadence) without
@@ -167,7 +175,7 @@ type Scheduler struct {
 	// workerTarget is the pool size reload would like, published for the Run
 	// loop to act on. Growth happens on the loop's own goroutine and nowhere
 	// else: wg.Wait runs there too, and a WaitGroup.Add racing its Wait is a
-	// panic, not a slow shutdown. Reload is callable from the API, so
+	// panic, not a slow shutdown. Reload runs on its caller's goroutine, so
 	// spawning workers inside it would be exactly that race.
 	workerTarget int
 
@@ -193,6 +201,11 @@ type Scheduler struct {
 	// wake lets a reload interrupt the sleep when the new head of the queue is
 	// due sooner than the old one.
 	wake chan struct{}
+
+	// reloadSoon carries ReloadSoon's requests to the Run loop. One slot is
+	// enough: a request that finds it full is already covered by the read
+	// that the pending one will cause.
+	reloadSoon chan struct{}
 
 	// tasks carries work to the pool. Buffered so a brief burst does not stall
 	// the scheduling loop.
@@ -243,6 +256,7 @@ func New(opts Options) *Scheduler {
 		queue:          q,
 		inFlight:       map[int64]bool{},
 		wake:           make(chan struct{}, 1),
+		reloadSoon:     make(chan struct{}, 1),
 		// The task buffer is sized for maxWorkers rather than for the
 		// starting pool, because the pool grows and the channel cannot be
 		// resized afterwards. Its capacity is queue depth, not concurrency:
@@ -317,6 +331,10 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	timer := time.NewTimer(time.Hour)
 	defer timer.Stop()
 
+	// settle is armed by the first ReloadSoon after a read and fires once,
+	// reloadSettle later; nil (never ready) while no request is waiting.
+	var settle <-chan time.Time
+
 	for {
 		wait := s.timeUntilNext()
 		if !timer.Stop() {
@@ -336,27 +354,43 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-reloadTicker.C:
-			if err := s.reload(ctx); err != nil {
-				// A reload racing a shutdown fails by design; logging it as an
-				// error trains operators to ignore the error level.
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					continue
-				}
-				s.log.Error("monitor reload failed", "error", err)
+			s.reloadAndGrow(ctx)
+
+		case <-s.reloadSoon:
+			// Wait out the settle time rather than reading now: the request
+			// is usually the first of several.
+			if settle == nil {
+				settle = time.After(reloadSettle)
 			}
-			s.growPool(ctx)
+
+		case <-settle:
+			settle = nil
+			s.reloadAndGrow(ctx)
 
 		case <-s.wake:
-			// A reload changed the queue; recompute the wait — and take on any
-			// workers that reload decided the new monitor set needs. This is
-			// the path an API-triggered Reload arrives by, so it is what makes
-			// a bulk import size the pool without waiting for the next tick.
+			// A reload or SetFailing changed the queue; recompute the wait,
+			// and take on any workers a reload made on another goroutine
+			// (Reload, from a test) decided the new monitor set needs.
 			s.growPool(ctx)
 
 		case <-timer.C:
 			s.dispatchDue(ctx)
 		}
 	}
+}
+
+// reloadAndGrow re-reads the monitor set on Run's goroutine and takes on any
+// workers the new set needs. A failed read is logged and otherwise ignored:
+// the queue keeps what it had, and the next tick tries again.
+func (s *Scheduler) reloadAndGrow(ctx context.Context) {
+	if err := s.reload(ctx); err != nil {
+		// A reload racing a shutdown fails by design; logging it as an
+		// error trains operators to ignore the error level.
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			s.log.Error("monitor reload failed", "error", err)
+		}
+	}
+	s.growPool(ctx)
 }
 
 // growPool starts however many workers reload has asked for since the last
@@ -518,13 +552,31 @@ func (s *Scheduler) report(o Outcome) {
 	s.onResult(o)
 }
 
-// Reload re-reads the monitor set immediately, rather than waiting for the
-// next reload tick.
+// ReloadSoon asks the Run loop to re-read the monitor set within
+// reloadSettle, rather than at the next reload tick.
 //
-// The API calls this after creating, deleting, pausing or resuming a monitor,
-// so a change the user just made takes effect now instead of up to
-// ReloadInterval later. Waiting would make the UI feel broken: you delete a
-// monitor and it keeps checking for another thirty seconds.
+// The API asks for it, through the monitor runner, after every write that
+// changes what is scheduled: creating, editing, deleting, pausing or resuming
+// a monitor, an import and a reset. Without it a change waited for the tick,
+// up to ReloadInterval: a new monitor's first check came half a minute after
+// it was saved, and a deleted or paused one went on being checked, and could
+// alert, for as long.
+//
+// It never blocks and cannot fail, so it is safe on a request's path: the read
+// happens on Run's goroutine, where a failure is logged and the tick remains
+// the fallback. Requests that arrive while one is waiting are served by the
+// same read. Before Run starts, a request waits for it.
+func (s *Scheduler) ReloadSoon() {
+	select {
+	case s.reloadSoon <- struct{}{}:
+	default:
+	}
+}
+
+// Reload re-reads the monitor set now, on the caller's goroutine. Run does
+// this on its own at start and on every tick; it is exported for tests that
+// drive a scheduler without running it. Code that serves a request calls
+// ReloadSoon instead, which neither waits for the read nor returns its error.
 func (s *Scheduler) Reload(ctx context.Context) error {
 	return s.reload(ctx)
 }

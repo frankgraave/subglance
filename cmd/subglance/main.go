@@ -301,6 +301,9 @@ func run(args []string, logOut io.Writer) error {
 	// a startup error rather than a limiter that quietly trusts nobody.
 	apiSrv, err := api.New(log, db).WithBus(bus).
 		WithProber(runner).WithPushRecorder(runner).
+		// The scheduler is told about every monitor write, so a change
+		// is checked now rather than at its next reload tick.
+		WithRescheduler(runner).
 		WithChannelTester(notify).
 		WithDeliveryCounts(notify).
 		// The same runner that records checks reports the counters, so

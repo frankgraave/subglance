@@ -110,6 +110,11 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Told once for the whole file, after the last write, and also when the
+	// import stopped part way: what was written before the failure is real
+	// and is checked like the rest.
+	defer s.monitorsChanged()
+
 	// A client that disconnects halfway must not stop the writes between an
 	// object and its key.
 	if err := s.applyImport(context.WithoutCancel(ctx), &plan, func(token string) string { return s.pushURL(r, token) }); err != nil {

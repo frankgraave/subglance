@@ -628,12 +628,14 @@ host that restarts every night is still checked once a day. A monitor whose
 check fell due while SubGlance was stopped runs within about half a minute of
 the start: two seconds, plus up to 30 seconds of spread so a restart after
 downtime does not fire every overdue monitor at once. Resuming a paused monitor
-places it the same way once the scheduler next reads the monitor list, which it
-does every 30 seconds: one paused for longer than its interval is checked within
-about a minute instead of a whole interval later. A monitor never checked gets
-its first check two seconds after the scheduler first sees it. If the clock has
-moved back since the last check, the wait is never longer than one cadence from
-the start.
+places it the same way: one paused for longer than its interval is checked
+within about half a minute instead of a whole interval later. A monitor never
+checked gets its first check about two seconds after it is saved. The scheduler
+learns of a monitor created, edited, paused, resumed or deleted through the API
+or the web UI within a fraction of a second, so a deleted or paused monitor is
+not checked again; anything else that changes the database is picked up within
+30 seconds. If the clock has moved back since the last check, the wait is never
+longer than one cadence from the start.
 
 Uptime is a sample ratio: assessed up / (assessed up + confirmed down). Warning
 samples are excluded, never backdated into downtime. The first failed sample
