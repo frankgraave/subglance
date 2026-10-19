@@ -63,8 +63,29 @@ func TestClientAddr(t *testing.T) {
 
 		{"X-Real-Ip from a trusted proxy with no chain",
 			"127.0.0.1", "127.0.0.1", nil, "198.51.100.7", "198.51.100.7"},
-		{"a chain wins over X-Real-Ip",
-			"127.0.0.1", "127.0.0.1", []string{"203.0.113.9"}, "198.51.100.7", "203.0.113.9"},
+
+		// Both headers from a trusted proxy. A proxy that sets only one of
+		// them passes the visitor's copy of the other through, so they are
+		// believed only when they agree; otherwise the proxy's own address
+		// is the bucket, which the visitor cannot choose.
+		{"both headers naming the same client",
+			"127.0.0.1", "127.0.0.1", []string{"198.51.100.1, 203.0.113.9"}, "203.0.113.9", "203.0.113.9"},
+		{"both headers, X-Real-Ip IPv4-mapped",
+			"127.0.0.1", "127.0.0.1", []string{"203.0.113.9"}, "::ffff:203.0.113.9", "203.0.113.9"},
+		{"X-Real-Ip naming a trusted hop of the chain: the chain carries further",
+			"127.0.0.1, 10.0.0.0/8", "127.0.0.1", []string{"203.0.113.9, 10.0.0.4"}, "10.0.0.4", "203.0.113.9"},
+		{"an X-Real-Ip-only proxy passing the visitor's X-Forwarded-For",
+			"127.0.0.1", "127.0.0.1", []string{"198.51.100.1"}, "203.0.113.9", "127.0.0.1"},
+		{"an X-Forwarded-For-only proxy passing the visitor's X-Real-Ip",
+			"127.0.0.1", "127.0.0.1", []string{"203.0.113.9"}, "198.51.100.7", "127.0.0.1"},
+		{"X-Real-Ip naming a forged hop left of the client",
+			"127.0.0.1", "127.0.0.1", []string{"198.51.100.1, 203.0.113.9"}, "198.51.100.1", "127.0.0.1"},
+		{"X-Real-Ip naming the peer, which the chain never named",
+			"127.0.0.1", "127.0.0.1", []string{"203.0.113.9"}, "127.0.0.1", "127.0.0.1"},
+		{"a non-address X-Real-Ip beside a chain is ignored",
+			"127.0.0.1", "127.0.0.1", []string{"203.0.113.9"}, "unknown", "203.0.113.9"},
+		{"X-Real-Ip from an untrusted peer does not override its chain either",
+			"127.0.0.1", "192.0.2.1", []string{"203.0.113.9"}, "198.51.100.7", "192.0.2.1"},
 		{"a non-address X-Real-Ip is ignored",
 			"127.0.0.1", "127.0.0.1", nil, "anything at all", "127.0.0.1"},
 		{"a trusted peer with no header is the client",

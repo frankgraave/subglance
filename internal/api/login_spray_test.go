@@ -18,7 +18,7 @@ func TestCredentialSprayingFromOneSourceIsLimited(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	// One host, one connection, a fresh forwarded address per request.
-	assertSprayStoppedByIPKey(t, srv.Handler(), "203.0.113.9:40000", func(i int) string {
+	assertSprayStoppedByIPKey(t, srv.Handler(), "203.0.113.9:40000", "", func(i int) string {
 		return "198.51.100." + strconv.Itoa(i%250+1)
 	}, "a forwarded header from an untrusted peer must not reset the limiter")
 }
@@ -34,14 +34,30 @@ func TestCredentialSprayingBehindAnAppendingProxyIsLimited(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertSprayStoppedByIPKey(t, srv.Handler(), "127.0.0.1:40000", func(i int) string {
+	assertSprayStoppedByIPKey(t, srv.Handler(), "127.0.0.1:40000", "", func(i int) string {
 		return "198.51.100." + strconv.Itoa(i%250+1) + ", 203.0.113.9"
 	}, "the address the client wrote must not pick the limiter's bucket")
 }
 
+// TestCredentialSprayingBehindARealIPProxyIsLimited is the spray from behind
+// a trusted proxy that sets X-Real-Ip and leaves X-Forwarded-For alone, as
+// nginx does with only `proxy_set_header X-Real-IP $remote_addr;`. The
+// visitor's own X-Forwarded-For then arrives untouched beside the real
+// address, and a chain that always wins hands the visitor its bucket.
+func TestCredentialSprayingBehindARealIPProxyIsLimited(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	if _, err := srv.WithTrustedProxies("127.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+
+	assertSprayStoppedByIPKey(t, srv.Handler(), "127.0.0.1:40000", "203.0.113.9", func(i int) string {
+		return "198.51.100." + strconv.Itoa(i%250+1)
+	}, "an X-Forwarded-For the proxy did not write must not pick the limiter's bucket")
+}
+
 // assertSprayStoppedByIPKey sends maxLoginAttempts failed sign-ins, each for a
-// different account and with the X-Forwarded-For value xff(i), and then one
-// more. Every account is fresh, so only the per-IP key can refuse the last
+// different account and with the X-Forwarded-For value xff(i) (and realIP as
+// X-Real-Ip when it is not empty), and then one more. Every account is fresh, so only the per-IP key can refuse the last
 // one: the spray holds that key when the client address does not follow the
 // forwarded value.
 //
@@ -50,7 +66,7 @@ func TestCredentialSprayingBehindAnAppendingProxyIsLimited(t *testing.T) {
 // long enough to reach it would pass whether or not the IP key ever filled.
 // The Retry-After of 900 tells the keyed limiter's refusal apart from the
 // flood limiter's 1.
-func assertSprayStoppedByIPKey(t *testing.T, h http.Handler, remoteAddr string, xff func(int) string, why string) {
+func assertSprayStoppedByIPKey(t *testing.T, h http.Handler, remoteAddr, realIP string, xff func(int) string, why string) {
 	t.Helper()
 	if maxLoginAttempts+1 >= loginFloodBurst {
 		t.Fatalf("the spray of %d attempts would reach the flood burst of %v", maxLoginAttempts+1, loginFloodBurst)
@@ -61,6 +77,9 @@ func assertSprayStoppedByIPKey(t *testing.T, h http.Handler, remoteAddr string, 
 			fmt.Sprintf(`{"email":"victim%d@example.com","password":"wrong-password-entirely"}`, i))
 		req.RemoteAddr = remoteAddr
 		req.Header.Set("X-Forwarded-For", xff(i))
+		if realIP != "" {
+			req.Header.Set("X-Real-Ip", realIP)
+		}
 
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)

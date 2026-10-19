@@ -219,6 +219,10 @@ func TestClientIPExtraction(t *testing.T) {
 			"10.0.0.1", map[string]string{"X-Forwarded-For": "evil\tlabel"}, "10.0.0.1:1234", "10.0.0.1"},
 		{"x-real-ip that is not an address from a trusted proxy",
 			"10.0.0.1", map[string]string{"X-Real-Ip": "not an address"}, "10.0.0.1:1234", "10.0.0.1"},
+		{"x-real-ip and x-forwarded-for that agree",
+			"10.0.0.1", map[string]string{"X-Real-Ip": "203.0.113.5", "X-Forwarded-For": "198.51.100.1, 203.0.113.5"}, "10.0.0.1:1234", "203.0.113.5"},
+		{"x-real-ip and x-forwarded-for that disagree",
+			"10.0.0.1", map[string]string{"X-Real-Ip": "203.0.113.5", "X-Forwarded-For": "198.51.100.1"}, "10.0.0.1:1234", "10.0.0.1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
