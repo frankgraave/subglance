@@ -323,7 +323,19 @@ whatever a visitor wrote into the header stands to the left of the address the
 proxy added and is never reached. An entry that is not an IP address stops the
 walk, and so does nothing to the left of it.
 
-Getting this wrong fails safe. An unset or too-narrow value means everyone
+`X-Real-Ip` is read when a proxy sends no `X-Forwarded-For`. When it sends
+both, they must agree: `X-Real-Ip` has to name the client the chain resolved,
+or one of the listed proxies the walk passed on the way. If they name different
+clients, SubGlance uses the proxy's own address. That case is a proxy that sets
+one of the two headers and passes on whatever the visitor wrote in the other:
+nginx with only `proxy_set_header X-Real-IP $remote_addr;` forwards a visitor's
+`X-Forwarded-For` untouched, and Caddy forwards a visitor's `X-Real-Ip`. Nothing
+in the request says which of the two the proxy wrote, so neither is believed,
+and a visitor who sends a header of their own shares the proxy's bucket instead
+of choosing one. Visitors who send nothing keep their own address. Setting
+`X-Forwarded-For` as shown in the nginx examples below avoids the question.
+
+Getting the list wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
 

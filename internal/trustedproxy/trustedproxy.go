@@ -14,6 +14,7 @@ package trustedproxy
 import (
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
@@ -110,8 +111,18 @@ func (s Set) String() string {
 // last address it read, or the peer when there was none. When every hop is in
 // the set, the request started inside it and the leftmost hop is that host.
 //
-// X-Real-Ip is used only when there is no forwarding chain at all, and only
-// when it is an address. The result is canonical — an IPv4 address that arrived
+// X-Real-Ip stands in for a chain when there is none, and only when it is an
+// address. When a proxy sends both, they must agree: X-Real-Ip has to name a
+// hop the walk read, the client or a proxy in the set to its right (an inner
+// nginx writing the $remote_addr of an outer load balancer). Otherwise one of
+// the two headers came from the visitor and nothing says which: a proxy that
+// sets only X-Real-Ip passes a visitor's X-Forwarded-For through untouched,
+// and Caddy, which sets only X-Forwarded-For, passes a visitor's X-Real-Ip.
+// Either header winning outright lets the visitor pick their own rate-limit
+// bucket behind one of those two, so neither does: the peer is used, which is
+// the proxy's shared bucket, and a visitor who forges nothing is not affected.
+//
+// The result is canonical — an IPv4 address that arrived
 // IPv6-mapped is written as IPv4, and a zone is dropped — so one host has one
 // bucket however it connected.
 func (s Set) ClientAddr(peer string, forwardedFor []string, realIP string) string {
@@ -123,28 +134,33 @@ func (s Set) ClientAddr(peer string, forwardedFor []string, realIP string) strin
 		return canonical(peerAddr)
 	}
 
-	if client, present := s.fromChain(forwardedFor); present {
-		if client.IsValid() {
-			return canonical(client)
+	real, haveReal := parseHop(strings.TrimSpace(realIP))
+	if client, read, present := s.fromChain(forwardedFor); present {
+		if !client.IsValid() {
+			return canonical(peerAddr)
 		}
-		return canonical(peerAddr)
+		if haveReal && !slices.ContainsFunc(read, func(hop netip.Addr) bool { return sameHost(hop, real) }) {
+			return canonical(peerAddr)
+		}
+		return canonical(client)
 	}
 
-	if addr, ok := parseHop(strings.TrimSpace(realIP)); ok {
-		return canonical(addr)
+	if haveReal {
+		return canonical(real)
 	}
 	return canonical(peerAddr)
 }
 
 // fromChain walks a forwarding chain from the right and returns the first hop
-// outside the set, or the leftmost hop when all of them are inside it.
-// present reports whether the chain named any hop at all.
+// outside the set, or the leftmost hop when all of them are inside it. read
+// holds every address the walk parsed, the client last. present reports
+// whether the chain named any hop at all.
 //
 // A hop that is not an address ends the walk. Every hop to its right was
 // written by a proxy in the set, so the last address read is the nearest
 // client known for certain; when the very first hop is not an address, no
 // client is returned and the caller falls back to the peer.
-func (s Set) fromChain(lines []string) (client netip.Addr, present bool) {
+func (s Set) fromChain(lines []string) (client netip.Addr, read []netip.Addr, present bool) {
 	for i := len(lines) - 1; i >= 0; i-- {
 		rest := lines[i]
 		for rest != "" {
@@ -161,15 +177,16 @@ func (s Set) fromChain(lines []string) (client netip.Addr, present bool) {
 			present = true
 			addr, ok := parseHop(entry)
 			if !ok {
-				return client, true
+				return client, read, true
 			}
 			client = addr
+			read = append(read, addr)
 			if !s.contains(addr) {
-				return client, true
+				return client, read, true
 			}
 		}
 	}
-	return client, present
+	return client, read, present
 }
 
 // contains reports whether an already parsed address is in the set.
@@ -197,6 +214,12 @@ func parseHop(hop string) (netip.Addr, bool) {
 		return ap.Addr(), true
 	}
 	return netip.Addr{}, false
+}
+
+// sameHost reports whether two addresses name one host however each was
+// written: IPv4-mapped or not, with a zone or without.
+func sameHost(a, b netip.Addr) bool {
+	return a.Unmap().WithZone("") == b.Unmap().WithZone("")
 }
 
 // canonical writes an address in one form per host.
