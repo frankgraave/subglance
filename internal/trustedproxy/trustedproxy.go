@@ -122,6 +122,12 @@ func (s Set) String() string {
 // bucket behind one of those two, so neither does: the peer is used, which is
 // the proxy's shared bucket, and a visitor who forges nothing is not affected.
 //
+// Agreement on a hop in the set carries the walk past it, as the chain alone
+// does. Both therefore assume that every address in the set writes
+// X-Forwarded-For: a forwarder that connects from a listed address without
+// writing it (a TCP tunnel, a layer-4 balancer) makes the set too wide, and
+// docs/operations.md says so rather than a flag guessing which hops write.
+//
 // The result is canonical — an IPv4 address that arrived
 // IPv6-mapped is written as IPv4, and a zone is dropped — so one host has one
 // bucket however it connected.

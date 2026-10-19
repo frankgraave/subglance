@@ -339,6 +339,17 @@ Getting the list wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
 
+Too wide includes an address shared with something that forwards without
+writing `X-Forwarded-For`: a TCP tunnel, a layer-4 load balancer or an SSH
+forward that connects to nginx from `127.0.0.1` while `127.0.0.1` is listed.
+Every visitor then reaches nginx from a listed address, so a chain a visitor
+sends ends in a listed hop (nginx appends it, or the visitor writes it), the
+walk skips that hop, and the visitor's own entry is read as the client. An
+`X-Real-Ip` naming that address does not catch it, because it names a listed
+proxy. Every address in the list has to belong to a proxy that writes the
+header; one that does not belongs in front of a proxy that does, or out of the
+list.
+
 ### Changes refused as cross-origin
 
 A change made from the dashboard, such as saving a monitor, must come from a
