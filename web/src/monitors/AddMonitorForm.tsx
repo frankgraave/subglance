@@ -217,6 +217,12 @@ export type AddMonitorFormProps = {
   onSubmit: (values: AddMonitorValues) => void;
   /** The current preview phase, owned by the caller. */
   preview: PreviewState;
+  /**
+   * Whether Save monitor tested exactly these settings itself, the check
+   * failed, and so nothing was created yet. A predicate rather than a flag
+   * because the answer depends on the values in the form right now.
+   */
+  isHeld?: (values: AddMonitorValues) => boolean;
   /** True while a save is in flight. */
   saving?: boolean;
   /** A save that failed, as the server explained it. */
@@ -272,6 +278,7 @@ export function AddMonitorForm({
   onPreview,
   onSubmit,
   preview,
+  isHeld,
   saving = false,
   saveError = null,
   onCancel,
@@ -346,6 +353,22 @@ export function AddMonitorForm({
     rejection?.field !== undefined
       ? (FIELD_CONTROL[rejection.field] ?? null)
       : null;
+
+  /*
+   * A settled result is brought into view when it is shown down here.
+   *
+   * The region sits under the buttons, which on a laptop screen is below the
+   * drawer's fold: Save monitor that tested a failing address used to hand
+   * its button back with the reason out of sight, which reads as the press
+   * having done nothing. "nearest" leaves a result that is already visible
+   * where it is. A refusal placed under its input is left alone: that input
+   * is where the eye has to go, and it has the focus to show it.
+   */
+  const resultRegion = useRef<HTMLDivElement>(null);
+  const shownHere = preview.phase === "done" || (preview.phase === "rejected" && badControl === null);
+  useEffect(() => {
+    if (shownHere) resultRegion.current?.scrollIntoView?.({ block: "nearest" });
+  }, [preview, shownHere]);
 
   /*
    * Whether the advanced panel is open.
@@ -515,6 +538,10 @@ export function AddMonitorForm({
       return;
     }
     setRepeatError(undefined);
+    // A save with no type tests the address before it creates anything, so
+    // what it tests is the tested address from here on, as for Test it: the
+    // certificate offer and the hint below follow it.
+    if (!push && values.type === "") setTestedAddress(addressOf(values));
     onSubmit({ ...effective, repeatAfterS: Number(repeatText) });
   };
 
@@ -1050,8 +1077,12 @@ export function AddMonitorForm({
        * asked for. A save error is a different matter: it happened to them
        * rather than for them, and it gets `role="alert"` below.
        */}
-      <div role="status" aria-live="polite" className="result-region">
-        <PreviewNotice preview={preview} placed={badControl !== null} />
+      <div ref={resultRegion} role="status" aria-live="polite" className="result-region">
+        <PreviewNotice
+          preview={preview}
+          placed={badControl !== null}
+          held={isHeld?.(effective) ?? false}
+        />
       </div>
 
       {/* Outside the live region: the result sentence says a certificate can
@@ -1117,9 +1148,11 @@ function ControlRefusal({
 function PreviewNotice({
   preview,
   placed,
+  held,
 }: {
   preview: PreviewState;
   placed: boolean;
+  held: boolean;
 }) {
   switch (preview.phase) {
     case "idle":
@@ -1136,11 +1169,19 @@ function PreviewNotice({
       if (placed) return null;
       return <p className="result result--bad">{preview.message}</p>;
     case "done":
-      return <PreviewSummary result={preview.result} />;
+      return <PreviewSummary result={preview.result} held={held} />;
   }
 }
 
-function PreviewSummary({ result }: { result: PreviewResult }) {
+/*
+ * Said only after Save monitor ran the test itself and it failed. The user
+ * pressed Save, not Test it, so without this the form would look as if it
+ * had ignored them. A service that is down right now is a fair thing to
+ * start watching, so the way on is a second press, not a dead end.
+ */
+const HELD = "Nothing was saved yet. Press Save monitor again to watch it anyway.";
+
+function PreviewSummary({ result, held }: { result: PreviewResult; held: boolean }) {
   return (
     <p
       className={
@@ -1155,6 +1196,7 @@ function PreviewSummary({ result }: { result: PreviewResult }) {
             user commits. */}
         Checked as {labelForType(result.type)}.
       </span>
+      {held && !result.ok && <>{" "}{HELD}</>}
     </p>
   );
 }
