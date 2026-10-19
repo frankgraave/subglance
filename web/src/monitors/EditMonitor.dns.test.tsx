@@ -41,18 +41,17 @@ it("sends the settings whole after a preview that carried them", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined);
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change("Resolver", "");
+  // Untested, so Save changes runs the preview before it sends anything.
   save();
   expect(onSave).not.toHaveBeenCalled();
-  testIt();
-  await screen.findByText(/answered/);
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({
+    dns: { record_type: "MX", expected: ["10 mx1.example.com", "20 mx2.example.com"] },
+  }));
+  expect(fetch).toHaveBeenCalledTimes(1);
   const sent = JSON.parse(fetch.mock.calls[0][1].body);
   expect(sent).toMatchObject({ type: "dns", target: "example.com", dns: { record_type: "MX", expected: ["10 mx1.example.com", "20 mx2.example.com"] } });
   expect(sent.dns).not.toHaveProperty("resolver");
   expect(sent).not.toHaveProperty("method");
-  save();
-  await waitFor(() => expect(onSave).toHaveBeenCalledWith({
-    dns: { record_type: "MX", expected: ["10 mx1.example.com", "20 mx2.example.com"] },
-  }));
 });
 
 it("puts a refusal of the settings under the control the server named", async () => {

@@ -40,15 +40,14 @@ it("sends a changed assertion whole, typed, and only after a preview that carrie
   change("JSON field", "replication.lag");
   change("Must", "less_than");
   change("Value", "30");
+  // Untested, so Save changes runs the preview before it sends anything.
   save();
   expect(onSave).not.toHaveBeenCalled();
-  testIt();
-  await screen.findByText(/answered/);
-  expect(JSON.parse(fetch.mock.calls[0][1].body).json_assertion).toEqual({ path: "replication.lag", operator: "less_than", expected: 30 });
-  save();
   await waitFor(() => expect(onSave).toHaveBeenCalledWith({
     json_assertion: { path: "replication.lag", operator: "less_than", expected: 30 },
   }));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetch.mock.calls[0][1].body).json_assertion).toEqual({ path: "replication.lag", operator: "less_than", expected: 30 });
 });
 
 it("removes the assertion with null when the field is cleared, and previews without one", async () => {

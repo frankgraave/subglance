@@ -81,12 +81,16 @@ settings. The check type stays fixed; a push monitor keeps its identity and
 secret reporting URL, and offers its report interval and grace instead of a
 target to probe.
 
-For an active check, changing its target or request settings requires **Test
-it** before saving. The preview uses the current draft without creating a
-monitor, recording check history or sending alerts. A failed probe is still a
-valid preview: you can intentionally save a service that is currently down.
-Changing the draft invalidates an earlier preview. The TLS floor remains in
-Advanced options; changing only that floor can be saved directly.
+For an active check, a changed target or request setting is tested before it
+is saved. Press **Test it** to see the answer first, or press **Save changes**
+and the drawer runs the same check itself: if it passes, the change is saved;
+if it fails, the drawer shows the result and saves nothing, and pressing Save
+changes again saves it anyway, since a service that is down right now is still
+worth watching. The check uses the current draft without recording check
+history or sending alerts, and any change to a setting it reads replaces an
+earlier answer with a fresh test. A name, tags, the interval, channels or
+repeat alerts save without a check. The TLS floor remains in Advanced options;
+changing only that floor can be saved directly.
 
 The drawer reads settings and their version together. It sends only changed
 fields with that version. If another edit wins first, the stale save is
