@@ -354,6 +354,22 @@ export function AddMonitorForm({
       : null;
 
   /*
+   * A settled result is brought into view when it is shown down here.
+   *
+   * The region sits under the buttons, which on a laptop screen is below the
+   * drawer's fold: Save monitor that tested a failing address used to hand
+   * its button back with the reason out of sight, which reads as the press
+   * having done nothing. "nearest" leaves a result that is already visible
+   * where it is. A refusal placed under its input is left alone: that input
+   * is where the eye has to go, and it has the focus to show it.
+   */
+  const resultRegion = useRef<HTMLDivElement>(null);
+  const shownHere = preview.phase === "done" || (preview.phase === "rejected" && badControl === null);
+  useEffect(() => {
+    if (shownHere) resultRegion.current?.scrollIntoView?.({ block: "nearest" });
+  }, [preview, shownHere]);
+
+  /*
    * Whether the advanced panel is open.
    *
    * Uncontrolled in the ordinary case — `<details>` already toggles itself, and
@@ -1060,7 +1076,7 @@ export function AddMonitorForm({
        * asked for. A save error is a different matter: it happened to them
        * rather than for them, and it gets `role="alert"` below.
        */}
-      <div role="status" aria-live="polite" className="result-region">
+      <div ref={resultRegion} role="status" aria-live="polite" className="result-region">
         <PreviewNotice
           preview={preview}
           placed={badControl !== null}

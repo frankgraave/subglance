@@ -372,6 +372,34 @@ describe("AddMonitor", () => {
     expect(create.mock.calls[0][0]).toMatchObject({ type: "http", target: "https://down.example.com" });
   });
 
+  it("brings a result shown under the buttons into view, and leaves a placed refusal alone", async () => {
+    // jsdom has no layout, so it has no scrollIntoView either; the stub records
+    // which element asked to be shown.
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this); };
+    try {
+      const preview = vi
+        .fn()
+        .mockResolvedValueOnce(result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }))
+        .mockRejectedValueOnce(new ApiError(400, "could not tell what to check", null, "target"));
+      render(<AddMonitor api={{ preview, create: vi.fn() }} />);
+
+      setField(/what should be watched/i, "down.example.com");
+      click(/save monitor/i);
+      await waitFor(() => expect(statusText()).toMatch(/connection refused/i));
+      expect(scrolled).toContain(screen.getByRole("status"));
+
+      scrolled.length = 0;
+      setField(/what should be watched/i, "db/x");
+      click(/test it/i);
+      await waitFor(() => expect(field(/what should be watched/i).getAttribute("aria-invalid")).toBe("true"));
+      expect(scrolled).not.toContain(screen.getByRole("status"));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("says nothing about saving again after a failing check from Test it", async () => {
     const preview = vi.fn().mockResolvedValue(
       result({ ok: false, status_code: undefined, error: "connection refused", target: "https://down.example.com" }),
