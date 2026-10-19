@@ -164,6 +164,14 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
   const [problem, setProblem] = useState<Problem>(null);
   const [preview, setPreview] = useState<PreviewState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
+  /*
+   * Save changes is waiting on its own test of the settings, before any PATCH
+   * exists. Kept apart from `saving`: closing the form now aborts the test and
+   * nothing is sent, so neither "Saving…" nor the note that a save may still
+   * complete would be true. The form is locked through both.
+   */
+  const [testing, setTesting] = useState(false);
+  const locked = saving || testing;
   const [conflict, setConflict] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const dirty = useRef(false);
@@ -181,12 +189,12 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
   useEffect(() => { dirty.current = changed; }, [changed]);
   useEffect(() => {
     // API errors arrive while the fieldset is disabled. Focus after it unlocks.
-    if (saving || !problem?.field) return;
+    if (locked || !problem?.field) return;
     const control = controlIn(form.current, problem.field, `${ids}-min-tls`);
     const panel = control?.closest("details");
     if (panel) panel.open = true;
     control?.focus();
-  }, [problem, saving, ids]);
+  }, [problem, locked, ids]);
   useEffect(() => {
     alive.current = true;
     const unregister = registerLeaveGuard({ element: () => form.current, dirty: () => dirty.current, discard: () => { dirty.current = false; } });
@@ -327,7 +335,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     return probe;
   };
   const runPreview = (current = values) => {
-    const draft = validated(current); if (!draft || saving || conflict) return;
+    const draft = validated(current); if (!draft || locked || conflict) return;
     void startProbe(draft.request);
   };
   /*
@@ -375,14 +383,15 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       const pending = inFlight.current;
       const probe = pending !== null && !pending.controller.signal.aborted && pending.fingerprint === fingerprint
         ? pending : startProbe(draft.request);
-      busy.current = true; setSaving(true);
+      busy.current = true; setTesting(true);
       void probe.outcome.then((tested) => {
         if (!alive.current) return;
+        setTesting(false);
         if (tested?.phase === "done" && tested.result.ok) { busy.current = false; commit(draft.patch, tested); return; }
         // A failed check is shown as Test it shows it and nothing is sent:
         // the user has not seen the answer yet. A refusal is already shown.
         if (tested?.phase === "done") setHeld(tested.request);
-        busy.current = false; setSaving(false);
+        busy.current = false;
       });
       return;
     }
@@ -406,7 +415,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     </div>;
   };
   return <form ref={form} className="form-column edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
-    <fieldset className="contents" disabled={saving}>
+    <fieldset className="contents" disabled={locked}>
       {field("name")}
       <p className="field-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
       {field("target")}
@@ -482,11 +491,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       offered={offered} onTrust={retest} onStop={() => retest("")} stopId={`${ids}-trusted_cert_sha256`}
       error={problem?.field === "trusted_cert_sha256" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
       errorId={problem?.field === "trusted_cert_sha256" ? `${ids}-error` : undefined}
-      disabled={saving || conflict} />}
+      disabled={locked || conflict} />}
     {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
     <div className="button-row">
-      {!monitor.push && <button className="button" type="button" onClick={() => runPreview()} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
-      <button className="button button--primary" type="submit" disabled={saving || conflict}>{saving ? "Saving…" : "Save changes"}</button>
+      {!monitor.push && <button className="button" type="button" onClick={() => runPreview()} disabled={locked || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
+      <button className="button button--primary" type="submit" disabled={locked || conflict}>{saving ? "Saving…" : "Save changes"}</button>
       {conflict && onReload && <button className="button" type="button" onClick={onReload}>Reload latest settings</button>}
       {onCancel && <button className="button button--quiet" type="button" onClick={() => { if (confirmLeave(form.current)) onCancel(); }}>Cancel</button>}
     </div>

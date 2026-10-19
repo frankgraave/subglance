@@ -69,9 +69,27 @@ it("waits for a Test it of the same settings instead of probing twice", async ()
   change("Target", "https://new.example"); testTarget(); save();
   expect(previews(fetch)).toBe(1);
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+  expect(onSave).not.toHaveBeenCalled();
   await act(async () => resolve(passed()));
   await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example/" }));
   expect(previews(fetch)).toBe(1);
+});
+
+it("says it is checking, not saving, until the test it ran passes", async () => {
+  let resolve!: (value: Response) => void;
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockReturnValue(new Promise<void>(() => undefined));
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example"); save();
+  // Closing the form now would abort the test and send nothing.
+  expect(status()).toMatch(/checking/i);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" }).disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Saving…" })).toBeNull();
+  expect(screen.queryByText(/may still complete/)).toBeNull();
+  await act(async () => resolve(passed()));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Saving…" }).disabled).toBe(true);
+  expect(screen.getByText(/may still complete/)).toBeTruthy();
 });
 
 it("tests again on Save changes after a test of the same settings was refused", async () => {
