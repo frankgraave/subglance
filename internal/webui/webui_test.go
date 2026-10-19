@@ -20,6 +20,7 @@ const themeScript = `document.documentElement.setAttribute("data-theme","dark");
 
 const indexHTML = `<!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
 <script>` + themeScript + `</script>
 <script type="module" src="./assets/index-abc123.js"></script>
 <link rel="preload" href="./fonts/Face-1.0-subset.woff2" as="font" type="font/woff2" crossorigin />
@@ -33,7 +34,7 @@ func builtFS() fs.FS {
 		"assets/index-abc123.js":      {Data: []byte("console.log(1)")},
 		"assets/index-abc123.css":     {Data: []byte(":root{}")},
 		"fonts/Face-1.0-subset.woff2": {Data: []byte("wOF2")},
-		"favicon.svg":                 {Data: []byte("<svg/>")},
+		"favicon.svg":                 {Data: []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)},
 		"nested/page/index.html":      {Data: []byte("nested")},
 	}
 }
@@ -132,6 +133,25 @@ func TestShellAndUnhashedFilesAreNeverCached(t *testing.T) {
 		if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
 			t.Errorf("GET %s: Cache-Control = %q, want no-cache", target, got)
 		}
+	}
+}
+
+// TestTabIconIsServedAsAnImage covers the file the shell names as its tab
+// icon. Before the shell named one, the browser asked for /favicon.ico by
+// itself and got the shell back as text/html; the icon has to arrive as the
+// picture it is, with the same revalidation as every other unhashed file.
+func TestTabIconIsServedAsAnImage(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+
+	rec := get(t, h, http.MethodGet, "/favicon.svg")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /favicon.svg: status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/svg+xml" {
+		t.Errorf("Content-Type = %q, want image/svg+xml", got)
+	}
+	if got := rec.Body.String(); !strings.HasPrefix(got, "<svg ") {
+		t.Errorf("body = %q, want the icon itself rather than the shell", got)
 	}
 }
 
@@ -349,7 +369,7 @@ func TestServeFontServesOnlyFontFiles(t *testing.T) {
 func TestShellReferencesLeadBackToTheBundleAtEveryDepth(t *testing.T) {
 	h := handlerFor(builtFS(), apiNotFound())
 	refs := regexp.MustCompile(`\s(?:src|href)="([^"]+)"`)
-	want := []string{"assets/index-abc123.js", "fonts/Face-1.0-subset.woff2", "assets/index-abc123.css"}
+	want := []string{"favicon.svg", "assets/index-abc123.js", "fonts/Face-1.0-subset.woff2", "assets/index-abc123.css"}
 
 	for _, base := range []string{"https://example.com", "https://example.com/subglance"} {
 		for _, route := range []string{"/", "/monitors", "/monitors/42", "/monitors/42/", "/notifications/new", "/settings?tab=users", "/monitors/a%2Fb", "/a/b/c/d/e/f/g/h", "/a/b/c/d/e/f/g/h/i", "/a/b/c/d/e/f/g/h/i/j", "/a/b/c/d/e/f/g/h/i/j/k/l"} {

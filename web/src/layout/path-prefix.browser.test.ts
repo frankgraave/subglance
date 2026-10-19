@@ -43,8 +43,7 @@ async function watched(): Promise<{ page: Page; requests: string[]; failed: stri
     if (url.protocol === "http:") requests.push(url.pathname);
   });
   page.on("response", (response) => {
-    const path = new URL(response.url()).pathname;
-    if (response.status() >= 400 && path !== "/favicon.ico") failed.push(`${response.status()} ${path}`);
+    if (response.status() >= 400) failed.push(`${response.status()} ${new URL(response.url()).pathname}`);
   });
   page.on("requestfailed", (request) => {
     /*
@@ -59,14 +58,14 @@ async function watched(): Promise<{ page: Page; requests: string[]; failed: stri
 }
 
 /*
- * Requests that leave the prefix. `/favicon.ico` is not one the dashboard
- * makes: the browser asks the root of the host for it by itself, because the
- * shell names no icon.
+ * Requests that leave the prefix. The tab icon is one of them too: this used
+ * to let `/favicon.ico` through, because the shell named no icon and the
+ * browser asked the root of the host for one by itself. The shell names its
+ * own now, so nothing is exempt.
  */
-const outside = (requests: string[]) =>
-  requests.filter((path) => !path.startsWith(`${PREFIX}/`) && path !== "/favicon.ico");
+const outside = (requests: string[]) => requests.filter((path) => !path.startsWith(`${PREFIX}/`));
 
-it("opens an alert's monitor link two levels deep, with its bundle, fonts, API and stream under the prefix", async () => {
+it("opens an alert's monitor link two levels deep, with its bundle, fonts, tab icon, API and stream under the prefix", async () => {
   const { page, requests, failed } = await watched();
   try {
     await page.goto(`${server.url}${PREFIX}/monitors/1`, { waitUntil: "domcontentloaded" });
@@ -80,6 +79,17 @@ it("opens an alert's monitor link two levels deep, with its bundle, fonts, API a
     expect(requests).toContain(`${PREFIX}/api/v1/stream`);
     expect(requests.some((path) => path.startsWith(`${PREFIX}/assets/`))).toBe(true);
     expect(requests.some((path) => path.startsWith(`${PREFIX}/fonts/`))).toBe(true);
+    // chrome-headless-shell draws no tab strip, so it never asks for a tab
+    // icon on its own: resolve the shell's link where the page stands and
+    // fetch what it names, the way a browser with tabs would.
+    const tab = await page.$eval('link[rel="icon"]', async (link) => {
+      const href = (link as HTMLLinkElement).href;
+      const response = await fetch(href);
+      return { path: new URL(href).pathname, status: response.status, type: response.headers.get("content-type") };
+    });
+    expect(tab.path).toBe(`${PREFIX}/favicon.svg`);
+    expect(tab.status).toBe(200);
+    expect(tab.type).toMatch(/^image\/svg\+xml/);
     expect(outside(requests)).toEqual([]);
     expect(failed).toEqual([]);
   } finally {

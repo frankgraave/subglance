@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SubGlance</title>
     <!--
+      The tab icon: the product mark, the up lamp on its tile, the same file
+      the project site uses as its icon.
+
+      Without a link the browser asks the root of the host for /favicon.ico
+      by itself. At the root that answered the shell as text/html; under a
+      path prefix (https://example.com/subglance/) it left the prefix, so the
+      tab showed whatever else that host serves at /, or nothing. Written
+      from the root like the font preloads below, so the build makes it
+      relative and the server's depth rewrite keeps it under the prefix at
+      every route. The tile is dark in both themes because it sits on the
+      browser's own tab strip, which is light or dark independently of ours.
+    -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!--
       The two faces the interface is set in, preloaded.
 
       They are declared with `font-display: block`, so the browser holds text
