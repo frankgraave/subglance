@@ -389,6 +389,23 @@ func (r *Runner) ReloadSoon() { r.sch.ReloadSoon() }
 // the check, is what the watchdog is allowed to read as liveness.
 func (r *Runner) ChecksCompleted() uint64 { return r.checks.Load() }
 
+// WriteFailures reports how many checks could not be recorded since start:
+// the counter /metrics names heartbeat write failures. The watchdog reads its
+// movement beside ChecksCompleted's to tell a pipeline between checks from
+// one whose writes are failing.
+func (r *Runner) WriteFailures() uint64 { return r.hbFailures.Load() }
+
+// CheckGap reports the longest the pipeline may go without recording a check
+// while it works: the schedule's own gap (see scheduler.Scheduler.CheckGap)
+// plus the time recording one check may take. Zero when nothing is scheduled.
+func (r *Runner) CheckGap() time.Duration {
+	gap := r.sch.CheckGap()
+	if gap == 0 {
+		return 0
+	}
+	return gap + recordTimeout
+}
+
 // RecordRollupFailure notes that a retention pass failed, so /metrics can
 // report it. cmd/subglance drives retention and calls this.
 func (r *Runner) RecordRollupFailure() { r.rollupFailures.Add(1) }
@@ -725,6 +742,11 @@ const maxRestoredFailStreak = 100
 // record stores one outcome for the scheduler, where a failed write is logged
 // and the pipeline carries on: a check that could not be stored still happened,
 // and an outage still has to be reported.
+// recordTimeout bounds the database work of recording one outcome. The
+// watchdog adds it to the schedule's gap, since a check's heartbeat lands
+// that much after the check ends at worst.
+const recordTimeout = 5 * time.Second
+
 func (r *Runner) record(o scheduler.Outcome) {
 	_ = r.recordOutcome(o)
 }
@@ -751,7 +773,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recordTimeout)
 	defer cancel()
 
 	if o.Result.Kind == checker.FailUnknown {

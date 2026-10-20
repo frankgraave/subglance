@@ -62,6 +62,11 @@ func TestFailedWritesStopFeedingTheWatchdog(t *testing.T) {
 			got, healthy)
 	}
 
+	if got := r.WriteFailures(); got != 5 {
+		t.Errorf("WriteFailures = %d after 5 failed writes, want 5 — the watchdog "+
+			"cannot tell failing writes from a pipeline between checks", got)
+	}
+
 	mt := r.Metrics()
 	if mt.HeartbeatWriteFailures != 5 {
 		t.Errorf("HeartbeatWriteFailures = %d, want 5 — a full disk is not visible on /metrics",
@@ -124,5 +129,32 @@ func TestRecordedChecksKeepCounting(t *testing.T) {
 
 	if got := r.ChecksCompleted(); got != 4 {
 		t.Errorf("ChecksCompleted = %d after 4 successful writes, want 4", got)
+	}
+}
+
+// The watchdog measures silence against the gap the runner reports, so the
+// gap has to cover the schedule's own and the time the heartbeat write may
+// take after the check ends, and be zero when nothing is scheduled.
+func TestCheckGapCoversTheScheduleAndTheWrite(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	r := New(Options{DB: db, Log: quietLogger()})
+
+	if got := r.CheckGap(); got != 0 {
+		t.Fatalf("CheckGap with nothing scheduled = %s, want 0", got)
+	}
+
+	if _, err := db.CreateMonitor(ctx, store.Monitor{
+		Name: "hourly", Type: "http", Target: "https://example.com",
+		IntervalS: 3600, TimeoutS: 10, Retries: 1, Enabled: true,
+	}); err != nil {
+		t.Fatalf("CreateMonitor: %v", err)
+	}
+	if err := r.sch.Reload(ctx); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	if got, want := r.CheckGap(), r.sch.CheckGap()+recordTimeout; got != want || r.sch.CheckGap() < time.Hour {
+		t.Fatalf("CheckGap = %s, want the schedule's %s plus %s for the write", got, r.sch.CheckGap(), recordTimeout)
 	}
 }

@@ -792,6 +792,32 @@ func (s *Scheduler) MaxCheckTimeout() time.Duration {
 	return maxTimeout
 }
 
+// CheckGap reports the longest a working pipeline may go without finishing a
+// check, given the monitors scheduled now. Zero when nothing is scheduled.
+//
+// It is the watchdog's measure of silence. A check is recorded when it ends,
+// so for one monitor the longest stretch between two recorded checks is a
+// first check that ended at once and a next one dispatched a cadence plus the
+// whole jitter window later that ran to its timeout. The instance records a
+// check at least that often for the monitor checked most often, which is the
+// one reported. A monitor whose next check is still running when it comes due
+// again is skipped and would stretch that, but Cadence keeps every cadence a
+// quarter above the monitor's timeout so a check that keeps to it never is.
+func (s *Scheduler) CheckGap() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var gap time.Duration
+	for _, item := range *s.queue {
+		cadence := item.job.cadence()
+		g := cadence + s.jitterWindow(cadence) + item.job.Monitor.Timeout
+		if gap == 0 || g < gap {
+			gap = g
+		}
+	}
+	return gap
+}
+
 // CheckerFor returns the implementation registered for a check type.
 //
 // It exists so an on-demand check can reuse exactly the checkers the schedule

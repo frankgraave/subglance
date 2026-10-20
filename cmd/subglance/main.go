@@ -408,6 +408,8 @@ func run(args []string, logOut io.Writer) error {
 			return watchdog.Liveness{
 				ChecksCompleted: runner.ChecksCompleted(),
 				Scheduled:       runner.Size(),
+				CheckGap:        runner.CheckGap(),
+				WriteFailures:   runner.WriteFailures(),
 			}
 		},
 	})

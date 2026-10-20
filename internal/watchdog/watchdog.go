@@ -20,8 +20,22 @@
 // A bare ticker would keep pinging from a process whose scheduler has
 // deadlocked, whose database is unwritable, or whose worker pool is wedged —
 // reporting health from a corpse, which is precisely the failure this is meant
-// to catch. So a ping is only sent when the check pipeline has completed at
-// least one check since the previous ping.
+// to catch. So a ping is only sent while the check pipeline is recording
+// checks as often as its schedule says it must.
+//
+// "As often as its schedule says" is the part that is easy to get wrong. A
+// ping used to need a check recorded since the previous ping, which is only
+// the right test when some monitor is checked more often than the ping is
+// sent. An instance of hourly monitors, or of domain monitors checked every
+// six hours, records nothing for most ping intervals while working perfectly,
+// and the switch at the other end raised the alarm for it, over and over. The
+// schedule knows the longest a working pipeline can go between two recorded
+// checks (Liveness.CheckGap), so silence is measured against that instead.
+//
+// A failed heartbeat write is evidence too, and it does not wait for the gap:
+// once the latest word from the pipeline is a write that failed, the ping is
+// withheld until one succeeds. A full disk on an instance of hourly monitors
+// would otherwise be reported healthy for most of an hour.
 //
 // The one exception is an instance with no monitors scheduled. There, zero
 // completed checks is the correct outcome rather than a symptom, and staying
@@ -97,6 +111,15 @@ type Liveness struct {
 
 	// Scheduled is how many monitors are currently in the schedule.
 	Scheduled int
+
+	// CheckGap is the longest a working pipeline may go without recording
+	// a check, given the monitors on the schedule now. Zero allows no gap
+	// at all: a ping then needs a check recorded since the previous one.
+	CheckGap time.Duration
+
+	// WriteFailures counts heartbeats that could not be written since
+	// process start. Like ChecksCompleted, only its movement matters.
+	WriteFailures uint64
 }
 
 // Options configures New.
@@ -132,6 +155,15 @@ type Watchdog struct {
 
 	// last is the liveness reading at the previous ping decision.
 	last Liveness
+
+	// recorded is when a tick last saw a check recorded, or when Run
+	// started before any has. The zero time, in a watchdog that never
+	// ran, allows no gap.
+	recorded time.Time
+
+	// writesFailing is set when the latest movement of the pipeline was a
+	// failed heartbeat write, and cleared by the next recorded check.
+	writesFailing bool
 }
 
 // New validates the options and builds a Watchdog.
@@ -285,6 +317,12 @@ func (w *Watchdog) Run(ctx context.Context) {
 		return
 	}
 	w.last = w.liveness()
+	// A check finished before the watchdog started is not one it saw, so
+	// the quiet spell is counted from here. A restart is then given one
+	// gap to record its first check, which the schedule allows for: a
+	// monitor checked before the restart keeps its place, up to one
+	// cadence away.
+	w.recorded = time.Now()
 	w.log.Info("watchdog enabled", "url", w.shown, "interval", w.interval)
 
 	ticker := time.NewTicker(w.interval)
@@ -301,24 +339,50 @@ func (w *Watchdog) Run(ctx context.Context) {
 	}
 }
 
-// tick sends one ping if the pipeline has moved since the last one.
+// tick sends one ping if the pipeline is recording checks as often as its
+// schedule says it must.
 func (w *Watchdog) tick(ctx context.Context) {
 	now := w.liveness()
+	at := time.Now()
 	progressed := now.ChecksCompleted > w.last.ChecksCompleted
+	failed := now.WriteFailures > w.last.WriteFailures
 	idle := now.Scheduled == 0
+	// The larger of this reading's gap and the previous one's: a monitor
+	// added just before this tick shortens the gap, and a check recorded
+	// under the old schedule is not late by the new one's measure until
+	// the new monitor has had a tick to be checked in.
+	allowed := max(now.CheckGap, w.last.CheckGap)
 	w.last = now
 
-	if !progressed && !idle {
-		w.mu.Lock()
-		w.history.decision = time.Now().UTC()
-		w.history.suppressed = true
-		w.mu.Unlock()
-		// Staying silent here is the whole point of the feature: the
-		// process is running but the check pipeline is not, and the
-		// receiving end should treat that exactly like a dead host.
-		w.log.Warn("skipping watchdog ping: no checks completed since the last one",
-			"scheduled", now.Scheduled)
-		return
+	switch {
+	case progressed:
+		// Some writes failing beside others that succeed is not a
+		// stalled pipeline, so a recorded check clears the flag.
+		w.recorded = at
+		w.writesFailing = false
+	case failed:
+		w.writesFailing = true
+	}
+
+	if !idle && !progressed {
+		quiet := at.Sub(w.recorded)
+		if w.writesFailing || quiet > allowed {
+			w.mu.Lock()
+			w.history.decision = at.UTC()
+			w.history.suppressed = true
+			w.mu.Unlock()
+			// Staying silent here is the whole point of the feature: the
+			// process is running but the check pipeline is not, and the
+			// receiving end should treat that exactly like a dead host.
+			if w.writesFailing {
+				w.log.Warn("skipping watchdog ping: heartbeat writes are failing",
+					"scheduled", now.Scheduled)
+			} else {
+				w.log.Warn("skipping watchdog ping: no check recorded for longer than the schedule allows",
+					"scheduled", now.Scheduled, "allowed", allowed)
+			}
+			return
+		}
 	}
 
 	body := fmt.Sprintf("alive; %d monitors scheduled, %d checks completed",

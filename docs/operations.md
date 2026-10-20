@@ -870,15 +870,25 @@ null history. These observations do not guarantee the receiver will alert.
 
 Three details matter:
 
-- The ping is tied to evidence, not to a timer. It is only sent when at least
-  one check has been **recorded** since the previous ping — completed *and*
-  written to the database — so a process whose check pipeline has wedged, or
-  whose disk has filled, goes quiet instead of reporting health from a corpse.
-  Counting the check rather than the write was the old behaviour and it was
-  wrong in exactly the case the switch exists for: on a full disk every write
-  failed, the counter kept climbing and the switch kept being reset. An
-  instance with no monitors scheduled still pings; there, zero checks is the
-  correct answer rather than a symptom.
+- The ping is tied to evidence, not to a timer. It is only sent while checks
+  are being **recorded** — completed *and* written to the database — as often
+  as the schedule says they must be, so a process whose check pipeline has
+  wedged goes quiet instead of reporting health from a corpse. How often that
+  is follows the monitor checked most often: its interval (one minute while it
+  is failing), the up to 10% the schedule spreads checks by, and its timeout.
+  An instance of hourly monitors records nothing for most of an hour while
+  working perfectly, and keeps pinging every interval through it; it goes
+  quiet once an hour and a bit has passed without a recorded check. A wedged
+  pipeline is therefore noticed after the watchdog interval or that span,
+  whichever is longer, plus the switch's own grace. To be told sooner, give one
+  monitor a short interval.
+- A failed write does not wait for that span. Once the latest check could not
+  be written, as on a full disk, the ping is withheld until one is written
+  again. Counting the check rather than the write was the old behaviour and it
+  was wrong in exactly the case the switch exists for: on a full disk the
+  count kept climbing and the switch kept being reset. An instance with no
+  monitors scheduled still pings; there, zero checks is the correct answer
+  rather than a symptom.
 - A clean shutdown sends one final ping marked `stopped`, so a planned restart
   does not page anyone. The marker is the `X-SubGlance-Event` header, and a
   generic provider ignores it: Healthchecks.io and Dead Man's Snitch read that

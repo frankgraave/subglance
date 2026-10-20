@@ -268,3 +268,139 @@ func TestDefaultInterval(t *testing.T) {
 		t.Fatalf("interval = %s, want %s", w.interval, DefaultInterval)
 	}
 }
+
+// An instance whose monitors are all checked less often than the watchdog
+// pings records nothing for most intervals while working perfectly. Silence
+// shorter than the schedule allows is not a stall, and withholding the ping
+// for it raised the alarm at the other end for a healthy instance.
+func TestPingsBetweenChecksOfASlowSchedule(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	reading := Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}
+	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+	w.last = reading
+	w.recorded = time.Now().Add(-10 * time.Minute)
+	w.tick(context.Background())
+
+	if got := rec.seen(); len(got) != 1 || got[0] != "alive" {
+		t.Fatalf("a pipeline ten minutes into an hourly schedule must ping, got %v", got)
+	}
+	if w.Snapshot().Suppressed {
+		t.Fatal("a ping within the schedule's gap is reported as withheld")
+	}
+}
+
+// Past the gap the schedule allows, silence is the stall it always was.
+func TestStaysSilentPastTheScheduleGap(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	reading := Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}
+	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+	w.last = reading
+	w.recorded = time.Now().Add(-61 * time.Minute)
+	w.tick(context.Background())
+
+	if got := rec.seen(); len(got) != 0 {
+		t.Fatalf("a pipeline silent for longer than its schedule allows must not ping, got %v", got)
+	}
+	if !w.Snapshot().Suppressed {
+		t.Fatal("a withheld ping is not reported as withheld")
+	}
+}
+
+// A failed write is evidence, and it does not wait out the gap: a full disk on
+// an instance of hourly monitors would otherwise be reported healthy for most
+// of an hour. The ping stays withheld until a check is recorded again.
+func TestFailedWriteWithholdsThePingInsideTheGap(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	reading := Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour, WriteFailures: 1}
+	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+	w.last = Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}
+	w.recorded = time.Now().Add(-time.Minute)
+
+	w.tick(context.Background())
+	w.tick(context.Background()) // nothing moved: still the failed write
+	if got := rec.seen(); len(got) != 0 {
+		t.Fatalf("a failed write with no recorded check since must withhold the ping, got %v", got)
+	}
+
+	reading.ChecksCompleted = 6
+	w.tick(context.Background())
+	if got := rec.seen(); len(got) != 1 || got[0] != "alive" {
+		t.Fatalf("a recorded check after the failure must ping again, got %v", got)
+	}
+
+	// And the failure is over: the next quiet tick inside the gap is a
+	// pipeline between checks again, not one whose writes are failing.
+	w.tick(context.Background())
+	if got := rec.seen(); len(got) != 2 {
+		t.Fatalf("a quiet tick after the recovery must ping, got %v", got)
+	}
+}
+
+// A failed write beside a recorded one is one monitor's trouble, not a stalled
+// pipeline, and pings as the recorded check says.
+func TestFailedWriteBesideARecordedCheckStillPings(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	w := newTestWatchdog(t, srv.URL, func() Liveness {
+		return Liveness{ChecksCompleted: 6, Scheduled: 2, CheckGap: time.Hour, WriteFailures: 1}
+	})
+	w.last = Liveness{ChecksCompleted: 5, Scheduled: 2, CheckGap: time.Hour}
+	w.tick(context.Background())
+
+	if got := rec.seen(); len(got) != 1 {
+		t.Fatalf("want one alive ping, got %v", got)
+	}
+}
+
+// A monitor added between two ticks shortens the gap at once, but a pipeline
+// quiet by the old schedule's measure is not late by the new one until the new
+// monitor has had a tick to be checked in.
+func TestAShortenedGapWaitsOneTick(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	reading := Liveness{ChecksCompleted: 5, Scheduled: 2, CheckGap: 30 * time.Second}
+	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+	w.last = Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}
+	w.recorded = time.Now().Add(-10 * time.Minute)
+
+	w.tick(context.Background())
+	if got := rec.seen(); len(got) != 1 {
+		t.Fatalf("the tick that first sees the shorter gap must still ping, got %v", got)
+	}
+	w.tick(context.Background())
+	if got := rec.seen(); len(got) != 1 {
+		t.Fatalf("the next tick, still with nothing recorded, must not ping, got %v", got)
+	}
+}
+
+// The quiet spell starts when Run does: a restart gets one gap to record its
+// first check, rather than being read as silent since the zero time.
+func TestRunStartsTheQuietSpell(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(rec.handler())
+	defer srv.Close()
+
+	reading := Liveness{ChecksCompleted: 3, Scheduled: 1, CheckGap: time.Hour}
+	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	w.Run(ctx) // sends the stopped ping and returns
+
+	w.tick(context.Background())
+	if got := rec.seen(); len(got) != 2 || got[1] != "alive" {
+		t.Fatalf("a tick within the first gap after Run must ping, got %v", got)
+	}
+}
