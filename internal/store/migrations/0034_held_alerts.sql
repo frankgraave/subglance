@@ -19,8 +19,14 @@
 --
 -- Both references cascade: a deleted monitor or channel takes its waiting
 -- messages with it, as it does its queued ones in notif_outbox.
+--
+-- AUTOINCREMENT because the notifier keeps these ids in memory and releases
+-- them when the batch is written. A cascade removes rows without telling it,
+-- and a plain rowid hands the highest freed id to the next alert held, which
+-- may wait in another batch: releasing the first batch would then delete the
+-- second one's copy.
 CREATE TABLE notif_held (
-    id           INTEGER PRIMARY KEY,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_id   INTEGER NOT NULL REFERENCES notif_channels (id) ON DELETE CASCADE,
     monitor_id   INTEGER NOT NULL REFERENCES monitors (id) ON DELETE CASCADE,
     payload_json TEXT    NOT NULL,

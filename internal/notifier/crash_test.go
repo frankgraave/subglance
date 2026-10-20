@@ -143,9 +143,57 @@ func TestCleanStopLeavesNothingHeld(t *testing.T) {
 		t.Fatalf("%d alerts still held after the clean stop wrote them", got)
 	}
 
-	runAndStop(t, groupNotifier(t, db, clock, time.Hour))
-	if got := countDeliveries(t, db); got != 1 {
+	// The second start delivers what the first one queued; a stub sender
+	// keeps that off the network, and every outbox row is counted whatever
+	// its status, so a delivery that ran first cannot hide a second write.
+	sender := &fakeSender{}
+	second := New(Options{
+		DB:          db,
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Now:         clock.Now,
+		GroupWindow: time.Hour,
+		Senders:     map[string]Sender{store.ChannelWebhook: sender},
+	})
+	runAndStop(t, second)
+	if got := len(outboxRows(t, db)); got != 1 {
 		t.Fatalf("the alert was written %d times across a clean restart, want once", got)
+	}
+}
+
+// TestReleasingABatchKeepsAnotherBatchsAlert: a cascade removes a held row
+// without the notifier knowing, so the batch still names its id. The next
+// alert held must not be given that id, or writing the first batch deletes
+// the copy of an alert waiting in another one.
+func TestReleasingABatchKeepsAnotherBatchsAlert(t *testing.T) {
+	t.Parallel()
+
+	db := groupDB(t)
+	clock := newTestClock()
+	ops := groupChannel(t, db, "ops")
+	pager := groupChannel(t, db, "pager")
+	a := groupMonitor(t, db, "edge-a", ops.ID)
+	b := groupMonitor(t, db, "edge-b", ops.ID)
+	c := groupMonitor(t, db, "edge-c", pager.ID)
+	n := groupNotifier(t, db, clock, 90*time.Second)
+
+	enqueueConfirmed(t, n, a, openIncident(t, db, a.ID, clock.Now(), "no such host"), clock.Now())
+	enqueueConfirmed(t, n, b, openIncident(t, db, b.ID, clock.Now(), "no such host"), clock.Now())
+	// edge-b's row, the newest, goes with the monitor.
+	if err := db.DeleteMonitor(context.Background(), b.ID); err != nil {
+		t.Fatalf("delete edge-b: %v", err)
+	}
+
+	clock.Advance(30 * time.Second)
+	enqueueConfirmed(t, n, c, openIncident(t, db, c.ID, clock.Now(), "no such host"), clock.Now())
+
+	// Only the ops batch has come of age; pager's waits another 29 s.
+	clock.Advance(61 * time.Second)
+	n.flushDue(context.Background())
+	if got := countDeliveries(t, db); got != 1 {
+		t.Fatalf("precondition: want the ops batch alone in the outbox, got %d rows", got)
+	}
+	if got := heldRows(t, db); got != 1 {
+		t.Fatalf("writing the ops batch left %d held rows, want edge-c's alert still on disk", got)
 	}
 }
 
