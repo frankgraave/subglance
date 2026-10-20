@@ -118,7 +118,7 @@ func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error)
 }
 
 // enqueueDelivery is EnqueueDelivery on the writer pool or inside a
-// transaction (see EnqueueReleasing).
+// transaction (see EnqueueBatches).
 func enqueueDelivery(ctx context.Context, q rowQuerier, d Delivery) (Delivery, error) {
 	now := time.Now().Unix()
 	due := d.NextAttemptAt

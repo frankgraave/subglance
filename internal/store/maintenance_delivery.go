@@ -45,7 +45,8 @@ func (db *DB) FilterMaintenanceDelivery(ctx context.Context, d Delivery, payload
 }
 
 // EnqueueMaintenanceDeliveries transfers intent and all eligible channel
-// deliveries in one transaction. Deferred initials bypass the in-memory group
+// deliveries in one transaction, which also clears the incident's AlertOwed
+// mark: its alert is in the outbox from then on. Deferred initials bypass the in-memory group
 // window. False means this is an ordinary initial alert, with no deferred intent.
 func (db *DB) EnqueueMaintenanceDeliveries(ctx context.Context, incidentID int64, deliveries []Delivery) (bool, error) {
 	tx, err := db.Writer.BeginTx(ctx, nil)
@@ -83,7 +84,7 @@ func (db *DB) EnqueueMaintenanceDeliveries(ctx context.Context, incidentID int64
 			return true, err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE incidents SET maintenance_pending=0 WHERE id=?`, incidentID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE incidents SET maintenance_pending=0, alert_owed=0 WHERE id=?`, incidentID); err != nil {
 		return true, err
 	}
 	return true, tx.Commit()

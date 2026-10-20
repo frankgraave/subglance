@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentDeliveriesScope } from "./deliveriesScope";
-import { deliveryFromApi } from "./deliveries";
+import { deliveryChip, deliveryFromApi } from "./deliveries";
+import { formatMoment } from "../format/format";
 import type { Incident } from "../monitors/detail";
 
 /**
@@ -155,6 +156,12 @@ describe("an incident's notifications", () => {
   });
 });
 
+describe("deliveryChip", () => {
+  it("words a waiting alert as waiting, not as sent", () => {
+    expect(deliveryChip("waiting")).toEqual({ status: "idle", word: "Waiting" });
+  });
+});
+
 describe("deliveryFromApi", () => {
   const base = DELIVERIES.deliveries[0]!;
 
@@ -169,6 +176,22 @@ describe("deliveryFromApi", () => {
     expect(
       deliveryFromApi({ ...base, state: "merged", merged_into: "digest" }).detail,
     ).toMatch(/quiet-hours digest/);
+  });
+
+  it("says when an alert waiting in its grouping window goes out", () => {
+    const due = T0 + 80_000;
+    const d = deliveryFromApi({
+      ...base, state: "waiting", ended_at: null,
+      due_at: new Date(due).toISOString(),
+    });
+    expect(d.outcome).toBe("waiting");
+    expect(d.detail).toBe(
+      `Waiting for other alerts to go out with it, until ${formatMoment(due)}.`,
+    );
+    // Dated, not just timed: a window can close on the next day.
+    expect(d.detail).toMatch(/until \d{1,2} [A-Z][a-z]{2} \d{4}, \d\d:\d\d\.$/);
+    // Its id is a waiting alert's, which may equal an outbox row's.
+    expect(d.id).not.toBe(String(base.id));
   });
 
   it("dates a delivery still going out by when it was queued", () => {

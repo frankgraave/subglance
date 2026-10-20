@@ -120,8 +120,10 @@ alerts went. Open an incident, on the Incidents screen or a monitor's page,
 and its **Notifications** list has one line per alert per channel: the alert,
 its reminders and the recovery, each marked Delivered, Failed (with the
 error), Retrying, Held for quiet hours, Not sent (with the reason, such as
-maintenance or quiet hours set to drop), or Merged, when the morning's
-quiet-hours digest or the recovery message carried it instead. Send test
+maintenance or quiet hours set to drop), Merged, when the morning's
+quiet-hours digest or the recovery message carried it instead, or Waiting,
+while it is in its [grouping window](operations.md#alert-grouping) and has not
+gone out yet. Send test
 messages are not alerts and are not listed. Delivered and skipped alerts are
 kept for the same 30 days, so the list on an older incident may be short and
 says so. The same list is `GET /api/v1/incidents/{id}/deliveries`.

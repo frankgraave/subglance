@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -21,6 +23,10 @@ const (
 	incidentDeliveryQueued = "queued"
 	// incidentDeliveryHeld: waiting for the channel's quiet hours to end.
 	incidentDeliveryHeld = "held"
+	// incidentDeliveryWaiting: waiting in its grouping window for other
+	// alerts to go out with, until DueAt. Not in the outbox yet, so its id
+	// names the waiting alert rather than an outbox row.
+	incidentDeliveryWaiting = "waiting"
 	// incidentDeliveryMerged: not sent on its own, because another delivery
 	// carried its news: the morning's quiet-hours digest, or the recovery
 	// that went out in its place. CarriedBy names that delivery.
@@ -56,6 +62,9 @@ type incidentDelivery struct {
 	// CarriedBy the id of the delivery that carried it, when that is known.
 	MergedInto string `json:"merged_into,omitempty"`
 	CarriedBy  *int64 `json:"carried_by,omitempty"`
+	// DueAt is when a waiting alert's grouping window closes and it is
+	// written to the outbox.
+	DueAt *time.Time `json:"due_at,omitempty"`
 }
 
 // incidentDeliveriesResponse is the list, plus what it can and cannot show.
@@ -118,7 +127,7 @@ func (s *Server) handleListIncidentDeliveries(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	rows, err := s.db.IncidentDeliveries(ctx, inc)
+	rows, waiting, err := s.db.IncidentNotifications(ctx, inc)
 	if err != nil {
 		s.log.Error("list incident deliveries", "incident_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "could not list deliveries")
@@ -151,7 +160,39 @@ func (s *Server) handleListIncidentDeliveries(w http.ResponseWriter, r *http.Req
 	for _, d := range rows {
 		out.Deliveries = append(out.Deliveries, toIncidentDelivery(d, byID[d.ChannelID]))
 	}
+	if len(waiting) > 0 {
+		for _, h := range waiting {
+			out.Deliveries = append(out.Deliveries, waitingDelivery(h, byID[h.ChannelID]))
+		}
+		// Oldest first across both. Stable, so the outbox's own order,
+		// and the carriers ahead of what they carried, hold.
+		sort.SliceStable(out.Deliveries, func(i, j int) bool {
+			return out.Deliveries[i].QueuedAt.Before(out.Deliveries[j].QueuedAt)
+		})
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// waitingDelivery is an alert still in its grouping window, listed so that
+// an outage confirmed a minute ago does not read as one nobody was told about.
+func waitingDelivery(h store.HeldAlert, ch store.Channel) incidentDelivery {
+	// The held copy is the alert as the notifier renders it; only what it
+	// says is read here.
+	var said struct {
+		Event string `json:"event"`
+	}
+	_ = json.Unmarshal([]byte(h.Payload), &said)
+	due := h.Due
+	return incidentDelivery{
+		ID:          h.ID,
+		ChannelID:   h.ChannelID,
+		ChannelName: ch.Name,
+		ChannelType: ch.Type,
+		Event:       said.Event,
+		State:       incidentDeliveryWaiting,
+		QueuedAt:    h.Created,
+		DueAt:       &due,
+	}
 }
 
 // withCarriers adds the delivery that carried each merged one, when the

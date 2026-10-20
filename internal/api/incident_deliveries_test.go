@@ -213,6 +213,46 @@ func TestIncidentDeliveriesSaysWhyAnAlertWasNotSent(t *testing.T) {
 	}
 }
 
+// TestIncidentDeliveriesListsAnAlertStillWaitingInItsWindow: an alert waits
+// in its grouping window before it reaches the outbox. Without it in the list
+// an outage confirmed a minute ago reads as one nobody was told about.
+func TestIncidentDeliveriesListsAnAlertStillWaitingInItsWindow(t *testing.T) {
+	f := newIncidentDeliveriesFixture(t)
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+	inc := f.incident(t, start, time.Time{})
+	other := f.incident(t, start.Add(-2*time.Hour), start.Add(-time.Hour))
+
+	sent := f.seed(t, store.Delivery{ChannelID: f.other.ID, IncidentID: inc.ID, Event: "incident_confirmed",
+		Status: store.OutboxDelivered, Attempts: 1, CreatedAt: start, UpdatedAt: start})
+	due := time.Now().Add(80 * time.Second).Truncate(time.Second)
+	if _, err := f.db.HoldAlert(t.Context(), store.HeldAlert{ChannelID: f.slack.ID, MonitorID: f.monitor, Due: due,
+		Payload: fmt.Sprintf(`{"event":"incident_confirmed","incident_id":%d}`, inc.ID)}); err != nil {
+		t.Fatalf("HoldAlert: %v", err)
+	}
+	// Another incident's waiting alert is not this one's.
+	if _, err := f.db.HoldAlert(t.Context(), store.HeldAlert{ChannelID: f.slack.ID, MonitorID: f.monitor, Due: due,
+		Payload: fmt.Sprintf(`{"event":"incident_confirmed","incident_id":%d}`, other.ID)}); err != nil {
+		t.Fatalf("HoldAlert: %v", err)
+	}
+
+	viewer := seedUser(t, f.srv, f.db, "viewer@example.com", store.RoleViewer)
+	code, body, raw := getIncidentDeliveries(t, f.srv, viewer, inc.ID)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d: %s", code, raw)
+	}
+	if len(body.Deliveries) != 2 {
+		t.Fatalf("deliveries = %s, want the delivered row and the waiting alert", raw)
+	}
+	if d := body.Deliveries[0]; d.ID != sent.ID || d.State != incidentDeliveryDelivered {
+		t.Errorf("first row = %+v, want the older delivered row", d)
+	}
+	d := body.Deliveries[1]
+	if d.State != incidentDeliveryWaiting || d.ChannelName != "ops" || d.Event != "incident_confirmed" ||
+		d.EndedAt != nil || d.DueAt == nil || !d.DueAt.Equal(due) || d.Attempts != 0 {
+		t.Errorf("waiting row = %+v, want ops waiting until %s", d, due)
+	}
+}
+
 func TestIncidentDeliveriesSaysWhenTheListMayBeShort(t *testing.T) {
 	f := newIncidentDeliveriesFixture(t)
 	inc := f.incident(t, time.Now().Add(-store.DeliveryLogRetention-time.Hour), time.Time{})

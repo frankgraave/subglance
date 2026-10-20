@@ -1227,7 +1227,11 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 
 	case state.EventIncidentConfirmed:
 		if !tr.Notice {
-			inc, err = r.confirmOutage(ctx, o, tr)
+			// Owed when the alert is about to be handed to the notifier:
+			// not in maintenance, which announces it after the window
+			// instead, and not held back by the flapping filter.
+			owed := tr.Notify && !maintained && r.notify != nil
+			inc, err = r.confirmOutage(ctx, o, tr, owed)
 			if err != nil {
 				return err
 			}
@@ -1354,11 +1358,20 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 
 // confirmOutage writes the confirmation of an outage and reads the incident
 // back for the alert.
-func (r *Runner) confirmOutage(ctx context.Context, o scheduler.Outcome, tr state.Transition) (store.Incident, error) {
+//
+// owed marks an outage whose alert is about to be sent as owed that alert in
+// the same write (store.DB.ConfirmOwedIncident): the notifier clears the mark
+// when the alert is on disk, so a process that ends in between does not leave
+// an outage that reads as announced.
+func (r *Runner) confirmOutage(ctx context.Context, o scheduler.Outcome, tr state.Transition, owed bool) (store.Incident, error) {
 	var (
 		inc store.Incident
 		err error
 	)
+	confirm := r.db.ConfirmIncident
+	if owed {
+		confirm = r.db.ConfirmOwedIncident
+	}
 	if tr.Replaces {
 		// An outage confirmed while a certificate notice was open. The
 		// notice ends where the outage began, without a message: the
@@ -1375,12 +1388,12 @@ func (r *Runner) confirmOutage(ctx context.Context, o scheduler.Outcome, tr stat
 	}
 	// With a threshold of 1 there was no pending phase, so the incident
 	// may not exist yet.
-	if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); errors.Is(err, store.ErrNoOpenIncident) {
+	if err := confirm(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); errors.Is(err, store.ErrNoOpenIncident) {
 		if _, err := r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
 			r.log.Error("failed to open incident on confirm", "monitor_id", o.Monitor.ID, "error", err)
 			return store.Incident{}, fmt.Errorf("open incident on confirm: %w", err)
 		}
-		if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
+		if err := confirm(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
 			r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
 			return store.Incident{}, fmt.Errorf("confirm incident: %w", err)
 		}

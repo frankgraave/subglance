@@ -835,12 +835,25 @@ when the window it was waiting in closes, or on the first pass if that time
 has gone by while SubGlance was down. A monitor that fails a few seconds after
 the start, on the same dead uplink, still joins that message.
 
-Two gaps remain. The copy on disk is written just after the incident is
-confirmed, not in the same write, so a crash in that moment loses the alert;
-and if writing the copy fails, which is logged, the alert lives only in memory
-until its window closes. A batch whose write to the outbox fails for another
-reason than a deleted monitor or channel is logged too, and stays on disk
-until the next start sends it.
+The moment between confirming an outage and keeping its alert is covered
+too. The write that confirms the outage also marks it as owed its alert, and
+the write that keeps the alert on disk clears the mark, so at every moment the
+alert is either owed or kept. The next start sends the alert of every open
+outage still marked, once; one that turns out to have nothing to send (no
+channel, every channel switched off, or a maintenance window that announces it
+afterwards) has its mark cleared and sends nothing. If writing the copy fails,
+which is logged, the outage stays marked until its message reaches the outbox,
+so a crash in that window is covered the same way. A batch whose write to the
+outbox fails for a reason other than a deleted monitor or channel is logged
+too. Its held alerts and owed outages are sent on the next start; a reminder
+or recovery whose copy could not be written either is lost.
+
+An alert sent this way on the next start is grouped with the alerts raised
+after that start, not with messages that were already in the outbox: those are
+committed to go out as they are, and may already be on their way.
+
+While an alert waits in its window it is listed in its incident's
+**Notifications** as Waiting, with the time its window closes.
 
 ## Watching the watcher
 

@@ -220,8 +220,13 @@ type pending struct {
 
 	// held names the notif_held rows of the alerts in this batch, which
 	// keep them on disk while they wait. Writing the batch to the outbox
-	// removes them in the same transaction (see Notifier.flush).
+	// removes them in the same transaction (see Notifier.write).
 	held []int64
+
+	// owed names the incidents whose owed alert is in this batch with no
+	// copy on disk, because holding it failed. The write of the last batch
+	// that carries one clears its mark (see Notifier.releasableOwed).
+	owed []int64
 }
 
 // Add records an alert against its batch and reports whether the batch is now

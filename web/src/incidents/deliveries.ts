@@ -6,6 +6,7 @@
  */
 
 import { apiFetch } from "../api/http";
+import { formatMoment } from "../format/format";
 
 /** What became of one alert on one channel; see the API's `state`. */
 export type DeliveryOutcome =
@@ -15,7 +16,8 @@ export type DeliveryOutcome =
   | "queued"
   | "held"
   | "not_sent"
-  | "merged";
+  | "merged"
+  | "waiting";
 
 export type IncidentDelivery = {
   id: string;
@@ -48,6 +50,8 @@ type ApiDelivery = {
   error: string;
   reason: string;
   merged_into?: string;
+  /** On a waiting alert, when its grouping window closes. */
+  due_at?: string;
 };
 
 const OUTCOMES: readonly DeliveryOutcome[] = [
@@ -58,6 +62,7 @@ const OUTCOMES: readonly DeliveryOutcome[] = [
   "held",
   "not_sent",
   "merged",
+  "waiting",
 ];
 
 export const incidentDeliveriesQueryKey = (incidentId: string) =>
@@ -77,6 +82,14 @@ function detailOf(api: ApiDelivery, outcome: DeliveryOutcome): string | null {
       return api.reason === "" ? null : sentence(api.reason);
     case "held":
       return "Waiting for the channel's quiet hours to end.";
+    case "waiting": {
+      // Dated as well as timed: the window may close after midnight, and
+      // a bare clock time would then name the wrong day.
+      const due = Date.parse(api.due_at ?? "");
+      return Number.isFinite(due)
+        ? `Waiting for other alerts to go out with it, until ${formatMoment(due)}.`
+        : "Waiting for other alerts to go out with it.";
+    }
     case "merged":
       return api.merged_into === "recovery"
         ? "The monitor was back up before it went out, so the recovery message carried it."
@@ -97,7 +110,11 @@ export function deliveryFromApi(api: ApiDelivery): IncidentDelivery {
     : "queued";
   const at = Date.parse(api.ended_at ?? api.queued_at);
   return {
-    id: String(api.id),
+    /*
+     * A waiting alert is not in the outbox yet, so its id is from another
+     * table and may equal a delivery's: kept apart, it stays a unique key.
+     */
+    id: outcome === "waiting" ? `waiting-${api.id}` : String(api.id),
     channelName: api.channel_name,
     channelType: api.channel_type,
     event: api.event,
@@ -160,6 +177,8 @@ export function deliveryChip(outcome: DeliveryOutcome): {
       return { status: "warn", word: "Retrying" };
     case "held":
       return { status: "idle", word: "Held" };
+    case "waiting":
+      return { status: "idle", word: "Waiting" };
     case "not_sent":
       return { status: "idle", word: "Not sent" };
     case "merged":

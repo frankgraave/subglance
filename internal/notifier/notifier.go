@@ -244,7 +244,15 @@ func New(opts Options) *Notifier {
 // Deferred maintenance initials go directly to the durable outbox in the same
 // transaction that consumes their intent. No network call happens here. A
 // broken channel still cannot slow a check down.
+//
+// An outage confirmed with its alert owed (store.Incident.AlertOwed) has the
+// mark cleared in the same write that keeps the alert on disk, or here when
+// there turns out to be nothing to send. Until then a process that ends
+// leaves the mark, and the next start announces the outage (AnnounceOwed).
+// Every error returned leaves it set.
 func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incident, event state.Event, at time.Time) error {
+	owed := owedBy(inc, event)
+
 	muted, err := n.db.InMaintenance(ctx, m.ID, at)
 	if err != nil {
 		return err
@@ -252,10 +260,15 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	if muted {
 		if event == state.EventIncidentConfirmed && inc.ID != 0 {
 			pending, err := n.db.HasPendingMaintenanceChannels(ctx, inc.ID)
-			if err != nil || pending {
+			if err != nil {
 				return err
 			}
-			return n.db.SetMaintenancePending(ctx, inc.ID, true)
+			if pending {
+				// Maintenance already holds this incident's alert for
+				// some channels and announces it after the window.
+				return n.clearOwed(ctx, owed)
+			}
+			return n.db.DeferOwedToMaintenance(ctx, inc.ID)
 		}
 		return nil
 	}
@@ -270,7 +283,7 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 		// Not an error. With no default set, plenty of monitors are
 		// watched on the dashboard and nowhere else, and saying so at every
 		// transition would fill the log with a non-event.
-		return nil
+		return n.clearOwed(ctx, owed)
 	}
 
 	alert := AlertFromStore(m, inc, event, at)
@@ -294,10 +307,9 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	// The alert as it is held on disk while it waits, encoded once for
-	// every channel. Rendered lazily: with grouping off, or for a notice,
-	// nothing is held.
-	var held string
+	// One write for the alert on every channel, so its owed mark is
+	// cleared together with the last copy rather than with the first.
+	var direct, holding []*pending
 	for _, ch := range channels {
 		if !ch.Enabled {
 			continue
@@ -308,7 +320,7 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 			// outage seen by twenty monitors at once, and a notice is one
 			// certificate's date: it would only make "3 monitors are down"
 			// out of one outage and two certificates.
-			n.flush(ctx, &pending{
+			direct = append(direct, &pending{
 				key: groupKey(ch.ID, kindOf(alert)), channel: ch.ID, monitorID: m.ID,
 				incidentID: alert.IncidentID, kind: kindOf(alert), alerts: []Alert{alert},
 			})
@@ -321,35 +333,130 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 			// ever close this window: write it now and keep nothing. The
 			// outbox delivers it on the next start.
 			delete(n.batches, b.key)
-			n.flush(ctx, b)
+			direct = append(direct, b)
 			continue
 		}
-		if held == "" {
-			if held, err = alert.Encode(); err != nil {
-				return err
+		holding = append(holding, b)
+	}
+
+	if len(direct) == 0 && len(holding) == 0 {
+		// Every channel it would go to is switched off.
+		return n.clearOwed(ctx, owed)
+	}
+	if len(holding) > 0 {
+		// The alert as it is held on disk while it waits, encoded once
+		// for every channel. With grouping off, or for a notice, nothing
+		// is held. The batches carry the owed mark until a write clears it.
+		payload, err := alert.Encode()
+		if err != nil {
+			for _, b := range holding {
+				b.owed = appendOwed(b.owed, owed)
 			}
+			return err
 		}
-		n.hold(ctx, b, ch.ID, m.ID, held)
+		n.hold(ctx, holding, m.ID, payload, owed)
+		owed = 0
+	}
+	if len(direct) > 0 {
+		n.write(ctx, direct, owedList(owed))
 	}
 	return nil
 }
 
-// hold writes an alert that has joined a batch to notif_held, so it outlives
-// a process that ends without its final flush. The caller holds mu.
+// hold writes an alert that has joined a batch on each of its channels to
+// notif_held, so it outlives a process that ends without its final flush, and
+// clears the owed mark of the incident it announces in the same write. The
+// caller holds mu.
 //
-// A failed write is logged, not returned: the alert is in its batch either
-// way and goes out when the window closes. Only a crash inside that window
-// would lose it, which is how every alert fared before it was held on disk.
-func (n *Notifier) hold(ctx context.Context, b *pending, channelID, monitorID int64, payload string) {
-	id, err := n.db.HoldAlert(ctx, store.HeldAlert{
-		ChannelID: channelID, MonitorID: monitorID, Payload: payload, Due: b.deadline,
-	})
+// A failed write is logged, not returned: the alert is in its batches either
+// way and goes out when their windows close. Its incident stays owed until
+// the last of those batches is written (see releasableOwed), so a process
+// that ends before that still announces it on the next start.
+func (n *Notifier) hold(ctx context.Context, batches []*pending, monitorID int64, payload string, owed int64) {
+	held := make([]store.HeldAlert, len(batches))
+	for i, b := range batches {
+		held[i] = store.HeldAlert{ChannelID: b.channel, MonitorID: monitorID, Payload: payload, Due: b.deadline}
+	}
+	ids, err := n.db.HoldAlerts(ctx, held, owed)
 	if err != nil {
-		n.log.Warn("could not keep a grouped alert on disk; it is sent when its window closes, "+
-			"but not if the process ends before that", "channel_id", channelID, "monitor_id", monitorID, "error", err)
+		// An outage's first alert is still owed on disk, so the next start
+		// sends it; a reminder or a recovery is not.
+		after := "but not if the process ends before that"
+		if owed != 0 {
+			after = "or on the next start if the process ends before that"
+		}
+		n.log.Warn("could not keep a grouped alert on disk; it is sent when its window closes, "+after,
+			"monitor_id", monitorID, "channels", len(batches), "error", err)
+		for _, b := range batches {
+			b.owed = appendOwed(b.owed, owed)
+		}
 		return
 	}
-	b.held = append(b.held, id)
+	for i, b := range batches {
+		b.held = append(b.held, ids[i])
+	}
+}
+
+// owedBy returns the incident whose owed alert this is, or zero.
+func owedBy(inc store.Incident, event state.Event) int64 {
+	if event != state.EventIncidentConfirmed || !inc.AlertOwed {
+		return 0
+	}
+	return inc.ID
+}
+
+func owedList(id int64) []int64 {
+	if id == 0 {
+		return nil
+	}
+	return []int64{id}
+}
+
+func appendOwed(owed []int64, id int64) []int64 {
+	if id == 0 {
+		return owed
+	}
+	return append(owed, id)
+}
+
+// clearOwed records that an owed alert has nothing to send.
+func (n *Notifier) clearOwed(ctx context.Context, owed int64) error {
+	if owed == 0 {
+		return nil
+	}
+	return n.db.ClearAlertOwed(ctx, owed)
+}
+
+// AnnounceOwed sends the alert of every open outage that the last process
+// confirmed and ended before keeping its alert on disk (see
+// store.Incident.AlertOwed). It goes through Enqueue like any alert, so the
+// routing, maintenance and grouping of the moment decide where it goes, and
+// its mark is cleared in the same write as for a fresh one.
+//
+// Call it once on start, before anything else can confirm an outage: one
+// confirmed after the read and not yet held would be announced twice.
+func (n *Notifier) AnnounceOwed(ctx context.Context) error {
+	owed, err := n.db.OwedIncidents(ctx)
+	if err != nil {
+		return err
+	}
+	// One that cannot be announced now stays owed and is tried on the next
+	// start; it does not hold up the rest.
+	var errs []error
+	for _, inc := range owed {
+		m, err := n.db.GetMonitor(ctx, inc.MonitorID)
+		if err == nil {
+			err = n.Enqueue(ctx, m, inc, state.EventIncidentConfirmed, inc.ConfirmedAt)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("announce incident %d: %w", inc.ID, err))
+		}
+	}
+	if len(owed) > len(errs) {
+		n.log.Info("announced outages the last run confirmed without writing their alert",
+			"incidents", len(owed)-len(errs))
+	}
+	return errors.Join(errs...)
 }
 
 // restoreHeld reads back the alerts a process left waiting in their windows
@@ -423,6 +530,7 @@ func (n *Notifier) restoreHeld(ctx context.Context) {
 		if live, ok := n.batches[key]; ok {
 			b.alerts = append(b.alerts, live.alerts...)
 			b.held = append(b.held, live.held...)
+			b.owed = append(b.owed, live.owed...)
 			if live.deadline.Before(b.deadline) {
 				b.deadline = live.deadline
 			}
@@ -445,11 +553,43 @@ func (n *Notifier) restoreHeld(ctx context.Context) {
 func (n *Notifier) flushDue(ctx context.Context) {
 	n.mu.Lock()
 	due := n.grouper.due(n.batches)
+	owed := n.releasableOwed(due)
 	n.mu.Unlock()
 
-	for _, b := range due {
-		n.flush(ctx, b)
+	n.write(ctx, due, owed)
+}
+
+// releasableOwed returns the owed incidents that the given batches, just
+// taken out of batches, are the last to carry. An alert whose copies could not
+// be held is owed until it is on disk for every channel. The caller holds mu.
+func (n *Notifier) releasableOwed(taken []*pending) []int64 {
+	var out []int64
+	seen := make(map[int64]bool)
+	for _, b := range taken {
+		for _, id := range b.owed {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if !n.carriesOwed(id) {
+				out = append(out, id)
+			}
+		}
 	}
+	return out
+}
+
+// carriesOwed reports whether a batch still waiting carries an owed alert
+// for the incident. The caller holds mu.
+func (n *Notifier) carriesOwed(id int64) bool {
+	for _, b := range n.batches {
+		for _, o := range b.owed {
+			if o == id {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // flushAll writes out every pending batch regardless of its window.
@@ -461,11 +601,10 @@ func (n *Notifier) flushDue(ctx context.Context) {
 func (n *Notifier) flushAll(ctx context.Context) {
 	n.mu.Lock()
 	all := n.takeAll()
+	owed := n.releasableOwed(all)
 	n.mu.Unlock()
 
-	for _, b := range all {
-		n.flush(ctx, b)
-	}
+	n.write(ctx, all, owed)
 }
 
 // stop is the final flush: it writes out every pending batch and turns
@@ -481,9 +620,8 @@ func (n *Notifier) stop(ctx context.Context) {
 	defer n.mu.Unlock()
 
 	n.stopped = true
-	for _, b := range n.takeAll() {
-		n.flush(ctx, b)
-	}
+	all := n.takeAll()
+	n.write(ctx, all, n.releasableOwed(all))
 }
 
 // takeAll empties batches and returns them in the order a channel hears them:
@@ -499,45 +637,65 @@ func (n *Notifier) takeAll() []*pending {
 	return all
 }
 
-// flush turns one batch into one outbox row.
-func (n *Notifier) flush(ctx context.Context, b *pending) {
-	if len(b.alerts) == 0 {
+// write turns each batch into one outbox row, in one transaction that also
+// removes the batches' held copies and clears the owed marks in owed.
+//
+// When that write fails the batches' alerts stay held and their incidents
+// owed, so the next start sends them.
+func (n *Notifier) write(ctx context.Context, batches []*pending, owed []int64) {
+	var (
+		writes  []store.BatchWrite
+		kept    []*pending
+		grouped []bool
+	)
+	for _, b := range batches {
+		if len(b.alerts) == 0 {
+			continue
+		}
+		summary := Summarise(b.alerts)
+		payload, err := summary.Encode()
+		if err != nil {
+			n.log.Error("could not encode grouped alert", "channel_id", b.channel, "error", err)
+			continue
+		}
+		writes = append(writes, store.BatchWrite{
+			Delivery: b.delivery(payload, state.Event(summary.Event), n.now()),
+			Held:     b.held,
+		})
+		kept = append(kept, b)
+		grouped = append(grouped, summary.Grouped())
+	}
+	if len(writes) == 0 && len(owed) == 0 {
 		return
 	}
 
-	summary := Summarise(b.alerts)
-	payload, err := summary.Encode()
+	dropped, err := n.db.EnqueueBatches(ctx, writes, owed)
 	if err != nil {
-		n.log.Error("could not encode grouped alert", "channel_id", b.channel, "error", err)
+		// The batches' alerts kept in notif_held stay there, and their
+		// incidents owed, so the next start sends them. An alert whose
+		// hold failed too (a reminder or recovery: only first alerts are
+		// owed) has no copy left, which the hold's log line said.
+		n.log.Error("could not queue notification",
+			"batches", len(writes), "error", err)
 		return
 	}
-
-	if _, err := n.db.EnqueueReleasing(ctx, b.delivery(payload, state.Event(summary.Event), n.now()), b.held); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+	for i, b := range kept {
+		switch {
+		case errors.Is(dropped[i], store.ErrNotFound):
 			// Every monitor in the batch was deleted while it waited for
 			// company. Their messages go with them, as their queued and
 			// sent ones do; that is not a failure to report.
 			n.log.Info("notification dropped: its monitors were deleted",
 				"channel_id", b.channel, "monitors", len(b.alerts))
-			return
-		}
-		if errors.Is(err, store.ErrUnknownChannel) {
+		case errors.Is(dropped[i], store.ErrUnknownChannel):
 			// The channel was deleted while the batch waited. Its queued
 			// messages went with it, and so does this one.
 			n.log.Info("notification dropped: its channel was deleted",
 				"channel_id", b.channel, "monitors", len(b.alerts))
-			return
+		case grouped[i]:
+			n.log.Info("grouped alert queued",
+				"channel_id", b.channel, "monitors", len(b.alerts), "event", writes[i].Delivery.Event)
 		}
-		// The batch's alerts stay in notif_held, so the next start
-		// sends them.
-		n.log.Error("could not queue notification",
-			"channel_id", b.channel, "monitors", len(b.alerts), "error", err)
-		return
-	}
-
-	if summary.Grouped() {
-		n.log.Info("grouped alert queued",
-			"channel_id", b.channel, "monitors", len(b.alerts), "event", summary.Event)
 	}
 }
 
