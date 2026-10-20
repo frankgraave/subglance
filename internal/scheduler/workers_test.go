@@ -296,3 +296,54 @@ func TestMaxCheckTimeoutReportsTheSlowestScheduledMonitor(t *testing.T) {
 			"budget for the wrong monitor and close the database mid-check", got)
 	}
 }
+
+// CheckGap is how long the watchdog lets the pipeline go without a recorded
+// check before it calls it stalled, so it has to follow the monitor checked
+// most often, with the jitter its next run may add and its timeout, since a
+// check is recorded when it ends. Too short, and a healthy instance of slow
+// monitors is reported dead; too long, and a stall is reported late.
+func TestCheckGapFollowsTheMonitorCheckedMostOften(t *testing.T) {
+	hourly := job(1, time.Hour)
+	hourly.Monitor.Timeout = 10 * time.Second
+	fiveMinutes := job(2, 5*time.Minute)
+	fiveMinutes.Monitor.Timeout = 30 * time.Second
+	domain := job(3, time.Minute) // a domain is checked every six hours at most
+	domain.Monitor.Type = checker.TypeDomain
+	domain.Monitor.Timeout = 10 * time.Second
+
+	jobs := []Job{hourly, fiveMinutes, domain}
+	s := New(Options{
+		Registry: RegistryFunc(func(context.Context) ([]Job, error) { return jobs, nil }),
+		Checkers: map[checker.Type]checker.Checker{
+			checker.TypeHTTP: &fakeChecker{}, checker.TypeDomain: &fakeChecker{},
+		},
+		OnResult:       func(Outcome) {},
+		JitterFraction: 0.1,
+		Log:            testLogger(),
+	})
+
+	if got := s.CheckGap(); got != 0 {
+		t.Errorf("CheckGap on an empty queue = %s, want 0", got)
+	}
+	if err := s.Reload(context.Background()); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if got, want := s.CheckGap(), 5*time.Minute+30*time.Second+30*time.Second; got != want {
+		t.Errorf("CheckGap = %s, want %s: the five-minute monitor's cadence, jitter window and timeout", got, want)
+	}
+
+	// A failing monitor is rechecked every minute, which shortens the gap.
+	s.SetFailing(2, true)
+	if got, want := s.CheckGap(), time.Minute+6*time.Second+30*time.Second; got != want {
+		t.Errorf("CheckGap with the monitor failing = %s, want %s", got, want)
+	}
+
+	// The domain floor holds whatever interval is stored.
+	jobs = []Job{domain}
+	if err := s.Reload(context.Background()); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if got, want := s.CheckGap(), 6*time.Hour+36*time.Minute+10*time.Second; got != want {
+		t.Errorf("CheckGap for a domain monitor = %s, want %s", got, want)
+	}
+}
