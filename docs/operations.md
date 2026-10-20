@@ -844,8 +844,9 @@ channel, every channel switched off, or a maintenance window that announces it
 afterwards) has its mark cleared and sends nothing. If writing the copy fails,
 which is logged, the outage stays marked until its message reaches the outbox,
 so a crash in that window is covered the same way. A batch whose write to the
-outbox fails for another reason than a deleted monitor or channel is logged
-too, and stays on disk until the next start sends it.
+outbox fails for a reason other than a deleted monitor or channel is logged
+too. Its held alerts and owed outages are sent on the next start; a reminder
+or recovery whose copy could not be written either is lost.
 
 An alert sent this way on the next start is grouped with the alerts raised
 after that start, not with messages that were already in the outbox: those are

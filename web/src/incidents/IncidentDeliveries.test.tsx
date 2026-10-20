@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentDeliveriesScope } from "./deliveriesScope";
 import { deliveryChip, deliveryFromApi } from "./deliveries";
-import { formatClock } from "../format/format";
+import { formatMoment } from "../format/format";
 import type { Incident } from "../monitors/detail";
 
 /**
@@ -186,8 +186,10 @@ describe("deliveryFromApi", () => {
     });
     expect(d.outcome).toBe("waiting");
     expect(d.detail).toBe(
-      `Waiting for other alerts to go out with it, until ${formatClock(due)}.`,
+      `Waiting for other alerts to go out with it, until ${formatMoment(due)}.`,
     );
+    // Dated, not just timed: a window can close on the next day.
+    expect(d.detail).toMatch(/until \d{1,2} [A-Z][a-z]{2} \d{4}, \d\d:\d\d\.$/);
     // Its id is a waiting alert's, which may equal an outbox row's.
     expect(d.id).not.toBe(String(base.id));
   });

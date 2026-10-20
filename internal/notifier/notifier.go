@@ -671,8 +671,10 @@ func (n *Notifier) write(ctx context.Context, batches []*pending, owed []int64) 
 
 	dropped, err := n.db.EnqueueBatches(ctx, writes, owed)
 	if err != nil {
-		// The batches' alerts stay in notif_held, and their incidents
-		// owed, so the next start sends them.
+		// The batches' alerts kept in notif_held stay there, and their
+		// incidents owed, so the next start sends them. An alert whose
+		// hold failed too (a reminder or recovery: only first alerts are
+		// owed) has no copy left, which the hold's log line said.
 		n.log.Error("could not queue notification",
 			"batches", len(writes), "error", err)
 		return

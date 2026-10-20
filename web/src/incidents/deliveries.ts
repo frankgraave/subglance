@@ -6,7 +6,7 @@
  */
 
 import { apiFetch } from "../api/http";
-import { formatClock } from "../format/format";
+import { formatMoment } from "../format/format";
 
 /** What became of one alert on one channel; see the API's `state`. */
 export type DeliveryOutcome =
@@ -83,9 +83,11 @@ function detailOf(api: ApiDelivery, outcome: DeliveryOutcome): string | null {
     case "held":
       return "Waiting for the channel's quiet hours to end.";
     case "waiting": {
+      // Dated as well as timed: the window may close after midnight, and
+      // a bare clock time would then name the wrong day.
       const due = Date.parse(api.due_at ?? "");
       return Number.isFinite(due)
-        ? `Waiting for other alerts to go out with it, until ${formatClock(due)}.`
+        ? `Waiting for other alerts to go out with it, until ${formatMoment(due)}.`
         : "Waiting for other alerts to go out with it.";
     }
     case "merged":
