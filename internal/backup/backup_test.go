@@ -229,6 +229,25 @@ func TestStatusRecallsTheNewestBackupAfterARestart(t *testing.T) {
 		}
 	})
 
+	t.Run("a newer name that is not a time is passed over", func(t *testing.T) {
+		fake, srv := newFakeS3(t, "bucket")
+		fake.objects["nightly/subglance-20260924T030000Z.db.gz"] = []byte("older")
+		fake.objects["nightly/subglance-20260925T030000Z.db.gz"] = []byte("newest")
+		// Named like a backup, and sorted after every real one, but month
+		// 13 is not a date.
+		fake.objects["nightly/subglance-20261301T030000Z.db.gz"] = []byte("stray")
+		b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+
+		first := b.firstRun(context.Background())
+
+		if st := b.Status(); !st.LastSuccess.Equal(newest) || st.LastObject != "subglance-20260925T030000Z.db.gz" {
+			t.Errorf("status after start = %+v; want the newest backup with a real time as the last success", st)
+		}
+		if want := newest.Add(24 * time.Hour); !first.Equal(want) {
+			t.Errorf("first run at %v; want one interval after that backup, %v", first, want)
+		}
+	})
+
 	t.Run("none is known", func(t *testing.T) {
 		for name, objects := range map[string]map[string]string{
 			"empty bucket": {},

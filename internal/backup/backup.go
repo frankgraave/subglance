@@ -440,25 +440,32 @@ func (b *Backups) removeStaleStaging() {
 // cannot be read (see Run). The newest backup it finds is also reported as
 // the last success (see recall), so the status does not read as "no backup"
 // until that first run.
+//
+// A name can match objectName and still not be a time, such as month 13:
+// it is passed over for the next older one, so one stray object does not
+// hide the backups below it.
 func (b *Backups) firstRun(ctx context.Context) time.Time {
 	now := b.now()
 	objs, err := listBackupObjects(ctx, b.client, b.target)
-	if err != nil || len(objs) == 0 {
-		return now
-	}
-	newest := objs[len(objs)-1]
-	stamp := strings.TrimSuffix(strings.TrimPrefix(newest.Key, "subglance-"), ".db.gz")
-	taken, err := time.Parse(objectTimeLayout, stamp)
 	if err != nil {
 		return now
 	}
-	// A clock that moved backwards, or a backup stamped in the future by
-	// another instance, must not push the first run past one interval.
-	if taken.After(now) {
-		return now.Add(b.interval)
+	for i := len(objs) - 1; i >= 0; i-- {
+		newest := objs[i]
+		stamp := strings.TrimSuffix(strings.TrimPrefix(newest.Key, "subglance-"), ".db.gz")
+		taken, err := time.Parse(objectTimeLayout, stamp)
+		if err != nil {
+			continue
+		}
+		// A clock that moved backwards, or a backup stamped in the future by
+		// another instance, must not push the first run past one interval.
+		if taken.After(now) {
+			return now.Add(b.interval)
+		}
+		b.recall(newest, taken)
+		return taken.Add(b.interval)
 	}
-	b.recall(newest, taken)
-	return taken.Add(b.interval)
+	return now
 }
 
 // recall reports a backup found in the bucket at start as the last success.
