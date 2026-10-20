@@ -80,7 +80,7 @@ func (s *Server) writeBackupMetrics(b *strings.Builder) {
 		last = uint64(st.LastSuccess.Unix())
 	}
 	gauge(b, "subglance_backup_last_success_timestamp_seconds",
-		"Unix time of the last backup that reached the bucket, 0 if none has since start.", last)
+		"Unix time of the last backup that reached the bucket, including one found there at start; 0 if none is known.", last)
 	gauge(b, "subglance_backup_last_size_bytes",
 		"Compressed size of the last successful backup.", uint64(max(st.LastSize, 0)))
 	counter(b, "subglance_backup_failures_total",

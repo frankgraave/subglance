@@ -1153,6 +1153,15 @@ subglance_backup_failures_total                   failed runs since start
 Alert on `time() - subglance_backup_last_success_timestamp_seconds` rather
 than on failures: it also catches a backup that stopped being attempted.
 
+A restart does not reset the last success. At start SubGlance lists the
+bucket, and the newest backup in it is reported as the last success, with the
+time in its name, until this process takes one of its own. So a deploy does
+not trip that alert while a good backup is in the bucket, and the next run is
+still one interval after that backup. With an empty bucket, one that cannot be
+read at start, or a newest backup stamped later than the host's clock, there
+is no last success until the first run: the gauge is `0`, and the API answers
+`null`. The failure count is for the running process only.
+
 ### Restoring from S3
 
 `subglance restore` downloads the newest backup from the configured target

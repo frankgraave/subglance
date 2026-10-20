@@ -294,19 +294,34 @@ func (b *Backups) List(ctx context.Context) ([]string, error) {
 }
 
 func listBackups(ctx context.Context, c *client, t Target) ([]string, error) {
+	objs, err := listBackupObjects(ctx, c, t)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(objs))
+	for i, o := range objs {
+		names[i] = o.Key
+	}
+	return names, nil
+}
+
+// listBackupObjects returns the backups under the target prefix with their
+// sizes, oldest first, each Key relative to the prefix. Objects that are not
+// named like a backup are left out.
+func listBackupObjects(ctx context.Context, c *client, t Target) ([]object, error) {
 	objs, err := c.list(ctx, t.Prefix+"subglance-")
 	if err != nil {
 		return nil, err
 	}
-	var names []string
+	var out []object
 	for _, o := range objs {
 		name := strings.TrimPrefix(o.Key, t.Prefix)
 		if objectName.MatchString(name) {
-			names = append(names, name)
+			out = append(out, object{Key: name, Size: o.Size})
 		}
 	}
-	sort.Strings(names)
-	return names, nil
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
 }
 
 // prune deletes the oldest backups beyond Keep.
@@ -420,14 +435,19 @@ func (b *Backups) removeStaleStaging() {
 	}
 }
 
+// firstRun returns when the first scheduled run is due: one interval after
+// the newest backup in the bucket, or now when there is none or the bucket
+// cannot be read (see Run). The newest backup it finds is also reported as
+// the last success (see recall), so the status does not read as "no backup"
+// until that first run.
 func (b *Backups) firstRun(ctx context.Context) time.Time {
 	now := b.now()
-	names, err := b.List(ctx)
-	if err != nil || len(names) == 0 {
+	objs, err := listBackupObjects(ctx, b.client, b.target)
+	if err != nil || len(objs) == 0 {
 		return now
 	}
-	newest := names[len(names)-1]
-	stamp := strings.TrimSuffix(strings.TrimPrefix(newest, "subglance-"), ".db.gz")
+	newest := objs[len(objs)-1]
+	stamp := strings.TrimSuffix(strings.TrimPrefix(newest.Key, "subglance-"), ".db.gz")
 	taken, err := time.Parse(objectTimeLayout, stamp)
 	if err != nil {
 		return now
@@ -437,7 +457,30 @@ func (b *Backups) firstRun(ctx context.Context) time.Time {
 	if taken.After(now) {
 		return now.Add(b.interval)
 	}
+	b.recall(newest, taken)
 	return taken.Add(b.interval)
+}
+
+// recall reports a backup found in the bucket at start as the last success.
+//
+// Without it every restart reads as an instance that has never backed up,
+// until the first run one interval after the newest backup: a day at the
+// default interval. The gauge an operator alerts on would then be 0, which
+// fires a staleness alert on every deploy while a good backup sits in the
+// bucket, and an alert that fires on every deploy is one that gets silenced.
+//
+// A backup stamped after now is not recalled (firstRun returns first): a
+// last success in the future would hold a staleness alert off. One older
+// than a success this process already recorded is not either.
+func (b *Backups) recall(o object, taken time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !taken.After(b.status.LastSuccess) {
+		return
+	}
+	b.status.LastSuccess = taken
+	b.status.LastObject = o.Key
+	b.status.LastSize = o.Size
 }
 
 // gzipFile compresses src into dst and returns the compressed size and its

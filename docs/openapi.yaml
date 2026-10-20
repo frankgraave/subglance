@@ -962,7 +962,11 @@ paths:
                   target:
                     type: [string, 'null']
                     description: The configured s3://bucket/prefix/, without credentials. Null when not configured.
-                  last_success_at: { type: [string, 'null'], format: date-time }
+                  last_success_at:
+                    type: [string, 'null']
+                    format: date-time
+                    description: |
+                      When the last successful backup was taken. Until this process has run one, the newest backup found in the bucket at start, timed by its object name. Null when none is known.
                   last_object:
                     type: [string, 'null']
                     description: Object name of the last successful backup, relative to the target.
