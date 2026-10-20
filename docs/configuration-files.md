@@ -133,7 +133,9 @@ A value that proves the right to send or read something is written as
   `method` and `body` template, which is the same rule the channel API uses
   when it masks a read;
 - the value of every request header an HTTP monitor sends (the header names
-  stay, so the file still says which headers are sent);
+  stay, so the file still says which headers are sent). A header sent with an
+  empty value is written as `""`: it proves nothing, so it is not something
+  to fill in;
 - an HTTP monitor's request body.
 
 The push URL of a push monitor is not written at all.

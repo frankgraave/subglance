@@ -4133,7 +4133,8 @@ paths:
         No credential is ever written. Channel settings follow the same
         allowlist as the masked channel read, and every other value, every
         request header value and a request body are written as
-        `<fill in after import>`. A push monitor's URL is not written at all.
+        `<fill in after import>`; an empty one is written as it is. A push
+        monitor's URL is not written at all.
 
         Monitors and channels are identified by `key`. An object that has no
         key yet is given one here, derived from its name, and the key is
