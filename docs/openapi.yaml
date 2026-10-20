@@ -2850,10 +2850,12 @@ paths:
         Every alert about this incident, one entry per channel it was aimed
         at, oldest first, with what became of it: delivered, failed after its
         retries, still being retried, held for quiet hours, not sent (with the
-        reason), or merged into another delivery that carried its news.
+        reason), merged into another delivery that carried its news, or still
+        waiting in its grouping window for other alerts to go out with.
 
-        Read from the notification outbox. A message about several monitors
-        at once is listed under each incident it names. Send test deliveries
+        Read from the notification outbox, plus the alerts still waiting in
+        their grouping window, which are not in the outbox yet. A message
+        about several monitors at once is listed under each incident it names. Send test deliveries
         and the notice about a failing channel are not alerts about the
         incident and are not listed.
 
@@ -8069,6 +8071,10 @@ components:
         id:
           type: integer
           format: int64
+          description: |
+            The outbox row. On a `waiting` entry, which is not in the outbox
+            yet, it names the waiting alert instead, so it is unique among
+            the `waiting` entries only.
           example: 311
         channel_id:
           type: integer
@@ -8098,7 +8104,9 @@ components:
             channel's quiet hours to end. `not_sent`: closed without being
             sent, for the reason in `reason`. `merged`: not sent on its own,
             because the delivery named in `carried_by` carried its news.
-          enum: [delivered, failed, retrying, queued, held, not_sent, merged]
+            `waiting`: in its grouping window, so that other monitors failing
+            at the same moment go out in the same message, until `due_at`.
+          enum: [delivered, failed, retrying, queued, held, not_sent, merged, waiting]
           example: delivered
         attempts:
           type: integer
@@ -8128,6 +8136,10 @@ components:
           type: integer
           format: int64
           description: On a `merged` delivery, the id of the delivery that carried it, when known.
+        due_at:
+          type: string
+          format: date-time
+          description: On a `waiting` alert, when its grouping window closes and it goes out.
     IncidentDeliveryList:
       type: object
       required: [incident_id, deliveries, window_days, complete]

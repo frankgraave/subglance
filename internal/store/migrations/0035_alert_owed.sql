@@ -1,0 +1,17 @@
+-- 0035_alert_owed.sql — remember that a confirmed outage is owed its alert.
+--
+-- An outage is confirmed in one write and its alert is kept on disk in
+-- another: in notif_held while it waits for company, or in notif_outbox. A
+-- process that ended between the two left an incident stored as confirmed and
+-- an alert nowhere, and the next start restored the outage as one that had
+-- been announced.
+--
+-- The write that confirms an outage about to be announced sets alert_owed,
+-- and the write that keeps its alert on disk clears it, in the same
+-- transaction. So does deciding that there is nothing to send: no channel,
+-- every channel switched off, or a maintenance window that takes the alert
+-- over. On start the notifier announces every open incident still owed.
+--
+-- The column says nothing about channels: which channels hear an alert is
+-- decided when it is sent, as it is for every other alert.
+ALTER TABLE incidents ADD COLUMN alert_owed INTEGER NOT NULL DEFAULT 0 CHECK (alert_owed IN (0, 1));

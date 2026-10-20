@@ -42,7 +42,39 @@ func (db *DB) GetIncident(ctx context.Context, id int64) (Incident, error) {
 // A row whose payload is not valid JSON is matched on its incident_id column,
 // so a corrupt payload is listed rather than hidden.
 func (db *DB) IncidentDeliveries(ctx context.Context, inc Incident) ([]Delivery, error) {
-	rows, err := db.Reader.QueryContext(ctx, `
+	return incidentDeliveries(ctx, db.Reader, inc)
+}
+
+// IncidentNotifications returns what IncidentDeliveries does, and the
+// incident's alerts still waiting in their grouping windows, read in one
+// transaction. A batch is written to the outbox and its waiting copies removed
+// in one write, so the two reads together list every alert once: read apart,
+// a batch written between them would be in neither.
+func (db *DB) IncidentNotifications(ctx context.Context, inc Incident) ([]Delivery, []HeldAlert, error) {
+	tx, err := db.Reader.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read incident %d notifications: %w", inc.ID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	held, err := incidentHeldAlerts(ctx, tx, inc.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	deliveries, err := incidentDeliveries(ctx, tx, inc)
+	if err != nil {
+		return nil, nil, err
+	}
+	return deliveries, held, nil
+}
+
+// queryer is a reader pool or a transaction.
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func incidentDeliveries(ctx context.Context, q queryer, inc Incident) ([]Delivery, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT `+deliveryColumns+`
 		  FROM notif_outbox
 		 WHERE created_at >= ?

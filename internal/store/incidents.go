@@ -43,6 +43,13 @@ type Incident struct {
 	// A notice is confirmed from the moment it opens, alerts and reminds
 	// like an outage, and is never downtime. See OpenNotice.
 	Notice bool
+
+	// AlertOwed is set while a confirmed outage's alert is on its way but
+	// not yet on disk: from the write that confirms it (ConfirmOwedIncident)
+	// to the one that keeps the alert in notif_held or notif_outbox. One
+	// still set on start is an alert a process ended without writing; the
+	// notifier announces it then (see OwedIncidents).
+	AlertOwed bool
 }
 
 // Confirmed reports whether this incident passed the failure threshold.
@@ -79,7 +86,7 @@ const incidentColumns = `
 	incidents.id, incidents.monitor_id, incidents.started_at, incidents.confirmed_at,
 	incidents.resolved_at, incidents.acked_at, incidents.cause, incidents.last_error,
 	incidents.reminded_at, incidents.reminder_count, incidents.maintenance_pending,
-	incidents.notice`
+	incidents.notice, incidents.alert_owed`
 
 // OpenIncident creates an unconfirmed incident for a monitor.
 //
@@ -156,13 +163,27 @@ func (db *DB) OpenNotice(ctx context.Context, monitorID int64, at time.Time, cau
 // It is idempotent: confirming an already-confirmed incident keeps the
 // original timestamp, so a restart cannot rewrite history.
 func (db *DB) ConfirmIncident(ctx context.Context, monitorID int64, at time.Time, cause, lastError string) error {
+	return db.confirmIncident(ctx, monitorID, at, cause, lastError, false)
+}
+
+// ConfirmOwedIncident is ConfirmIncident for an outage whose alert is about
+// to be sent: the same write marks the incident as owed that alert
+// (Incident.AlertOwed), so a process that ends before the alert is on disk
+// leaves a record that it is owed rather than an outage that reads as
+// announced. The notifier clears the mark in the write that keeps the alert.
+func (db *DB) ConfirmOwedIncident(ctx context.Context, monitorID int64, at time.Time, cause, lastError string) error {
+	return db.confirmIncident(ctx, monitorID, at, cause, lastError, true)
+}
+
+func (db *DB) confirmIncident(ctx context.Context, monitorID int64, at time.Time, cause, lastError string, owed bool) error {
 	res, err := db.Writer.ExecContext(ctx, `
 		UPDATE incidents
 		SET confirmed_at = COALESCE(confirmed_at, ?),
 		    cause        = ?,
-		    last_error   = ?
+		    last_error   = ?,
+		    alert_owed   = CASE WHEN ? THEN 1 ELSE alert_owed END
 		WHERE monitor_id = ? AND resolved_at IS NULL`,
-		at.Unix(), cause, lastError, monitorID)
+		at.Unix(), cause, lastError, owed, monitorID)
 	if err != nil {
 		return fmt.Errorf("confirm incident for monitor %d: %w", monitorID, err)
 	}
@@ -458,7 +479,7 @@ func scanIncidentWith(s scanner, extra ...any) (Incident, error) {
 		&confirmed, &resolved, &acked,
 		&inc.Cause, &inc.LastError,
 		&reminded, &inc.ReminderCount, &inc.MaintenancePending,
-		&inc.Notice,
+		&inc.Notice, &inc.AlertOwed,
 	}
 	err := s.Scan(append(dest, extra...)...)
 	if err != nil {

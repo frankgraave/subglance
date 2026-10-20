@@ -259,6 +259,14 @@ func run(args []string, logOut io.Writer) error {
 		MuteLinks:   muteLinks,
 	})
 
+	// Before anything can confirm an outage: an alert the last run owed
+	// and never wrote goes out now, once. A failure leaves it owed for the
+	// next start rather than stopping this one.
+	if err := notify.AnnounceOwed(openCtx); err != nil {
+		log.Error("could not announce outages the last run left unannounced; they are tried again on the next start",
+			"error", err)
+	}
+
 	canary, err := newCanary(openCtx, cfg, db, notify, log)
 	if err != nil {
 		return err
