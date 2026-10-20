@@ -217,6 +217,11 @@ type pending struct {
 
 	// kind is the kind of news, the other half of the key.
 	kind batchKind
+
+	// held names the notif_held rows of the alerts in this batch, which
+	// keep them on disk while they wait. Writing the batch to the outbox
+	// removes them in the same transaction (see Notifier.flush).
+	held []int64
 }
 
 // Add records an alert against its batch and reports whether the batch is now
