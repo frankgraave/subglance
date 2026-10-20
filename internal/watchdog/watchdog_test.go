@@ -363,26 +363,45 @@ func TestFailedWriteBesideARecordedCheckStillPings(t *testing.T) {
 	}
 }
 
-// A monitor added between two ticks shortens the gap at once, but a pipeline
-// quiet by the old schedule's measure is not late by the new one until the new
-// monitor has had a tick to be checked in.
-func TestAShortenedGapWaitsOneTick(t *testing.T) {
-	rec := &recorder{}
-	srv := httptest.NewServer(rec.handler())
-	defer srv.Close()
+// A schedule that comes to allow a shorter gap, because a monitor was added
+// beside slower ones or to an empty schedule, measures that gap from the tick
+// that first sees it. A check recorded under the old schedule says nothing
+// about the new monitor, which may still be inside its own first gap at the
+// next tick; past that gap, silence is a stall again.
+func TestAShortenedGapStartsTheQuietSpellAgain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		previous Liveness
+		quiet    time.Duration
+	}{
+		{"a monitor added beside an hourly one", Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}, 10 * time.Minute},
+		{"the first monitor on an empty schedule", Liveness{ChecksCompleted: 5}, 2 * time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &recorder{}
+			srv := httptest.NewServer(rec.handler())
+			defer srv.Close()
 
-	reading := Liveness{ChecksCompleted: 5, Scheduled: 2, CheckGap: 30 * time.Second}
-	w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
-	w.last = Liveness{ChecksCompleted: 5, Scheduled: 1, CheckGap: time.Hour}
-	w.recorded = time.Now().Add(-10 * time.Minute)
+			reading := Liveness{ChecksCompleted: 5, Scheduled: 2, CheckGap: 30 * time.Second}
+			w := newTestWatchdog(t, srv.URL, func() Liveness { return reading })
+			w.last = tc.previous
+			w.recorded = time.Now().Add(-tc.quiet)
 
-	w.tick(context.Background())
-	if got := rec.seen(); len(got) != 1 {
-		t.Fatalf("the tick that first sees the shorter gap must still ping, got %v", got)
-	}
-	w.tick(context.Background())
-	if got := rec.seen(); len(got) != 1 {
-		t.Fatalf("the next tick, still with nothing recorded, must not ping, got %v", got)
+			w.tick(context.Background()) // first sees the shorter gap
+			w.tick(context.Background()) // the next tick, still inside it
+			if got := rec.seen(); len(got) != 2 {
+				t.Fatalf("ticks inside the shorter gap since it was first seen must ping, got %v", got)
+			}
+
+			w.recorded = w.recorded.Add(-31 * time.Second)
+			w.tick(context.Background())
+			if got := rec.seen(); len(got) != 2 {
+				t.Fatalf("a tick past the shorter gap with nothing recorded must not ping, got %v", got)
+			}
+			if !w.Snapshot().Suppressed {
+				t.Fatal("a withheld ping is not reported as withheld")
+			}
+		})
 	}
 }
 

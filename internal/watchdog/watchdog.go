@@ -347,11 +347,16 @@ func (w *Watchdog) tick(ctx context.Context) {
 	progressed := now.ChecksCompleted > w.last.ChecksCompleted
 	failed := now.WriteFailures > w.last.WriteFailures
 	idle := now.Scheduled == 0
-	// The larger of this reading's gap and the previous one's: a monitor
-	// added just before this tick shortens the gap, and a check recorded
-	// under the old schedule is not late by the new one's measure until
-	// the new monitor has had a tick to be checked in.
-	allowed := max(now.CheckGap, w.last.CheckGap)
+	// A schedule that allows a shorter gap than at the previous tick (a
+	// monitor added or resumed beside slower ones, or to a schedule that
+	// was empty and so allowed any gap) starts the quiet spell again here.
+	// A check recorded under the old schedule says nothing about the new
+	// monitor, which has its own first check to make; the new gap is
+	// counted from the tick that first sees it.
+	if now.CheckGap > 0 && (w.last.Scheduled == 0 || now.CheckGap < w.last.CheckGap) {
+		w.recorded = at
+	}
+	allowed := now.CheckGap
 	w.last = now
 
 	switch {
