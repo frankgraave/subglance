@@ -114,6 +114,12 @@ func (d Delivery) MergedInto() string {
 // too. Without the check the insert fails on the foreign key, and a deliberate
 // deletion reads in the log as a database fault.
 func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error) {
+	return enqueueDelivery(ctx, db.Writer, d)
+}
+
+// enqueueDelivery is EnqueueDelivery on the writer pool or inside a
+// transaction (see EnqueueReleasing).
+func enqueueDelivery(ctx context.Context, q rowQuerier, d Delivery) (Delivery, error) {
 	now := time.Now().Unix()
 	due := d.NextAttemptAt
 	if due.IsZero() {
@@ -133,7 +139,7 @@ func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error)
 	// alert.
 	var id, owner int64
 	var incident sql.NullInt64
-	err := db.Writer.QueryRowContext(ctx, `
+	err := q.QueryRowContext(ctx, `
 		WITH p(payload) AS (SELECT ?),
 		     doc(json) AS (SELECT CASE WHEN json_valid(payload) THEN payload ELSE '{}' END FROM p)
 		INSERT INTO notif_outbox
@@ -157,7 +163,7 @@ func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error)
 		// Either the channel or every monitor is gone; say which, the
 		// channel first, since its absence alone is enough to write nothing.
 		var channel bool
-		if err := db.Writer.QueryRowContext(ctx,
+		if err := q.QueryRowContext(ctx,
 			`SELECT EXISTS (SELECT 1 FROM notif_channels WHERE id = ?)`, d.ChannelID).Scan(&channel); err != nil {
 			return Delivery{}, fmt.Errorf("enqueue delivery: %w", err)
 		}

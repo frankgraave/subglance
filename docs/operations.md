@@ -826,6 +826,15 @@ push report the server is still answering or a reminder already due) is written
 straight away rather than grouped. Whatever has not been delivered when
 SubGlance exits is sent on the next start.
 
+A stop that is not clean loses no alert either. The process being killed,
+running out of memory or the host losing power gives SubGlance no chance to
+write anything, so an alert waiting in its grouping window is kept on disk
+from the moment it joins the window, and removed in the same write that puts
+its message in the outbox. The next start reads back what was left and sends
+it when the window it was waiting in closes, or on the first pass if that time
+has gone by while SubGlance was down. A monitor that fails a few seconds after
+the start, on the same dead uplink, still joins that message.
+
 ## Watching the watcher
 
 SubGlance cannot report its own death. If the process is killed, runs out of

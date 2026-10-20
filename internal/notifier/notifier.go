@@ -294,6 +294,10 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	// The alert as it is held on disk while it waits, encoded once for
+	// every channel. Rendered lazily: with grouping off, or for a notice,
+	// nothing is held.
+	var held string
 	for _, ch := range channels {
 		if !ch.Enabled {
 			continue
@@ -318,9 +322,119 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 			// outbox delivers it on the next start.
 			delete(n.batches, b.key)
 			n.flush(ctx, b)
+			continue
 		}
+		if held == "" {
+			if held, err = alert.Encode(); err != nil {
+				return err
+			}
+		}
+		n.hold(ctx, b, ch.ID, m.ID, held)
 	}
 	return nil
+}
+
+// hold writes an alert that has joined a batch to notif_held, so it outlives
+// a process that ends without its final flush. The caller holds mu.
+//
+// A failed write is logged, not returned: the alert is in its batch either
+// way and goes out when the window closes. Only a crash inside that window
+// would lose it, which is how every alert fared before it was held on disk.
+func (n *Notifier) hold(ctx context.Context, b *pending, channelID, monitorID int64, payload string) {
+	id, err := n.db.HoldAlert(ctx, store.HeldAlert{
+		ChannelID: channelID, MonitorID: monitorID, Payload: payload, Due: b.deadline,
+	})
+	if err != nil {
+		n.log.Warn("could not keep a grouped alert on disk; it is sent when its window closes, "+
+			"but not if the process ends before that", "channel_id", channelID, "monitor_id", monitorID, "error", err)
+		return
+	}
+	b.held = append(b.held, id)
+}
+
+// restoreHeld reads back the alerts a process left waiting in their windows
+// when it ended without its final flush, and puts each into its batch with
+// the deadline it had. One that is already due goes out on the first pass of
+// Run; one whose window is still open waits out the rest of it, and an alert
+// raised in that time still joins it.
+//
+// It merges into any batch an Enqueue opened before Run started, putting the
+// restored alerts first, since they happened first, and keeping the earlier
+// deadline. That batch's own alerts are on disk too, and are left to it.
+func (n *Notifier) restoreHeld(ctx context.Context) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// Read under the lock, so an alert held after this read cannot be
+	// mistaken for one the last run left behind.
+	held, err := n.db.ListHeldAlerts(ctx)
+	if err != nil {
+		n.log.Error("could not read alerts left waiting by the last run; they are sent on the next start",
+			"error", err)
+		return
+	}
+	live := make(map[int64]bool)
+	for _, b := range n.batches {
+		for _, id := range b.held {
+			live[id] = true
+		}
+	}
+
+	restored := make(map[string]*pending)
+	var order []string
+	count := 0
+	for _, h := range held {
+		if live[h.ID] {
+			continue
+		}
+		count++
+		a, err := DecodeAlert(h.Payload)
+		if err != nil {
+			// Written by this code from an Alert, so this is a damaged
+			// row rather than a message. Kept, it would be read and
+			// refused again on every start.
+			n.log.Error("could not read an alert left waiting by the last run; discarding it",
+				"channel_id", h.ChannelID, "monitor_id", h.MonitorID, "error", err)
+			if err := n.db.ReleaseHeldAlerts(ctx, []int64{h.ID}); err != nil {
+				n.log.Error("could not discard an unreadable waiting alert", "id", h.ID, "error", err)
+			}
+			continue
+		}
+		kind := kindOf(a)
+		key := groupKey(h.ChannelID, kind)
+		b, ok := restored[key]
+		if !ok {
+			b = &pending{key: key, channel: h.ChannelID, deadline: h.Due, monitorID: h.MonitorID, kind: kind}
+			restored[key] = b
+			order = append(order, key)
+		}
+		if h.Due.Before(b.deadline) {
+			b.deadline = h.Due
+		}
+		b.alerts = append(b.alerts, a)
+		b.held = append(b.held, h.ID)
+		if b.incidentID == 0 {
+			b.incidentID = a.IncidentID
+		}
+	}
+
+	for _, key := range order {
+		b := restored[key]
+		if live, ok := n.batches[key]; ok {
+			b.alerts = append(b.alerts, live.alerts...)
+			b.held = append(b.held, live.held...)
+			if live.deadline.Before(b.deadline) {
+				b.deadline = live.deadline
+			}
+			if b.incidentID == 0 {
+				b.incidentID = live.incidentID
+			}
+		}
+		n.batches[key] = b
+	}
+	if count > 0 {
+		n.log.Info("restored alerts left waiting by the last run", "alerts", count, "batches", len(order))
+	}
 }
 
 // flushDue writes out every batch whose window has closed.
@@ -398,7 +512,7 @@ func (n *Notifier) flush(ctx context.Context, b *pending) {
 		return
 	}
 
-	if _, err := n.db.EnqueueDelivery(ctx, b.delivery(payload, state.Event(summary.Event), n.now())); err != nil {
+	if _, err := n.db.EnqueueReleasing(ctx, b.delivery(payload, state.Event(summary.Event), n.now()), b.held); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Every monitor in the batch was deleted while it waited for
 			// company. Their messages go with them, as their queued and
@@ -414,6 +528,8 @@ func (n *Notifier) flush(ctx context.Context, b *pending) {
 				"channel_id", b.channel, "monitors", len(b.alerts))
 			return
 		}
+		// The batch's alerts stay in notif_held, so the next start
+		// sends them.
 		n.log.Error("could not queue notification",
 			"channel_id", b.channel, "monitors", len(b.alerts), "error", err)
 		return
@@ -428,6 +544,12 @@ func (n *Notifier) flush(ctx context.Context, b *pending) {
 // Run drains the outbox until the context is cancelled.
 func (n *Notifier) Run(ctx context.Context) {
 	n.log.Info("notifier started", "interval", n.interval)
+
+	// Before the first flush, so an alert whose window closed while the
+	// process was down goes out on the first pass. A local read, so it is
+	// not cut short by a stop that arrives as Run starts: the stop's flush
+	// then writes what it restored.
+	n.restoreHeld(context.WithoutCancel(ctx))
 
 	for {
 		// Close any grouping window that has expired before looking for
