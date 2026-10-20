@@ -237,9 +237,16 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		// remove what the target monitor sends, where an absent key would
 		// keep it. Header names are kept so the file still says which
 		// headers the check sends; the values are what authenticate it.
+		// An empty value authenticates nothing and is written as it is,
+		// as an empty channel setting is: withheld, it read as a
+		// credential no instance has, and the import switched the
+		// monitor off for it, on the instance that wrote the file too.
 		out.Headers = make(configfile.Headers, len(m.Headers))
-		for k := range m.Headers {
+		for k, v := range m.Headers {
 			out.Headers[k] = configfile.Placeholder
+			if v == "" {
+				out.Headers[k] = ""
+			}
 		}
 		out.Body = ptr("")
 		if m.Body != "" {

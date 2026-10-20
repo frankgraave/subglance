@@ -571,11 +571,15 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 		}
 		headers := map[string]string{}
 		for k, v := range m.Headers {
+			// A header the monitor sends with an empty value is kept as
+			// empty: a file from a release that withheld empty values
+			// too then imports into the instance that wrote it unchanged.
+			held, has := existing.Headers[k]
 			switch {
 			case v != configfile.Placeholder:
 				headers[k] = v
-			case found && existing.Headers[k] != "":
-				headers[k] = existing.Headers[k]
+			case found && has:
+				headers[k] = held
 			default:
 				missing = append(missing, sub("headers", k))
 			}
