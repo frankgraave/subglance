@@ -4186,7 +4186,9 @@ paths:
         A value written as `<fill in after import>` keeps what the instance
         already holds for that field. When there is nothing to keep, the
         object is saved without it and switched off, and `needs_secrets`
-        names the missing fields.
+        names the missing fields. A channel stored without such a value, in
+        a file that leaves its `config` out, stays switched off and is
+        reported the same way.
 
         With `dry_run=true` the same checks run and the report says what would
         happen, but nothing is written. Without it, nothing is written unless

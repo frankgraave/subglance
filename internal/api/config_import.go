@@ -355,6 +355,18 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 			missing = append(missing, smsNumbersKey)
 		}
 		next.Config = cfg
+	} else {
+		// A file that leaves the settings out keeps the stored ones, and a
+		// channel an import created without its credential is stored
+		// without it. That setting is still to be filled in, as it was
+		// after that first import: checked with its stand-in, the channel
+		// kept switched off, the setting listed under needs_secrets. Held
+		// to the full rule, a file that only renamed the channel was
+		// refused whole for a value it never mentioned. The export writes
+		// the same settings as withheld, by the same check.
+		written := map[string]string{}
+		maps.Copy(written, existing.Config)
+		missing = stillWithheld(existing, written)
 	}
 	slices.Sort(missing)
 

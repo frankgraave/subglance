@@ -159,7 +159,10 @@ afterwards, and switch the object on.
 A channel created that way is stored without the value, and its export still
 writes the field as `<fill in after import>`, so the file says what is left to
 fill in and imports again: into the same instance as unchanged, and into
-another switched off, with the field under `needs_secrets` as before.
+another switched off, with the field under `needs_secrets` as before. A
+hand-written file that leaves such a channel's `config` out, to rename it or
+to set `enabled`, is read the same way: the channel stays switched off until
+the value is filled in, and the report lists the field under `needs_secrets`.
 
 A webhook's `headers` are withheld whole, and they can name the
 `Content-Type` its `body` is written for, such as a form. When an import has
