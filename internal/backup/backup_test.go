@@ -206,6 +206,99 @@ func TestFirstRunFollowsTheNewestBackup(t *testing.T) {
 	}
 }
 
+func TestStatusRecallsTheNewestBackupAfterARestart(t *testing.T) {
+	newest := time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+
+	t.Run("the newest backup in the bucket is the last success", func(t *testing.T) {
+		fake, srv := newFakeS3(t, "bucket")
+		fake.objects["nightly/subglance-20260924T030000Z.db.gz"] = []byte("older")
+		fake.objects["nightly/subglance-20260925T030000Z.db.gz"] = []byte("newest")
+		// Not named like a backup, so neither pruned nor reported.
+		fake.objects["nightly/subglance-notes.txt"] = []byte("operator notes")
+		b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+
+		b.firstRun(context.Background())
+
+		st := b.Status()
+		if !st.LastSuccess.Equal(newest) || st.LastObject != "subglance-20260925T030000Z.db.gz" || st.LastSize != int64(len("newest")) {
+			t.Errorf("status after start = %+v; want the newest backup in the bucket as the last success", st)
+		}
+		if st.LastError != "" || st.Failures != 0 {
+			t.Errorf("status after start = %+v; recalling a backup is not a run and records no failure", st)
+		}
+	})
+
+	t.Run("a newer name that is not a time is passed over", func(t *testing.T) {
+		fake, srv := newFakeS3(t, "bucket")
+		fake.objects["nightly/subglance-20260924T030000Z.db.gz"] = []byte("older")
+		fake.objects["nightly/subglance-20260925T030000Z.db.gz"] = []byte("newest")
+		// Named like a backup, and sorted after every real one, but month
+		// 13 is not a date.
+		fake.objects["nightly/subglance-20261301T030000Z.db.gz"] = []byte("stray")
+		b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+
+		first := b.firstRun(context.Background())
+
+		if st := b.Status(); !st.LastSuccess.Equal(newest) || st.LastObject != "subglance-20260925T030000Z.db.gz" {
+			t.Errorf("status after start = %+v; want the newest backup with a real time as the last success", st)
+		}
+		if want := newest.Add(24 * time.Hour); !first.Equal(want) {
+			t.Errorf("first run at %v; want one interval after that backup, %v", first, want)
+		}
+	})
+
+	t.Run("none is known", func(t *testing.T) {
+		for name, objects := range map[string]map[string]string{
+			"empty bucket": {},
+			// A clock that moved backwards: a last success in the future
+			// would hold a staleness alert off.
+			"backup stamped in the future": {"nightly/subglance-20260926T030000Z.db.gz": "x"},
+			"only other objects":           {"nightly/subglance-notes.txt": "x"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				fake, srv := newFakeS3(t, "bucket")
+				for k, v := range objects {
+					fake.objects[k] = []byte(v)
+				}
+				b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+				b.firstRun(context.Background())
+				if st := b.Status(); !st.LastSuccess.IsZero() || st.LastObject != "" || st.LastSize != 0 {
+					t.Errorf("status = %+v; want no last success", st)
+				}
+			})
+		}
+	})
+
+	t.Run("an unreadable bucket", func(t *testing.T) {
+		_, srv := newFakeS3(t, "some-other-bucket")
+		b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+		b.firstRun(context.Background())
+		if st := b.Status(); !st.LastSuccess.IsZero() || st.LastObject != "" {
+			t.Errorf("status = %+v; want no last success when the bucket cannot be listed", st)
+		}
+	})
+
+	t.Run("a run of this process is not replaced by an older listing", func(t *testing.T) {
+		fake, srv := newFakeS3(t, "bucket")
+		b := newBackups(t, openStore(t), srv.URL, 3, &clock{t: start})
+		res, err := b.RunOnce(context.Background())
+		if err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+		// A listing read before that upload landed.
+		fake.mu.Lock()
+		fake.objects = map[string][]byte{"nightly/subglance-20260925T030000Z.db.gz": []byte("older")}
+		fake.mu.Unlock()
+
+		b.firstRun(context.Background())
+
+		if st := b.Status(); st.LastObject != res.Object || !st.LastSuccess.Equal(start) || st.LastSize != res.Size {
+			t.Errorf("status = %+v; want this process's own run, %s, kept", st, res.Object)
+		}
+	})
+}
+
 func TestAlertOncePerDayOfFailure(t *testing.T) {
 	var a AlertGate
 	t0 := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
