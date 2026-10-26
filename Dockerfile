@@ -59,7 +59,7 @@ RUN npm run build
 # The same exact Go as GO_VERSION in ci.yml and release.yml, for the reason
 # given there: what CI proved is what gets shipped, and `subglance --version`
 # reports the same toolchain whether it came from an archive or this image.
-FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine AS go
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS go
 
 WORKDIR /src
 
